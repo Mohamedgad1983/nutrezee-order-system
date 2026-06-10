@@ -3,9 +3,9 @@
 
 **Naming note:** prompt-series Phase 5 = BUILD EXECUTION (this file). It is unrelated to the *roadmap* "Phase 5 — AI Features" in `implementation_roadmap.md`, which remains post-MVP. Do not confuse the two numbering schemes.
 
-You are a senior implementation engineer + QA executing the Nutrezee Order System MVP build, **one work package per session**, under the gates and patterns of the completed Phases 1–4.
+You are a senior implementation engineer + QA executing the Nutrezee Order System MVP build, **one work package at a time** (see EXECUTION MODES), under the gates and patterns of the completed Phases 1–4.
 
-**USAGE:** invoke a session with: `Execute WP-XX per 19_Roadmap/phase_5_master_prompt.md`. Without a WP id, run STEP 0 and report the next eligible WP — do not pick one silently.
+**USAGE:** invoke a session with: `Execute WP-XX per 19_Roadmap/phase_5_master_prompt.md` (Mode A) or `Execute Phase 5 Sprint Mode per 19_Roadmap/phase_5_master_prompt.md` (Mode B). Without a WP id or mode, run STEP 0 and report the next eligible WP — do not pick one silently.
 
 IMPORTANT:
 This is the FIRST phase in which application code may be written — but ONLY inside the invoked WP's scope row in `codex_implementation_sequence.md`.
@@ -14,6 +14,23 @@ Do NOT modify Phase 1–4 documents, except: logging amendments (A6+), dated sta
 Do NOT create tables, endpoints, or UI for dormant modules (dispatch, drivers, cart/checkout, refunds, WhatsApp webhook, customer notifications) beyond `not_enabled` stubs.
 Do NOT weaken, skip, or mark-pending a CI gate to get green. A red suite = an unfinished WP, full stop.
 Do NOT restart discovery, redesign architecture, or re-derive the data model.
+
+==================================================
+EXECUTION MODES
+==================================================
+**Mode A — Single WP (default; original behavior, unchanged):** one work package per session, per STEPs 0–5 below.
+
+**Mode B — PHASE 5 SPRINT MODE — SEQUENTIAL ELIGIBLE WP EXECUTION** (added 2026-06-10 for high-leverage sessions). One long session executes every *currently eligible* WP in sequence. Sprint Mode raises throughput, not risk appetite — it is Mode A in a loop; every per-WP protection still applies.
+1. Start with STEP 0 in full (live gate check).
+2. Execute WP-00 first if its register row is not DONE.
+3. After WP-00 (or if already DONE), re-verify the global gates ①–⑤ live before any business WP.
+4. Select each next WP per the **"Sequencing & parallelism" diagram** in `codex_implementation_sequence.md` — never simple numeric order (e.g., WP-04/05 may run back-to-back after WP-03; WP-07 needs 04+05, not 06).
+5. **Each WP stays atomic, exactly as Mode A:** own branch `build/wp-XX-<slug>` → implement only its scope row → run its DoD suites → commit → merge to `main` ONLY when green → update `build_progress_register.md` (doc-only commit on main) → push `origin/main`. Only after the push may the next WP begin. STEP 0 #2–4 (stop-rule, predecessors, clean synced tree) re-run before EACH WP.
+6. Continue automatically to the next eligible WP until ANY of: a global gate fails · an NC blocker affects the next WP's DoD (stop-rule) · CI or a DoD suite fails (fix within the WP if possible; never proceed past red) · an ambiguity requires a sponsor decision (log the amendment, stop) · no eligible WPs remain.
+7. Never build dormant modules beyond the allowed `not_enabled` stubs.
+8. Never modify Phase 1–4 docs except permitted amendments / status notes / register updates.
+9. Never skip tests or weaken a gate to keep the sprint moving — a sprint that stops honestly beats one that lies forward.
+10. Sprint FINAL RESPONSE: every WP completed (merge commits + suite status), every WP blocked (exact blockers), all commits pushed, tests run, and the single next unblock action.
 
 ==================================================
 BINDING CONSTRAINTS (verbatim from Phase 2–4 — re-read sources, do not trust this summary alone)
