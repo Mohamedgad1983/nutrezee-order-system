@@ -28,6 +28,10 @@ const OWNERSHIP = {
   routing_rule: 'm05-catalog', ingredient_allergen: 'm05-catalog', // A6
 
   import_batch: 'm19-migration', import_row_result: 'm19-migration', sync_record: 'm18-bridge',
+
+  // wave 3 (WP-07)
+  draft_order: 'm01-intake', draft_item: 'm01-intake',
+  whatsapp_message_ref: 'm17-whatsapp',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;

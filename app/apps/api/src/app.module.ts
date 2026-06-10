@@ -15,13 +15,18 @@ import { StaffService } from './platform/staff/staff.service';
 import { SettingsService } from './platform/settings/settings.service';
 import { SettingsController } from './platform/settings/settings.controller';
 import { TransitionEngine } from './platform/transition/transition-engine';
+import { CustomerService } from './modules/m04-customers/customer.service';
+import { CatalogService } from './modules/m05-catalog/catalog.service';
+import { DraftController } from './modules/m01-intake/draft.controller';
+import { DraftService } from './modules/m01-intake/draft.service';
+import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
 
 @Module({
-  controllers: [HealthController, AuthController, StaffController, SettingsController],
+  controllers: [HealthController, AuthController, StaffController, SettingsController, DraftController],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
     AuditService,
@@ -70,6 +75,33 @@ export const POOL = 'POOL';
         reader: SettingsReader, engine: TransitionEngine,
       ) => new SettingsService(pool, audit, outbox, reader, [() => engine.invalidate()]),
       inject: [POOL, AuditService, OutboxService, SettingsReader, TransitionEngine],
+    },
+    {
+      provide: CustomerService,
+      useFactory: (
+        pool: Pool, audit: AuditService, readQueue: AuditReadQueue,
+        outbox: OutboxService, settings: SettingsReader,
+      ) => new CustomerService(pool, audit, readQueue, outbox, settings),
+      inject: [POOL, AuditService, AuditReadQueue, OutboxService, SettingsReader],
+    },
+    {
+      provide: CatalogService,
+      useFactory: (pool: Pool, audit: AuditService, settings: SettingsReader) =>
+        new CatalogService(pool, audit, settings),
+      inject: [POOL, AuditService, SettingsReader],
+    },
+    MessageRefService,
+    {
+      provide: DraftService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService, settings: SettingsReader,
+        idempotency: IdempotencyService, transitions: TransitionEngine,
+        customers: CustomerService, catalog: CatalogService, refs: MessageRefService,
+      ) => new DraftService(pool, audit, outbox, settings, idempotency, transitions, customers, catalog, refs),
+      inject: [
+        POOL, AuditService, OutboxService, SettingsReader, IdempotencyService, TransitionEngine,
+        CustomerService, CatalogService, MessageRefService,
+      ],
     },
   ],
 })

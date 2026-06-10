@@ -29,6 +29,19 @@ export interface GuidedCreateInput {
   force?: boolean;
 }
 
+export interface CustomerAllergyForIntake {
+  allergenId: string;
+  severity: 'note' | 'avoid' | 'severe' | null;
+  note: string | null;
+}
+
+export interface CustomerAddressForIntake {
+  id: string;
+  customerId: string;
+  areaId: string | null;
+  active: boolean;
+}
+
 // M04 customer profiles: guided create with dup detection (GAP-DQ-01), phone-first
 // search, profile reads logged per visibility class (BR-043 via the read queue).
 export class CustomerService {
@@ -252,6 +265,46 @@ export class CustomerService {
       [fullNameEn, dob ?? null],
     );
     return rows.map((r) => r.id as string);
+  }
+
+  /** Read API for M01/M02: confirms customer reference without exposing profile. */
+  async exists(customerId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM customer WHERE id = $1 AND status = 'active'`,
+      [customerId],
+    );
+    return rows.length > 0;
+  }
+
+  /** Read API for M01: validates a saved address selection and exposes only the
+   * fields required for intake completeness (area + active). */
+  async getAddressForIntake(addressId: string, customerId?: string): Promise<CustomerAddressForIntake | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, customer_id, area_id, active FROM address
+       WHERE id = $1 AND ($2::text IS NULL OR customer_id = $2)`,
+      [addressId, customerId ?? null],
+    );
+    if (rows.length === 0) return null;
+    return {
+      id: rows[0].id as string,
+      customerId: rows[0].customer_id as string,
+      areaId: rows[0].area_id as string | null,
+      active: rows[0].active as boolean,
+    };
+  }
+
+  /** Read API for allergy chain step 2. This is validation, not a full health panel;
+   * UI profile reads remain logged through getProfile(includeHealth=true). */
+  async allergiesForIntake(customerId: string): Promise<CustomerAllergyForIntake[]> {
+    const { rows } = await this.pool.query(
+      `SELECT allergen_id, severity, note FROM customer_allergy WHERE customer_id = $1`,
+      [customerId],
+    );
+    return rows.map((r) => ({
+      allergenId: r.allergen_id as string,
+      severity: r.severity as CustomerAllergyForIntake['severity'],
+      note: r.note as string | null,
+    }));
   }
 
   private async assertExists(c: PoolClient, id: string): Promise<Record<string, unknown>> {
