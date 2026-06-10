@@ -23,6 +23,8 @@ import { ReviewController } from './modules/m02-review/review.controller';
 import { ReviewService } from './modules/m02-review/review.service';
 import { OrderController } from './modules/m03-orders/order.controller';
 import { OrderService } from './modules/m03-orders/order.service';
+import { PaymentController } from './modules/m07-payments/payment.controller';
+import { PaymentService } from './modules/m07-payments/payment.service';
 import { KitchenController } from './modules/m08-kitchen/kitchen.controller';
 import { KitchenService } from './modules/m08-kitchen/kitchen.service';
 import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
@@ -34,7 +36,7 @@ export const POOL = 'POOL';
 @Module({
   controllers: [
     HealthController, AuthController, StaffController, SettingsController,
-    DraftController, ReviewController, OrderController, KitchenController,
+    DraftController, ReviewController, OrderController, PaymentController, KitchenController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -144,6 +146,14 @@ export const POOL = 'POOL';
         POOL, AuditService, OutboxService, TransitionEngine,
         OrderService, CatalogService, CustomerService,
       ],
+    },
+    {
+      provide: PaymentService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService,
+        transitions: TransitionEngine, orders: OrderService,
+      ) => new PaymentService(pool, audit, outbox, transitions, orders),
+      inject: [POOL, AuditService, OutboxService, TransitionEngine, OrderService],
     },
   ],
 })

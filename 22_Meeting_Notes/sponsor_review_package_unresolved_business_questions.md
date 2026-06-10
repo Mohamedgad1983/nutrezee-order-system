@@ -13,7 +13,7 @@ This package collects unresolved questions in one place. The build may continue 
 | P0 | WP-07 intake submit contract | ASM-003 to ASM-024 | Defines what staff can save, submit, warn on, or block during order intake. |
 | P0 | Customer identity and duplicates | ASM-007 to ASM-009 | Determines customer matching, duplicate prevention, merge behavior, and import risk. |
 | P0 | Allergy/health safety | ASM-010 to ASM-012 | Determines whether unsafe meals are blocked, warned, or overridden. |
-| P0 | Payment capture and unpaid policy | ASM-019 to ASM-022, ASM-031 to ASM-032 | Determines payment readiness and finance workflow. |
+| P0 | Payment capture and unpaid policy | ASM-019 to ASM-022, ASM-031 to ASM-032, ASM-049 | Determines payment readiness and finance workflow. |
 | P1 | Order status, review, order core, kitchen | ASM-023 to ASM-030, ASM-043 to ASM-048 | Determines downstream lifecycle, order conversion, and operational handoffs. |
 | P1 | Reports, notifications, migration | ASM-033 to ASM-038 | Determines reporting scope, trigger content, and bridge behavior. |
 | P1 | Out-of-scope boundaries | ASM-039 to ASM-042 | Keeps dormant modules and WP-14 staging gate explicit. |
@@ -80,10 +80,11 @@ This package collects unresolved questions in one place. The build may continue 
 1. Confirm payment method values and which are in real use.
 2. Does payment need to be confirmed before kitchen production starts?
 3. Are refunds/credits excluded from MVP?
-4. Are internal/email alerts enough for MVP, with customer WhatsApp/push/SMS dormant?
-5. Confirm the day-one report set: intake funnel, daily ops, kitchen day-list.
-6. What legacy export/source access will be provided for real bridge/migration apply?
-7. How should unknown legacy payment status and off-day values be mapped?
+4. Should payment records be created automatically when an order is converted, or only when the first payment action occurs?
+5. Are internal/email alerts enough for MVP, with customer WhatsApp/push/SMS dormant?
+6. Confirm the day-one report set: intake funnel, daily ops, kitchen day-list.
+7. What legacy export/source access will be provided for real bridge/migration apply?
+8. How should unknown legacy payment status and off-day values be mapped?
 
 ### Boundaries and gates
 

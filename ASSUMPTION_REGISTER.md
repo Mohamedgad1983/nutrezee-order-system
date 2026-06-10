@@ -71,6 +71,7 @@ Risk scale:
 | ASM-046 | Change request mutation scope | WP-09 supports end-date extension/reduction change requests only. Other order mutations require later signed change types before implementation. | High | Yes | WP-09 | Change-request workflow signoff. |
 | ASM-047 | Kitchen routing scope | WP-10 ticket generation routes product-backed order items by active product-level routing rules only. Package-only items, component routes, meal-type routes, and missing routes generate unrouted tickets until routing ownership/content is signed. | High | Yes | WP-10 | DEC-006 routing review. |
 | ASM-048 | Packed confirmation override | WP-10 requires all tickets for a fulfillment day to be `prepared` before Kitchen User can mark the day `packed`. Ops Manager override-to-packed is deferred until sponsor signs override role/reason rules and transition config. | High | Yes | WP-10 | Kitchen workflow signoff. |
+| ASM-049 | Payment record creation timing | WP-11 creates `payment_record` on the first payment write action (link sent, status-review request, or legacy unmapped-status queue), not during WP-09 order conversion. `GET /orders/:id/payments` stays non-mutating and returns no payment when none exists. | Medium | Yes | WP-11, WP-13 | DEC-009 / finance workflow signoff. |
 
 ## Revision log
 
@@ -79,3 +80,4 @@ Risk scale:
 | 2026-06-10 | Initial assumption register created from sponsor/user directive to continue WP execution as far as technically possible. |
 | 2026-06-10 | Added WP-09 assumptions ASM-043 to ASM-046 for day generation, unverified-customer conversion, exception taxonomy, and change-request mutation scope. |
 | 2026-06-10 | Added WP-10 assumptions ASM-047 and ASM-048 for product-level routing scope and packed confirmation override handling. |
+| 2026-06-10 | Added WP-11 assumption ASM-049 for payment record creation timing and non-mutating payment reads. |
