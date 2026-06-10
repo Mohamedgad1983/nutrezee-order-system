@@ -10,9 +10,11 @@
 - `phase_3_to_phase_4_handoff.md` — data/API → physical design handoff
 - `phase_4_master_prompt.md` — executed 2026-06-11 (Phase 4 complete)
 - `codex_implementation_sequence.md` — WP-01…14 work packages with stop-rules and the five-condition build entry gate
-- `phase_4_to_build_handoff.md` — **current gate**: build entry ticket, open-NC register, amendments log (next id A5)
+- `phase_4_to_build_handoff.md` — build entry ticket, open-NC register, amendments A1–A4
+- `phase_5_master_prompt.md` — **standing build-session prompt**: one WP per session, gate check first, binding constraints, repo layout, session protocol; defines WP-00 environment standup (A5)
+- `build_progress_register.md` — live WP-00…14 status, gate snapshot, amendments log continuation (next id A6)
 
-Status: all documentation phases (1–4) complete. R1 remote backup **closed 2026-06-10** (GitHub private remote, both branches). Build (WP-01) still blocked on: DEC-011, DEC-003, staging/CI, workshop (or sponsor NC-carry acceptance for WP-01–06).
+Status: documentation phases 1–4 complete; Phase 5 (build execution) prompt in place. R1 closed 2026-06-10; **DEC-011 signed 2026-06-10**. **WP-00 (environment standup) is eligible now.** WP-01 still blocked on: DEC-003, staging (WP-00 + PG-region residency note), workshop or sponsor NC-carry acceptance (WP-01–06 only).
 **Owner:** PM
 **Depends on:** 04, 20_Decisions
 

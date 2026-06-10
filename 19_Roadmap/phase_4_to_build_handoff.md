@@ -25,8 +25,8 @@ Decision-gated: DEC-002 (WhatsApp API), Q20 (refunds), DEC-012 detail.
 
 ## 4. Amendments log (Phase 4 additions)
 
-A1 customer.email applied · A2 off_days_unverified applied · **A3 transition_config table (M16)** · **A4 platform tables: outbox_event, idempotency_key, audit_read_queue**. Next free id: A5.
+A1 customer.email applied · A2 off_days_unverified applied · **A3 transition_config table (M16)** · **A4 platform tables: outbox_event, idempotency_key, audit_read_queue**. Next free id: A5. *(Status note 2026-06-10: A5 consumed by WP-00 — the canonical A-id counter is now `build_progress_register.md` §Amendments; next free A6.)*
 
 ## 5. First session instruction
 
-Start with **WP-01 Platform foundation** exactly as scoped; end with TS-I/TS-A(#2,#3)/TS-R(log) green and a commit referencing WP-01. No business modules, no UI beyond a login shell, no dormant tables. If any entry-gate item is unmet, the session must stop and report — not improvise.
+Start with **WP-01 Platform foundation** exactly as scoped; end with TS-I/TS-A(#2,#3)/TS-R(log) green and a commit referencing WP-01. *(Status note 2026-06-10: WP-00 environment standup now precedes WP-01 per amendment A5 — see `phase_5_master_prompt.md`; first session is WP-00.)* No business modules, no UI beyond a login shell, no dormant tables. If any entry-gate item is unmet, the session must stop and report — not improvise.

@@ -23,6 +23,9 @@ the custom SPA surfaces that dominate the MVP.
 
 Consequences: WP-01 scaffolds Nest + SQL migrations + CI gates; module_api_contracts
 become shared TS types; 16_Deployment owns environment/secrets/rollback standards.
+*(Status note 2026-06-10: the repo/CI skeleton portion of this consequence is executed
+by WP-00 per amendment A5 — phase_5_master_prompt.md; WP-01 retains the real CI-guard
+implementations, SQL migrations, and deployment-standard content.)*
 
 Reversal condition: if the sponsor confirms a PHP-centric maintenance team before
 WP-01 starts, re-decide toward Option C; after WP-01, switching cost escalates.

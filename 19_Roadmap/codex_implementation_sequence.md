@@ -34,4 +34,4 @@ WP-01 ─► WP-02 ─► WP-03 ─►─┬─ WP-04 ─┬─► WP-06 ──�
 
 ## Standing reminders for every Codex session
 
-Read `13_Architecture/backend_foundation_blueprint.md` + the relevant module spec + this WP row **before coding**; respect MVP cut (dormant = `not_enabled`, no tables); never edit Phase 1–4 docs except logging amendments (A5+); every session ends with suites green and a commit referencing its WP id; NO session starts if its NC blockers row is unresolved per the stop-rule.
+Read `13_Architecture/backend_foundation_blueprint.md` + the relevant module spec + this WP row **before coding**; respect MVP cut (dormant = `not_enabled`, no tables); never edit Phase 1–4 docs except logging amendments (next free id per `build_progress_register.md` §Amendments — A5 was consumed 2026-06-10 by WP-00, defined in `phase_5_master_prompt.md`); every session ends with suites green and a commit referencing its WP id; NO session starts if its NC blockers row is unresolved per the stop-rule.
