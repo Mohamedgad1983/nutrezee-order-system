@@ -12,13 +12,16 @@ import { SessionService } from './platform/auth/session.service';
 import { AccessService } from './platform/rbac/access.service';
 import { RoleAdminService } from './platform/rbac/role-admin.service';
 import { StaffService } from './platform/staff/staff.service';
+import { SettingsService } from './platform/settings/settings.service';
+import { SettingsController } from './platform/settings/settings.controller';
+import { TransitionEngine } from './platform/transition/transition-engine';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
 
 @Module({
-  controllers: [HealthController, AuthController, StaffController],
+  controllers: [HealthController, AuthController, StaffController, SettingsController],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
     AuditService,
@@ -53,6 +56,20 @@ export const POOL = 'POOL';
       useFactory: (pool: Pool, audit: AuditService, access: AccessService) =>
         new RoleAdminService(pool, audit, access),
       inject: [POOL, AuditService, AccessService],
+    },
+    {
+      provide: TransitionEngine,
+      useFactory: (pool: Pool, audit: AuditService, outbox: OutboxService) =>
+        new TransitionEngine(pool, audit, outbox),
+      inject: [POOL, AuditService, OutboxService],
+    },
+    {
+      provide: SettingsService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService,
+        reader: SettingsReader, engine: TransitionEngine,
+      ) => new SettingsService(pool, audit, outbox, reader, [() => engine.invalidate()]),
+      inject: [POOL, AuditService, OutboxService, SettingsReader, TransitionEngine],
     },
   ],
 })
