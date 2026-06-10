@@ -42,6 +42,15 @@ export interface CustomerAddressForIntake {
   active: boolean;
 }
 
+export interface CustomerAddressSnapshot {
+  id: string;
+  customerId: string;
+  areaId: string | null;
+  addressText: string;
+  deliveryNotes: string | null;
+  active: boolean;
+}
+
 // M04 customer profiles: guided create with dup detection (GAP-DQ-01), phone-first
 // search, profile reads logged per visibility class (BR-043 via the read queue).
 export class CustomerService {
@@ -289,6 +298,23 @@ export class CustomerService {
       id: rows[0].id as string,
       customerId: rows[0].customer_id as string,
       areaId: rows[0].area_id as string | null,
+      active: rows[0].active as boolean,
+    };
+  }
+
+  async getAddressSnapshot(addressId: string, customerId?: string): Promise<CustomerAddressSnapshot | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, customer_id, area_id, address_text, delivery_notes, active FROM address
+       WHERE id = $1 AND ($2::text IS NULL OR customer_id = $2)`,
+      [addressId, customerId ?? null],
+    );
+    if (rows.length === 0) return null;
+    return {
+      id: rows[0].id as string,
+      customerId: rows[0].customer_id as string,
+      areaId: rows[0].area_id as string | null,
+      addressText: rows[0].address_text as string,
+      deliveryNotes: rows[0].delivery_notes as string | null,
       active: rows[0].active as boolean,
     };
   }

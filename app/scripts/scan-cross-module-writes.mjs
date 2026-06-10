@@ -34,6 +34,9 @@ const OWNERSHIP = {
   whatsapp_message_ref: 'm17-whatsapp',
   // wave 3 (WP-08)
   review_queue_item: 'm02-review', review_decision: 'm02-review',
+  // wave 4 (WP-09)
+  customer_order: 'm03-orders', order_item: 'm03-orders', fulfillment_day: 'm03-orders',
+  order_status_history: 'm03-orders', change_request: 'm03-orders', exception_case: 'm03-orders',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;

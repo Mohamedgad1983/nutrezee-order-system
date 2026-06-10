@@ -473,6 +473,34 @@ export class DraftService {
     );
   }
 
+  async transitionToConvertedInTx(
+    client: PoolClient,
+    draftId: string,
+    orderId: string,
+  ): Promise<void> {
+    const draft = await this.loadDraftRowInTx(client, draftId, true);
+    await this.transitions.transitionInTx(
+      {
+        machine: 'draft',
+        subjectType: 'draft_order',
+        subjectId: draftId,
+        from: draft.state,
+        to: 'converted',
+        actor: 'system',
+        eventType: 'order.approved',
+        refs: { created_order_ref: orderId, ...(draft.customer_id ? { customer_id: draft.customer_id } : {}) },
+        apply: async (tx) => {
+          await tx.query(
+            `UPDATE draft_order SET state = 'converted',
+               updated_at = now(), updated_by = 'system', version = version + 1 WHERE id = $1`,
+            [draftId],
+          );
+        },
+      },
+      client,
+    );
+  }
+
   private validateDraftInput(input: DraftInput, patch = false): void {
     if (!patch && !input.channel) throw new DraftError('validation_failed', { field: 'channel' });
     if (input.channel && !CHANNELS.has(input.channel)) throw new DraftError('validation_failed', { field: 'channel' });

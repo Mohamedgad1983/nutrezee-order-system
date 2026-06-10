@@ -37,6 +37,12 @@ export interface ReviewQueueRecord {
   warnings: CompletenessWarning[];
 }
 
+export interface ApprovedReviewDecision {
+  draftId: string;
+  warningsOverridden: WarningOverrideInput[];
+  decidedBy: string;
+}
+
 export class ReviewError extends Error {
   constructor(
     readonly code:
@@ -187,6 +193,21 @@ export class ReviewService {
 
       await this.writeApprovalInTx(client, actor, draftId, input.warningsOverridden ?? []);
     });
+  }
+
+  async approvedDecisionForDraft(draftId: string): Promise<ApprovedReviewDecision | null> {
+    const { rows } = await this.pool.query(
+      `SELECT warnings_overridden, decided_by FROM review_decision
+       WHERE draft_id = $1 AND decision = 'approve'
+       ORDER BY decided_at DESC LIMIT 1`,
+      [draftId],
+    );
+    if (rows.length === 0) return null;
+    return {
+      draftId,
+      warningsOverridden: (rows[0].warnings_overridden as WarningOverrideInput[] | null) ?? [],
+      decidedBy: rows[0].decided_by as string,
+    };
   }
 
   private async hasApproval(draftId: string): Promise<boolean> {
