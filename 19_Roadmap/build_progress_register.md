@@ -26,7 +26,7 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | WP-02 | RBAC & staff admin | **DONE 2026-06-10** | `build/wp-02-rbac-staff-admin` → merge `2091f7c` (feat `ce9f762`) | Local 37/37 (TS-R full matrix log+warn+deny sweeps; TS-U staff ×10) + lint/scans; CI 13/13 green | — | Staff lifecycle HIGH-audited w/ diffs; grants only via M13 (C4); dormant-grant alert; level caps [Proposed]; matrix export-compare CLI; argon2 params pinned. NC carried: matrix content awaits S8 sign-off; admin SPA screens consolidate at WP-07 UI |
 | WP-03 | Settings & transition engine | **DONE 2026-06-10** | `build/wp-03-settings-transition-engine` → merge `4906fbc` | Local 51/51 (TS-U transitions GENERATED from config: 40+ active rules × allow/role/reason + fail-closed validators + no-redeploy config edits; TS-I settings invalidation proven) + CI 13/13 | — | Engine = platform service; owning modules write their own tables via apply callback (ADR-010). Rule CONTENT stays workshop-owned [NC DEC-005/006] |
 | WP-04 | Customers | **DONE 2026-06-10** | `build/wp-04-customers` → merge (see git log) | Local 61/61 (TS-U dedup/read-logging; TS-S #6 merge+undo) + CI 13/13 | A1 applied in DDL | Soft-unique phones (family-share NC); merge re-link hook ready for WP-07 drafts; HTTP surface consolidates at WP-07; primary-phone ordering bug caught by partial index in test |
-| WP-05 | Catalog | NOT STARTED | — | — | — | |
+| WP-05 | Catalog | **DONE 2026-06-10** | `build/wp-05-catalog` → merge (git log) | Local 68/68 (TS-U allergen-resolver + mirror-mode DoD) + CI 13/13 | **A6** | Mirror mode proven (import-only core writes until cutover_catalog); cycle guard (C7); routing rules zero-row [NC DEC-006]; catalog owner [NC Q1] |
 | WP-06 | Import tooling | NOT STARTED | — | — | — | |
 | WP-07 | Intake & WhatsApp panel | NOT STARTED | — | — | — | Hard NC: intake field set (workshop S3) |
 | WP-08 | Review queue | NOT STARTED | — | — | — | |
@@ -53,4 +53,5 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 | ID | Date | Amendment | Raised by |
 |---|---|---|---|
 | A5 | 2026-06-10 | WP-00 "Environment standup" added ahead of WP-01 to satisfy global gate ④ (staging+CI) — resolves the bootstrap circularity in the Phase 4 gate; entry gate ①+③ only, no business code; staging provisioning conditional on a PG-region residency note in 20_Decisions/ (stop-rule carve-out); CI guards remain placeholders until WP-01 implements them | Phase 5 master prompt |
-| *next: A6* | | | |
+| A6 | 2026-06-10 | `ingredient_allergen` link table added (wave-2 catalog DDL) — AllergenResolver's derived_from_ingredient semantics required ingredient→allergen links missing from the logical data model; structure-only, discovered during WP-05 | WP-05 build session |
+| *next: A7* | | | |
