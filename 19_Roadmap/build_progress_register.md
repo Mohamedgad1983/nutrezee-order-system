@@ -39,6 +39,13 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 
 Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC — name it) · DONE (merged, suites green, pushed).
 
+## Run log
+
+| Date | Mode | Result |
+|---|---|---|
+| 2026-06-10 | Mode A — WP-00 | DONE (merge `e704eca`); suites green locally; staging deferred (region NC); WP-01 declared BLOCKED |
+| 2026-06-10 | **Sprint Mode** (first run, after Mode B added @ `1ac4876`) | STEP 0 re-verified live: ①③ ✅, ② ❌, ⑤ ❌, ④ ◐. WP-00 already DONE (artifacts verified). Next eligible per dependency diagram = WP-01 → entry gate fails (② DEC-003, ⑤ workshop/NC-carry) → sprint stopped honestly, **0 new WPs executed**, no eligible WPs remain. Unblock = sign DEC-003 + record NC-carry note (or hold workshop) + PG-region note. |
+
 ## Amendments log (continues `phase_4_to_build_handoff.md` §4 — A1–A4 recorded there)
 
 | ID | Date | Amendment | Raised by |
