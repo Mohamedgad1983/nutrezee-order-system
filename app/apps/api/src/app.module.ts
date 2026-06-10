@@ -27,6 +27,10 @@ import { PaymentController } from './modules/m07-payments/payment.controller';
 import { PaymentService } from './modules/m07-payments/payment.service';
 import { KitchenController } from './modules/m08-kitchen/kitchen.controller';
 import { KitchenService } from './modules/m08-kitchen/kitchen.service';
+import { NotificationController } from './modules/m11-notifications/notification.controller';
+import { NotificationService } from './modules/m11-notifications/notification.service';
+import { ReportController } from './modules/m15-reports/report.controller';
+import { ReportService } from './modules/m15-reports/report.service';
 import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
@@ -37,6 +41,7 @@ export const POOL = 'POOL';
   controllers: [
     HealthController, AuthController, StaffController, SettingsController,
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
+    NotificationController, ReportController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -154,6 +159,18 @@ export const POOL = 'POOL';
         transitions: TransitionEngine, orders: OrderService,
       ) => new PaymentService(pool, audit, outbox, transitions, orders),
       inject: [POOL, AuditService, OutboxService, TransitionEngine, OrderService],
+    },
+    {
+      provide: NotificationService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService, settings: SettingsReader,
+      ) => new NotificationService(pool, audit, outbox, settings),
+      inject: [POOL, AuditService, OutboxService, SettingsReader],
+    },
+    {
+      provide: ReportService,
+      useFactory: (pool: Pool, audit: AuditService) => new ReportService(pool, audit),
+      inject: [POOL, AuditService],
     },
   ],
 })

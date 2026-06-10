@@ -8,7 +8,7 @@ describe('TS-C api contract', () => {
   it('placeholder until module WPs', () => expect(true).toBe(true));
 });
 describe('TS-E event replay', () => {
-  it('placeholder until WP-12', () => expect(true).toBe(true));
+  it('placeholder for additional replay suites after WP-12', () => expect(true).toBe(true));
 });
 describe('TS-S end-to-end scenarios', () => {
   it('placeholder until WP-04..14', () => expect(true).toBe(true));

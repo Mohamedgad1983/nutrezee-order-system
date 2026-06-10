@@ -112,7 +112,7 @@ describe('TS-R rbac — staged enforcement modes', () => {
   it('visibility grants aggregate across roles (masking input)', async () => {
     const grants = await access.visibilityGrants(['admin']);
     expect(grants.has('pii')).toBe(true); // staff.read carries ["pii"]
-    const none = await access.visibilityGrants(['report_viewer']);
+    const none = await access.visibilityGrants(['driver']);
     expect(none.has('pii')).toBe(false);
   });
 });

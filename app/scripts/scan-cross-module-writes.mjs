@@ -41,6 +41,8 @@ const OWNERSHIP = {
   payment_record: 'm07-payments', payment_review_item: 'm07-payments',
   // wave 5 (WP-10)
   kitchen_ticket: 'm08-kitchen', ticket_status_event: 'm08-kitchen', escalation: 'm08-kitchen',
+  // wave 5 (WP-12)
+  notification_template: 'm11-notifications', notification_log: 'm11-notifications',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;
