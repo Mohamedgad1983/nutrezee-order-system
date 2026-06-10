@@ -2,6 +2,14 @@
 
 **Purpose:** Logical and physical data design
 **Store here:** Per-domain ERDs, data dictionary, old-to-new migration mapping (DEC-012), retention rules
+
+## Contents (Phase 3, 2026-06-11)
+- `phase_3_data_model_blueprint.md` — input review, contradictions C1–C7, modeling decisions DM-01–08 (start here)
+- `logical_data_model.md` — 38 MVP entities + 9 dormant stubs, ERDs per module
+- `data_dictionary.md` — entity index, conventions, identifier strategy, 25-enum registry
+- `migration_mapping.md` — catalog/customer/active-plan imports, dedup, rollback (amendments A1/A2)
+
+Physical schema: Phase 4, after DEC-011.
 **Owner:** Data Architect
 **Depends on:** 13_Architecture, old-schema access
 
