@@ -12,17 +12,17 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | ① DEC-011 stack signed | ✅ SIGNED 2026-06-10 |
 | ② DEC-003 MVP cut signed | ❌ OPEN |
 | ③ R1 remote backup | ✅ CLOSED 2026-06-10 (GitHub, both branches) |
-| ④ Staging + CI live | ❌ Not yet — CI half satisfied by WP-00; staging half satisfied by WP-00 only after a PG-region (residency) note lands in `20_Decisions/` |
+| ④ Staging + CI live | ◐ CI half ✅ (workflow live since WP-00, 2026-06-10 — verify first GitHub run); staging half ❌ deferred pending a PG-region (residency) note in `20_Decisions/` (provisioning checklist ready: `16_Deployment/environment_plan.md` §3) |
 | ⑤ Workshop held / NC-carry acceptance | ❌ Neither recorded |
 
-**Currently eligible:** WP-00 only (its entry gate = ① + ③, both ✅). WP-01 eligible after WP-00 + ② + ⑤(or NC-carry for WP-01–06).
+**Currently eligible:** none — WP-00 is DONE (2026-06-10); WP-01 is **BLOCKED** on ② DEC-003 signature + ⑤ workshop/NC-carry + ④ staging half (region note). Build resumes when those land.
 
 ## Work package status
 
 | WP | Title | Status | Branch / merge commit | Suites green | Amendments | Notes / NC carried |
 |---|---|---|---|---|---|---|
-| WP-00 | Environment standup | NOT STARTED | — | — | — | Defined in phase_5_master_prompt (A5) |
-| WP-01 | Platform foundation | NOT STARTED | — | — | — | |
+| WP-00 | Environment standup | **DONE 2026-06-10** | `build/wp-00-environment-standup` → merge `e704eca` (feat `213478c`) | lint ✅ typecheck ✅ build ✅ placeholder suites 8/8 ✅ + `GET /health` runtime smoke ✅ (all local) | A5 | Staging deferred per A5 carve-out (no PG-region note); compose authored but unvalidated locally (Docker not installed); first GitHub CI run to be verified post-push |
+| WP-01 | Platform foundation | **BLOCKED 2026-06-10** | — | — | — | Exact blockers: ② DEC-003 OPEN (sponsor signature on `13_Architecture/mvp_architecture_cut.md`); ⑤ no workshop minutes in `22_Meeting_Notes/` and no sponsor NC-carry note in `20_Decisions/`; ④ staging half pending PG-region note. No business code may be written until cleared (stop-rule). |
 | WP-02 | RBAC & staff admin | NOT STARTED | — | — | — | |
 | WP-03 | Settings & transition engine | NOT STARTED | — | — | — | |
 | WP-04 | Customers | NOT STARTED | — | — | — | |
