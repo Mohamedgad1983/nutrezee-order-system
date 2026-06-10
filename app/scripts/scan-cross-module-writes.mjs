@@ -25,7 +25,8 @@ const OWNERSHIP = {
   package_for_type: 'm05-catalog', ingredient: 'm05-catalog', allergen: 'm05-catalog',
   product: 'm05-catalog', product_component: 'm05-catalog', product_ingredient: 'm05-catalog',
   product_allergen: 'm05-catalog', nutrition_facts: 'm05-catalog', package: 'm05-catalog',
-  routing_rule: 'm05-catalog',
+  routing_rule: 'm05-catalog', ingredient_allergen: 'm05-catalog', // A6
+
   import_batch: 'm19-migration', import_row_result: 'm19-migration', sync_record: 'm18-bridge',
 };
 
