@@ -1,0 +1,11 @@
+{
+  "name": "@nutrezee/shared",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Shared TS types mirrored from 11_API_Design/module_api_contracts.md — the .md remains the single source of contract truth; divergence = amendment, then fix the types",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

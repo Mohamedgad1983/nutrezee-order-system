@@ -1,0 +1,82 @@
+# Nutrezee Order System CI — WP-00 foundation.
+# Suite jobs (ts-u…ts-s) run placeholder tests until each WP implements the real suite
+# (15_Testing/test_strategy.md). boundary-scan and no-get-mutation-scan are placeholders
+# until WP-01 implements the real guards (backend_foundation §1/§8).
+name: ci
+on:
+  push:
+    branches: ["main", "build/**"]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+
+  lint:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - run: npm run typecheck
+
+  build:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - run: npm run build
+
+  suites:
+    needs: install
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        suite: [ts-u, ts-i, ts-m, ts-r, ts-a, ts-c, ts-e, ts-s]
+    name: ${{ matrix.suite }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - run: npx vitest run -t "${SUITE_FILTER}"
+        env:
+          SUITE_FILTER: ${{ matrix.suite == 'ts-u' && 'TS-U' || matrix.suite == 'ts-i' && 'TS-I' || matrix.suite == 'ts-m' && 'TS-M' || matrix.suite == 'ts-r' && 'TS-R' || matrix.suite == 'ts-a' && 'TS-A' || matrix.suite == 'ts-c' && 'TS-C' || matrix.suite == 'ts-e' && 'TS-E' || 'TS-S' }}
+
+  boundary-scan:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "placeholder — cross-module table-write scan implemented in WP-01 (backend_foundation §1)"
+
+  no-get-mutation-scan:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "placeholder — no-GET-mutation scan implemented in WP-01 (backend_foundation §8)"

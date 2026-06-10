@@ -1,0 +1,46 @@
+# Nutrezee Order System — local/staging composition (WP-00)
+# Local verification note 2026-06-10: authored on a machine without Docker installed;
+# `docker compose config` validation pending first machine with Docker (recorded in
+# build_progress_register.md WP-00 row).
+name: nutrezee
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nutrezee
+      POSTGRES_PASSWORD: nutrezee # local dev only — staging/prod values come from the secret store
+      POSTGRES_DB: nutrezee
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nutrezee"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://nutrezee:nutrezee@postgres:5432/nutrezee
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
