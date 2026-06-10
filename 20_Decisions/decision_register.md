@@ -16,3 +16,5 @@
 | DEC-010 | Day-one KPIs | P0 management analytics set | Management | Phase 4 entry (G3) | OPEN |
 | DEC-011 | Hosting & stack | DECIDED — see DEC-011_stack_hosting.md | Tech Lead + Sponsor | End Phase 0 | **SIGNED 2026-06-10 — TypeScript/NestJS modular monolith + PostgreSQL (managed) + React/Vite admin & PWAs; SQL-first migrations; server-side sessions; GitHub Actions CI/CD; staging+prod containers. PostgreSQL posture of Phase 4 confirmed unchanged.** |
 | DEC-012 | Data migration approach | Scope of old data migrated; timing; validation method | Tech Lead + Ops | Phase 1 | OPEN |
+| DEC-013 | Go-Live | Reserved — sponsor go-live decision per `19_Roadmap/phase_6_master_prompt.md` STEP 6 | Sponsor | Phase 6 | RESERVED |
+| DEC-014 | Staging gate re-scope (WP-01–06) | DECIDED — see NOTE_staging_gate_rescope_wp01_06.md: staging-live moves to hard pre-pilot/WP-14 entry; WP-01–06 build on local + CI (CI mandatory, unweakened); staging NOT provisioned, not marked done | Sponsor | Before WP-01 | **SIGNED 2026-06-10** |

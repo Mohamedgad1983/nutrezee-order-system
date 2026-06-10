@@ -21,16 +21,17 @@
 | Workshop / NC-carry | ◐ **NC-carry accepted 2026-06-10** for WP-01–06 (`NOTE_nc_carry_acceptance_wp01_06.md`); workshop itself still outstanding — WP-07+ stay workshop-blocked |
 | PG region / data residency | ◐ **Interim staging region noted 2026-06-10**: AWS me-south-1 (`NOTE_pg_staging_region_interim.md`); final production region revisited pre-launch (residency check stays open toward Phase 6) |
 
-## What blocks WP-01+ (after the 2026-06-10 sponsor unblock pack)
+## What blocks WP-01+ (after DEC-014 staging re-scope, 2026-06-10)
 
-WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ⑤ ✅ (WP-01–06 via NC-carry). **Sole remaining blocker:**
-1. **④ staging half — staging is not provisioned/live.** The region note unblocked the checklist (`16_Deployment/environment_plan.md` §3), but executing it needs a cloud account + credentials — a human/infra action an agent cannot invent (missing-credential = sprint stop condition).
+WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–06 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (NC-carry, WP-01–06).
 
-WP-07+ additionally remain workshop-blocked (hard NCs: intake field set, DEC-005 finals, DEC-006 sections) — untouched by the NC-carry note. WP-00: ✅ DONE.
+**→ WP-01–06: no entry blockers. WP-01 is ELIGIBLE.**
 
-## Exact unblock actions (one of)
+Still standing, clearly scoped:
+1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–06 build). Region: AWS me-south-1 interim.
+2. **WP-07+ workshop blockers** — intake field set (S3), DEC-005 finals, DEC-006 sections; untouched by NC-carry or DEC-014.
+3. Practical session duty: each WP merge requires green CI on GitHub — the executing session must verify runs (Actions tab; `gh` CLI not installed on the authoring machine).
 
-1. **Provision staging** per `16_Deployment/environment_plan.md` §3 (AWS me-south-1 interim): managed PG 16 + container host + secrets, deploy the WP-00 shell, record the URL — or hand the agent credentials to do it.
-2. **Or** a sponsor decision re-scoping gate ④'s staging-live requirement to pre-pilot (WP-14 entry), letting WP-01–06 build on local+CI verification. One short note in `20_Decisions/`; the gate text itself would then be amended with a dated status note.
+## Exact next action
 
-Then: `Execute Phase 5 Sprint Build Mode per 19_Roadmap/phase_5_master_prompt.md` runs WP-01→02→03→04/05→06 in one session, stopping honestly at WP-07's workshop dependency.
+`Execute Phase 5 Sprint Build Mode per 19_Roadmap/phase_5_master_prompt.md` — runs WP-01→02→03→04/05→06 atomically, stopping honestly at WP-07's workshop dependency. In parallel (human): provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.

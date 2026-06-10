@@ -54,7 +54,7 @@ Verify LIVE on disk/remote — snapshots in this file may be stale:
    ① DEC-011 signed — check `20_Decisions/decision_register.md` (was SIGNED 2026-06-10 ✅)
    ② DEC-003 signed — check register (was OPEN at this prompt's writing)
    ③ R1 closed — `git remote -v` + branch tracking (was CLOSED 2026-06-10 ✅)
-   ④ staging + CI live — satisfied by **WP-00** (below); verify `16_Deployment/` + `.github/workflows/` exist and CI ran
+   ④ staging + CI live — satisfied by **WP-00** (below); verify `16_Deployment/` + `.github/workflows/` exist and CI ran. *(Status note 2026-06-10 — DEC-014 / `20_Decisions/NOTE_staging_gate_rescope_wp01_06.md`: for WP-01–06 ONLY, the staging-live half is re-scoped to a hard pre-pilot/WP-14 entry condition; WP-01–06 require CI green + local verification. CI remains mandatory and unweakened. Staging is NOT provisioned — never mark it done until provisioned and smoke-tested.)*
    ⑤ workshop held (minutes in `22_Meeting_Notes/`) OR sponsor NC-carry acceptance for WP-01–06 recorded in `20_Decisions/` (was: neither, at this prompt's writing)
    Exception: **WP-00 requires only ① and ③** — it writes no business code.
 2. **WP stop-rule:** the invoked WP's "NC blockers" column in `codex_implementation_sequence.md` (for WP-00 only: the NC-blockers line of this file's WP-00 section — the sequence file intentionally has no WP-00 row); if a blocker affects its DoD and is unresolved → STOP.
