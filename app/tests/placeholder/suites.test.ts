@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vitest';
 // (tests/integration/). A placeholder passing here means "suite not yet
 // implemented", never "feature verified".
 
-describe('TS-M migration', () => {
-  it('placeholder until WP-06', () => expect(true).toBe(true));
-});
 describe('TS-C api contract', () => {
   it('placeholder until module WPs', () => expect(true).toBe(true));
 });

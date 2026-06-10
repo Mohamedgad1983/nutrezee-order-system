@@ -38,7 +38,7 @@ export class CatalogService {
 
   async createProduct(
     actor: StaffContext,
-    p: { nameEn: string; nameAr: string; code?: string; mealTypeId?: string; price?: number },
+    p: { nameEn: string; nameAr: string; code?: string; mealTypeId?: string; price?: number; importBatchId?: string },
     via: 'admin' | 'import' = 'admin',
     client?: PoolClient,
   ): Promise<string> {
@@ -47,10 +47,10 @@ export class CatalogService {
     const id = newId();
     const run = async (c: PoolClient) => {
       await c.query(
-        `INSERT INTO product (id, code, name_en, name_ar, meal_type_id, price, origin, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        `INSERT INTO product (id, code, name_en, name_ar, meal_type_id, price, origin, import_batch_id, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [id, p.code ?? null, p.nameEn, p.nameAr, p.mealTypeId ?? null, p.price ?? null,
-         via === 'import' ? 'legacy' : 'new', actor.staffId],
+         via === 'import' ? 'legacy' : 'new', via === 'import' ? (p.importBatchId ?? null) : null, actor.staffId],
       );
       await this.audit.writeInTx(c, {
         eventType: 'settings.changed', // product changes audit WARN (data_ownership)
@@ -66,7 +66,7 @@ export class CatalogService {
 
   async createPackage(
     actor: StaffContext,
-    p: { nameEn: string; nameAr: string; parentPackageId?: string; durationDays?: number; mealsPerDay?: number; price?: number },
+    p: { nameEn: string; nameAr: string; parentPackageId?: string; durationDays?: number; mealsPerDay?: number; price?: number; importBatchId?: string },
     via: 'admin' | 'import' = 'admin',
     client?: PoolClient,
   ): Promise<string> {
@@ -74,10 +74,11 @@ export class CatalogService {
     const id = newId();
     const run = async (c: PoolClient) => {
       await c.query(
-        `INSERT INTO package (id, name_en, name_ar, parent_package_id, duration_days, meals_per_day, price, origin, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO package (id, name_en, name_ar, parent_package_id, duration_days, meals_per_day, price, origin, import_batch_id, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [id, p.nameEn, p.nameAr, p.parentPackageId ?? null, p.durationDays ?? null,
-         p.mealsPerDay ?? null, p.price ?? null, via === 'import' ? 'legacy' : 'new', actor.staffId],
+         p.mealsPerDay ?? null, p.price ?? null, via === 'import' ? 'legacy' : 'new',
+         via === 'import' ? (p.importBatchId ?? null) : null, actor.staffId],
       );
       await this.audit.writeInTx(c, {
         eventType: 'settings.changed',
@@ -159,6 +160,26 @@ export class CatalogService {
       [productId],
     );
     return rows.map((r) => ({ allergenId: r.allergen_id, nameEn: r.name_en, source: r.source }));
+  }
+
+  /** Import path for bilingual masters (M19 calls this — ADR-010): match-or-create
+   *  by name within the CALLER's transaction. */
+  async importMaster(
+    client: PoolClient,
+    table: 'meal_type' | 'diet_status' | 'tag' | 'package_for_type' | 'ingredient' | 'allergen',
+    nameEn: string,
+    nameAr: string,
+    batchId: string,
+  ): Promise<{ id: string; matched: boolean }> {
+    const found = await client.query(`SELECT id FROM ${table} WHERE lower(name_en) = lower($1)`, [nameEn]);
+    if (found.rowCount && found.rowCount > 0) return { id: found.rows[0].id, matched: true };
+    const id = newId();
+    await client.query(
+      `INSERT INTO ${table} (id, name_en, name_ar, origin, import_batch_id, created_by)
+       VALUES ($1,$2,$3,'legacy',$4,'import')`,
+      [id, nameEn, nameAr, batchId],
+    );
+    return { id, matched: false };
   }
 
   /** Routing-rule admin (ADR-006: rules are data; kitchen.routing_changed audit). */
