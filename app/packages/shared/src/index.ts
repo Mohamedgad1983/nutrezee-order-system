@@ -64,3 +64,27 @@ export interface DraftContract {
   whatsapp_ref_attached: boolean;
   version: number;
 }
+
+export type ReviewQueueState = 'waiting' | 'in_review' | 'decided';
+export type ReviewDecision = 'approve' | 'reject' | 'return' | 'hold';
+
+export interface ReviewQueueItemContract {
+  id: string;
+  draft_id: string;
+  entered_at: string;
+  sla_due_at: string;
+  sla_late: boolean;
+  reviewer_id: string | null;
+  queue_state: ReviewQueueState;
+  draft_state: DraftState | string;
+  channel: DraftChannel | string;
+  missing: string[];
+  warnings: DraftCompletenessContract['warnings'];
+}
+
+export interface ReviewDecisionContract {
+  decision: ReviewDecision;
+  reason_code?: string;
+  note?: string;
+  warnings_overridden?: Array<{ field: string; reason: string }>;
+}

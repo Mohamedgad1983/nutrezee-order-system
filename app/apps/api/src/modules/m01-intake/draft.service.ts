@@ -98,6 +98,16 @@ export interface DraftRecord {
   whatsapp_ref_attached: boolean;
 }
 
+export interface ReviewDraftMeta {
+  id: string;
+  state: DraftState;
+  channel: DraftChannel;
+  customer_id: string | null;
+  created_by: string | null;
+  completeness: CompletenessSnapshot;
+  allergy_conflicts: AllergyConflict[];
+}
+
 export class DraftError extends Error {
   constructor(
     readonly code:
@@ -417,6 +427,52 @@ export class DraftService {
     return ids;
   }
 
+  async submittedReviewMetas(limit = 100): Promise<ReviewDraftMeta[]> {
+    const { rows } = await this.pool.query(
+      `SELECT * FROM draft_order WHERE state = 'submitted' ORDER BY submitted_at NULLS LAST, created_at LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => this.toReviewMeta(this.castDraftRow(r)));
+  }
+
+  async reviewMeta(draftId: string): Promise<ReviewDraftMeta> {
+    return withTransaction(this.pool, async (client) =>
+      this.toReviewMeta(await this.loadDraftRowInTx(client, draftId, false)),
+    );
+  }
+
+  async transitionFromReviewInTx(
+    client: PoolClient,
+    actor: StaffContext,
+    draftId: string,
+    to: 'returned' | 'rejected',
+    reason: { code: string; note?: string },
+  ): Promise<void> {
+    const draft = await this.loadDraftRowInTx(client, draftId, true);
+    await this.transitions.transitionInTx(
+      {
+        machine: 'draft',
+        subjectType: 'draft_order',
+        subjectId: draftId,
+        from: draft.state,
+        to,
+        actor,
+        reason,
+        eventType: to === 'returned' ? 'order.returned' : 'order.rejected',
+        refs: draft.customer_id ? { customer: draft.customer_id } : undefined,
+        apply: async (tx) => {
+          await tx.query(
+            `UPDATE draft_order SET state = $2,
+               returned_at = CASE WHEN $2 = 'returned' THEN now() ELSE returned_at END,
+               updated_at = now(), updated_by = $3, version = version + 1 WHERE id = $1`,
+            [draftId, to, actor.staffId],
+          );
+        },
+      },
+      client,
+    );
+  }
+
   private validateDraftInput(input: DraftInput, patch = false): void {
     if (!patch && !input.channel) throw new DraftError('validation_failed', { field: 'channel' });
     if (input.channel && !CHANNELS.has(input.channel)) throw new DraftError('validation_failed', { field: 'channel' });
@@ -654,6 +710,18 @@ export class DraftService {
     };
   }
 
+  private toReviewMeta(row: DraftRow): ReviewDraftMeta {
+    return {
+      id: row.id,
+      state: row.state,
+      channel: row.channel,
+      customer_id: row.customer_id,
+      created_by: row.created_by,
+      completeness: row.completeness,
+      allergy_conflicts: row.allergy_conflicts,
+    };
+  }
+
   private mergeInput(
     row: DraftRow,
     items: Array<{ product_id: string; qty: number; note: string | null }>,
@@ -702,6 +770,7 @@ export class DraftService {
       allergy_conflicts: (row.allergy_conflicts as AllergyConflict[] | null) ?? [],
       notes: row.notes as string | null,
       submitted_at: row.submitted_at ? new Date(row.submitted_at as string).toISOString() : null,
+      created_by: row.created_by as string | null,
       version: row.version as number,
     };
   }
@@ -742,6 +811,7 @@ interface DraftRow {
   allergy_conflicts: AllergyConflict[];
   notes: string | null;
   submitted_at: string | null;
+  created_by: string | null;
   version: number;
 }
 
