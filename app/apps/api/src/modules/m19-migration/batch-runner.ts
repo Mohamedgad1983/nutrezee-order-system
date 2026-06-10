@@ -4,6 +4,8 @@ import { AuditService } from '../../platform/audit/audit.service';
 import type { StaffContext } from '../../platform/auth/session.service';
 import { SyncRecordService } from '../m18-bridge/sync-record.service';
 import { newId } from '../../platform/ids';
+import type { OrderService } from '../m03-orders/order.service';
+import type { PaymentService } from '../m07-payments/payment.service';
 
 export type BatchType = 'customer' | 'catalog' | 'active_plans';
 export type RowAction = 'created' | 'matched' | 'merge_review' | 'skipped' | 'error';
@@ -52,6 +54,8 @@ export class BatchRunner {
     private readonly pool: Pool,
     private readonly audit: AuditService,
     private readonly sync: SyncRecordService,
+    private readonly orders?: OrderService,
+    private readonly payments?: PaymentService,
   ) {}
 
   hashSource(rows: Array<Record<string, unknown>>): string {
@@ -153,6 +157,22 @@ export class BatchRunner {
       if (rows.length === 0) throw new ImportError('not_found');
       if (rows[0].state !== 'applied') throw new ImportError('not_applied', rows[0].state);
       try {
+        if (rows[0].type === 'active_plans') {
+          if (!this.orders || !this.payments) throw new ImportError('rollback_blocked', 'active-plan owner rollback ports not configured');
+          const paymentRefs = await this.payments.rollbackImportedBatchInTx(client, batchId);
+          await this.sync.clearByNewRefs(client, paymentRefs);
+          const orderRefs = await this.orders.rollbackImportedBatchInTx(client, batchId);
+          await this.sync.clearByNewRefs(client, orderRefs);
+          await client.query(`UPDATE import_batch SET state = 'rolled_back', updated_at = now() WHERE id = $1`, [batchId]);
+          await this.audit.writeInTx(client, {
+            eventType: 'bridge.import_run',
+            actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+            entityType: 'import_batch', entityId: batchId, severity: 'high',
+            after: { rolled_back: true, type: 'active_plans' },
+          });
+          await client.query('COMMIT');
+          return;
+        }
         // child-first deletion, explicit per child shape (errors must propagate —
         // a swallowed error aborts the PG transaction and poisons later statements)
         for (const table of ['customer_phone', 'address']) {
@@ -191,6 +211,31 @@ export class BatchRunner {
     } finally {
       client.release();
     }
+  }
+
+  async report(batchId: string): Promise<BatchReport> {
+    const batch = await this.pool.query(
+      `SELECT id, type, dry_run, source_note, counts FROM import_batch WHERE id = $1`,
+      [batchId],
+    );
+    if (batch.rows.length === 0) throw new ImportError('not_found');
+    const rows = await this.pool.query(
+      `SELECT row_no, action, target_ref, messages
+       FROM import_row_result WHERE batch_id = $1 ORDER BY row_no`,
+      [batchId],
+    );
+    return {
+      batchId: batch.rows[0].id as string,
+      dryRun: Boolean(batch.rows[0].dry_run),
+      sourceHash: batch.rows[0].source_note as string,
+      counts: batch.rows[0].counts as Record<RowAction, number>,
+      rows: rows.rows.map((r) => ({
+        rowNo: Number(r.row_no),
+        action: r.action as RowAction,
+        targetRef: (r.target_ref as string | null) ?? undefined,
+        messages: r.messages as string[],
+      })),
+    };
   }
 
   private enforceGates(type: BatchType, counts: Record<RowAction, number>, total: number): void {

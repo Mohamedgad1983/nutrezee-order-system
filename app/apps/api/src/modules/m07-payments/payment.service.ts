@@ -52,6 +52,24 @@ export interface PaymentReviewItem {
   created_at: string;
 }
 
+export interface ImportedLegacyPaymentInput {
+  orderId: string;
+  legacyStatus: string;
+  method?: string;
+  amount?: number;
+  currency?: string;
+  transactionRef?: string;
+  evidenceNote?: string;
+  importBatchId: string;
+}
+
+export interface ImportedLegacyPaymentResult {
+  paymentId: string;
+  mappedStatus: PaymentStatus;
+  reviewId?: string;
+  unmapped: boolean;
+}
+
 interface PaymentRow {
   id: string;
   order_id: string;
@@ -67,6 +85,28 @@ interface PaymentRow {
 const DIRECT_PAYMENT_STATUSES = new Set<PaymentStatus>([
   'link_sent', 'paid', 'failed', 'cod_pending', 'collected',
 ]);
+
+const LEGACY_PAYMENT_STATUS_MAP: Record<string, PaymentStatus> = {
+  unpaid: 'unpaid',
+  pending: 'unpaid',
+  not_paid: 'unpaid',
+  link_sent: 'link_sent',
+  payment_link_sent: 'link_sent',
+  paid: 'paid',
+  paid_online: 'paid',
+  paid_cash: 'paid',
+  success: 'paid',
+  failed: 'failed',
+  declined: 'failed',
+  cod: 'cod_pending',
+  cod_pending: 'cod_pending',
+  cash_on_delivery: 'cod_pending',
+  collected: 'collected',
+};
+
+function normalizeLegacyPaymentStatus(status: string): string {
+  return status.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
 
 export class PaymentService {
   constructor(
@@ -186,6 +226,76 @@ export class PaymentService {
       });
       return { id, payment_id: payment.id };
     });
+  }
+
+  async importLegacyPaymentInTx(
+    client: PoolClient,
+    actorId: string,
+    input: ImportedLegacyPaymentInput,
+  ): Promise<ImportedLegacyPaymentResult> {
+    if (!input.legacyStatus.trim()) throw new PaymentError('validation_failed', { field: 'legacy_status' });
+    const existing = await client.query(`SELECT * FROM payment_record WHERE order_id = $1`, [input.orderId]);
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0] as PaymentRow;
+      return { paymentId: row.id, mappedStatus: row.status, unmapped: false };
+    }
+    const normalized = normalizeLegacyPaymentStatus(input.legacyStatus);
+    const mapped = LEGACY_PAYMENT_STATUS_MAP[normalized] ?? 'unpaid';
+    const paymentId = newId();
+    await client.query(
+      `INSERT INTO payment_record
+        (id, order_id, status, method, amount, currency, transaction_ref, evidence_note,
+         origin, import_batch_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'legacy',$9,$10)`,
+      [
+        paymentId, input.orderId, mapped, input.method ?? null, input.amount ?? 0,
+        input.currency ?? 'SAR', input.transactionRef ?? null, input.evidenceNote ?? null,
+        input.importBatchId, actorId,
+      ],
+    );
+    if (LEGACY_PAYMENT_STATUS_MAP[normalized]) {
+      await this.audit.writeInTx(client, {
+        eventType: 'payment.legacy_status_imported',
+        actor: { id: actorId, role: 'import' },
+        entityType: 'payment_record',
+        entityId: paymentId,
+        severity: 'high',
+        relatedRefs: { order_id: input.orderId },
+        after: { legacy_status: input.legacyStatus, mapped_status: mapped },
+      });
+      return { paymentId, mappedStatus: mapped, unmapped: false };
+    }
+    const reviewId = newId();
+    await client.query(
+      `INSERT INTO payment_review_item (id, payment_id, requested_status, evidence_note, requested_by)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [
+        reviewId, paymentId, `legacy_unmapped:${input.legacyStatus}`,
+        input.evidenceNote ?? 'Legacy payment status requires finance mapping review', actorId,
+      ],
+    );
+    await this.audit.writeInTx(client, {
+      eventType: 'payment.legacy_status_unmapped',
+      actor: { id: actorId, role: 'import' },
+      entityType: 'payment_review_item',
+      entityId: reviewId,
+      severity: 'high',
+      relatedRefs: { payment_id: paymentId, order_id: input.orderId },
+      after: { legacy_status: input.legacyStatus, mapped_status: mapped },
+    });
+    return { paymentId, mappedStatus: mapped, reviewId, unmapped: true };
+  }
+
+  async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {
+    const { rows } = await client.query(
+      `SELECT id FROM payment_record WHERE import_batch_id = $1 FOR UPDATE`,
+      [batchId],
+    );
+    const paymentIds = rows.map((r) => r.id as string);
+    if (paymentIds.length === 0) return [];
+    await client.query(`DELETE FROM payment_review_item WHERE payment_id = ANY($1)`, [paymentIds]);
+    await client.query(`DELETE FROM payment_record WHERE id = ANY($1)`, [paymentIds]);
+    return paymentIds;
   }
 
   async listReviewQueue(state: 'waiting' | 'in_review' | 'decided' = 'waiting'): Promise<PaymentReviewItem[]> {
