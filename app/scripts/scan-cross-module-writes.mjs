@@ -32,6 +32,8 @@ const OWNERSHIP = {
   // wave 3 (WP-07)
   draft_order: 'm01-intake', draft_item: 'm01-intake',
   whatsapp_message_ref: 'm17-whatsapp',
+  // wave 3 (WP-08)
+  review_queue_item: 'm02-review', review_decision: 'm02-review',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;

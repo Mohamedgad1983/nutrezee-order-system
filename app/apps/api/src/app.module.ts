@@ -19,6 +19,8 @@ import { CustomerService } from './modules/m04-customers/customer.service';
 import { CatalogService } from './modules/m05-catalog/catalog.service';
 import { DraftController } from './modules/m01-intake/draft.controller';
 import { DraftService } from './modules/m01-intake/draft.service';
+import { ReviewController } from './modules/m02-review/review.controller';
+import { ReviewService } from './modules/m02-review/review.service';
 import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
@@ -26,7 +28,10 @@ import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
 export const POOL = 'POOL';
 
 @Module({
-  controllers: [HealthController, AuthController, StaffController, SettingsController, DraftController],
+  controllers: [
+    HealthController, AuthController, StaffController, SettingsController,
+    DraftController, ReviewController,
+  ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
     AuditService,
@@ -102,6 +107,14 @@ export const POOL = 'POOL';
         POOL, AuditService, OutboxService, SettingsReader, IdempotencyService, TransitionEngine,
         CustomerService, CatalogService, MessageRefService,
       ],
+    },
+    {
+      provide: ReviewService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService,
+        settings: SettingsReader, drafts: DraftService,
+      ) => new ReviewService(pool, audit, outbox, settings, drafts),
+      inject: [POOL, AuditService, OutboxService, SettingsReader, DraftService],
     },
   ],
 })

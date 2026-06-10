@@ -68,6 +68,10 @@ export class TransitionEngine {
   }
 
   async transition(req: TransitionRequest): Promise<void> {
+    await withTransaction(this.pool, (client) => this.transitionInTx(req, client));
+  }
+
+  async transitionInTx(req: TransitionRequest, client: PoolClient): Promise<void> {
     const rule = await this.rule(req.machine, req.from, req.to);
     if (!rule) throw new TransitionError('transition_not_allowed', `${req.machine}: ${req.from} -> ${req.to}`);
 
@@ -77,33 +81,31 @@ export class TransitionEngine {
     }
     if (rule.requires_reason && !req.reason?.code) throw new TransitionError('reason_required');
 
-    // resolve validators BEFORE opening the transaction — unknown = fail closed
+    // Resolve validators before applying writes; unknown names fail closed.
     const fns = rule.validations.map((name) => {
       const fn = this.validators.get(name);
       if (!fn) throw new TransitionError('validator_not_registered', name);
       return fn;
     });
 
-    await withTransaction(this.pool, async (client) => {
-      for (const fn of fns) await fn(req, client);
-      await req.apply(client);
-      await this.audit.writeInTx(client, {
-        eventType: req.eventType,
-        actor: req.actor === 'system' ? 'system' : { id: req.actor.staffId, role: req.actor.roles[0] ?? 'none' },
-        entityType: req.subjectType,
-        entityId: req.subjectId,
-        relatedRefs: req.refs,
-        before: { status: req.from },
-        after: { status: req.to },
-        severity: req.severity ?? 'info',
-        reason: req.reason ? `${req.reason.code}${req.reason.note ? `: ${req.reason.note}` : ''}` : undefined,
-      });
-      await this.outbox.writeInTx(client, {
-        eventType: req.eventType,
-        actor: req.actor === 'system' ? { system: 'transition' } : { id: req.actor.staffId, role: req.actor.roles[0] ?? 'none' },
-        refs: { ...(req.refs ?? {}), [req.subjectType]: req.subjectId },
-        payload: { machine: req.machine, from: req.from, to: req.to, reason: req.reason ?? null },
-      });
+    for (const fn of fns) await fn(req, client);
+    await req.apply(client);
+    await this.audit.writeInTx(client, {
+      eventType: req.eventType,
+      actor: req.actor === 'system' ? 'system' : { id: req.actor.staffId, role: req.actor.roles[0] ?? 'none' },
+      entityType: req.subjectType,
+      entityId: req.subjectId,
+      relatedRefs: req.refs,
+      before: { status: req.from },
+      after: { status: req.to },
+      severity: req.severity ?? 'info',
+      reason: req.reason ? `${req.reason.code}${req.reason.note ? `: ${req.reason.note}` : ''}` : undefined,
+    });
+    await this.outbox.writeInTx(client, {
+      eventType: req.eventType,
+      actor: req.actor === 'system' ? { system: 'transition' } : { id: req.actor.staffId, role: req.actor.roles[0] ?? 'none' },
+      refs: { ...(req.refs ?? {}), [req.subjectType]: req.subjectId },
+      payload: { machine: req.machine, from: req.from, to: req.to, reason: req.reason ?? null },
     });
   }
 
