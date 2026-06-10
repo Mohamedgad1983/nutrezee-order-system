@@ -18,25 +18,25 @@
 | CI | ◐ Workflow live since WP-00 (`.github/workflows/ci.yml`); **first GitHub run unverified** from the authoring machine (no `gh`) — check the Actions tab |
 | Staging | ❌ **Deferred** — blocked by the PG-region/data-residency item below; provisioning checklist ready (`16_Deployment/environment_plan.md` §3) |
 | Local environment | ✅ Verified (typecheck/lint/tests/build/smoke); Docker compose authored but **unvalidated locally** (Docker not installed) |
-| Workshop / NC-carry | ◐ **NC-carry accepted 2026-06-10** for WP-01–06 (`NOTE_nc_carry_acceptance_wp01_06.md`); workshop itself still outstanding — WP-07+ stay workshop-blocked |
+| Workshop / assumption-carry | ✅ **Assumption-carry accepted 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
 | PG region / data residency | ◐ **Interim staging region noted 2026-06-10**: AWS me-south-1 (`NOTE_pg_staging_region_interim.md`); final production region revisited pre-launch (residency check stays open toward Phase 6) |
 
 ## What blocks WP-01+ (after DEC-014 staging re-scope, 2026-06-10)
 
 WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–06 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (NC-carry, WP-01–06).
 
-**→ WP-01–06: ALL DONE (built 2026-06-10, Sprint Build Mode — 6 WPs, 74 tests, 6× CI 13/13). The NC-carry envelope is exhausted; WP-07 is the frontier and is workshop-blocked.**
+**→ WP-01–06: ALL DONE (built 2026-06-10, Sprint Build Mode — 6 WPs, 74 tests, 6× CI 13/13). The WP-07+ assumption-carry directive is now recorded; WP-07 is the next eligible WP, subject to the active assumptions and normal technical gates.**
 
 Still standing, clearly scoped:
 1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–06 build). Region: AWS me-south-1 interim.
-2. **WP-07+ workshop blockers** — intake field set (S3), DEC-005 finals, DEC-006 sections; untouched by NC-carry or DEC-014.
+2. **WP-07+ business decisions** — intake field set, DEC-005 finals, DEC-006 sections, and related OPEN decisions are now carried as explicit assumptions in `ASSUMPTION_REGISTER.md`. They do not block build by themselves, but they remain sponsor-review-required and reversible.
 3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest 14/14 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
 ## WP-07 legacy review pack status
 
-**2026-06-10:** `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md` was created as a sponsor decision pack for old `/orders/create`. Result: **READY_FOR_SPONSOR_SIGNOFF**, not unblocked. The pack confirms the old field categories visible in read-only discovery, but old-system evidence does **not** verify required flags, warning-only behavior, defaults, or submit blockers.
+**2026-06-10:** `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md` was created as a sponsor decision pack for old `/orders/create`. The pack confirms the old field categories visible in read-only discovery, but old-system evidence does **not** verify required flags, warning-only behavior, defaults, or submit blockers.
 
-WP-07 stays **BLOCKED** until the sponsor signs or explicitly accepts Assumed-for-build values for these P0 decisions:
+**2026-06-10 update:** Sponsor/user explicitly accepted assumption-based continuation. The missing decisions below are now active assumptions in `ASSUMPTION_REGISTER.md`; they remain sponsor-review-required but no longer block WP-07 by themselves:
 
 1. Mandatory submit field set for `/orders/create` draft intake.
 2. Draft-save vs submit-block rules.
@@ -49,4 +49,4 @@ WP-07 stays **BLOCKED** until the sponsor signs or explicitly accepts Assumed-fo
 
 ## Exact next action
 
-Sponsor/user reviews and signs `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md` checklist, or records explicit Assumed-for-build values for every P0 missing decision above. Only then update the register to mark WP-07 eligible and start WP-07. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
+Execute WP-07 in Sprint Build Mode using `ASSUMPTION_REGISTER.md` as the active Assumed-for-build control. Continue to later WPs while technical gates pass, stopping only for real technical blockers, forbidden scope, failed suites, missing credentials/access that make implementation impossible, or no eligible WPs remaining. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.

@@ -13,9 +13,9 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | ② DEC-003 MVP cut signed | ✅ **SIGNED 2026-06-10** (`20_Decisions/DEC-003_mvp_cut.md`) |
 | ③ R1 remote backup | ✅ CLOSED 2026-06-10 (GitHub, both branches) |
 | ④ Staging + CI live | ✅ **for WP-01–06 per DEC-014 re-scope**. CI half **Verified on GitHub 2026-06-10**: all runs green since WP-00; latest run 27279685845 = 14/14 jobs success (lint, typecheck, build, ts-u…ts-s, scans); `gh` CLI authed locally for per-WP verification. Staging half: **NOT provisioned, NOT done** — hard pre-pilot/WP-14 entry gate; region AWS me-south-1 interim; provisioning still needs cloud credentials |
-| ⑤ Workshop held / NC-carry acceptance | ✅ **NC-carry acceptance recorded 2026-06-10** for WP-01–06 only (`NOTE_nc_carry_acceptance_wp01_06.md`); workshop itself still outstanding — WP-07+ remain workshop-blocked |
+| ⑤ Workshop held / assumption-carry acceptance | ✅ **Assumption-carry recorded 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
 
-**Currently eligible: none — the NC-carry envelope (WP-01–06) is FULLY BUILT.** WP-07 is the frontier and is workshop-blocked (intake field set); WP-08+ depend on it or on later gates. A WP-07 sponsor legacy review pack now exists at `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md`, but WP-07 remains blocked until every P0 missing decision is signed or explicitly accepted as Assumed-for-build. Staging live + smoke-tested remains the hard WP-14/pre-pilot gate.
+**Currently eligible: WP-07.** WP-07+ unresolved business questions are now carried as explicit assumptions in `ASSUMPTION_REGISTER.md`, with sponsor review still required. Build continues as far as technically possible under those assumptions. Staging live + smoke-tested remains the hard WP-14/pre-pilot gate and cannot be assumed away.
 
 ## Work package status
 
@@ -28,10 +28,10 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | WP-04 | Customers | **DONE 2026-06-10** | `build/wp-04-customers` → merge (see git log) | Local 61/61 (TS-U dedup/read-logging; TS-S #6 merge+undo) + CI 13/13 | A1 applied in DDL | Soft-unique phones (family-share NC); merge re-link hook ready for WP-07 drafts; HTTP surface consolidates at WP-07; primary-phone ordering bug caught by partial index in test |
 | WP-05 | Catalog | **DONE 2026-06-10** | `build/wp-05-catalog` → merge (git log) | Local 68/68 (TS-U allergen-resolver + mirror-mode DoD) + CI 13/13 | **A6** | Mirror mode proven (import-only core writes until cutover_catalog); cycle guard (C7); routing rules zero-row [NC DEC-006]; catalog owner [NC Q1] |
 | WP-06 | Import tooling | **DONE 2026-06-10** | `build/wp-06-import-tooling` → merge (git log) | Local 74/74 (TS-M real: dry-run report, apply gate, idempotency, quality gates, rollback) + CI 13/13 (ts-a rerun after Docker-registry flake) | — | Boundary scan caught 3 ADR-010 violations in first draft → import APIs on owning modules. Real legacy runs still blocked on access/export (WP-13) |
-| WP-07 | Intake & WhatsApp panel | **BLOCKED 2026-06-10** | — | — | — | Hard NC: mandatory intake-field set (workshop S3 Q8) affects DoD; sponsor review pack created at `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md`, but required flags/defaults/submit rules/customer identity/WhatsApp/allergy/payment/coupon/delivery decisions are not signed. NC-carry covers WP-01–06 only — stop-rule applies. |
+| WP-07 | Intake & WhatsApp panel | NOT STARTED | — | — | A7 | Eligible via `ASSUMPTION_REGISTER.md` and `20_Decisions/NOTE_assumption_carry_wp07_plus.md`; missing business decisions remain sponsor-review-required but no longer block build by themselves. |
 | WP-08 | Review queue | NOT STARTED | — | — | — | |
-| WP-09 | Order core | NOT STARTED | — | — | — | Hard NC: DEC-005 finals, cutoff |
-| WP-10 | Kitchen | NOT STARTED | — | — | — | Hard NC: DEC-006 sections (pilot) |
+| WP-09 | Order core | NOT STARTED | — | — | — | DEC-005 finals and cutoff carried as assumptions ASM-026/ASM-027; sponsor review still required |
+| WP-10 | Kitchen | NOT STARTED | — | — | — | DEC-006 sections/shared-device model carried as assumptions ASM-028/ASM-029; sponsor review still required |
 | WP-11 | Payments-lite | NOT STARTED | — | — | — | |
 | WP-12 | Notifications & reports | NOT STARTED | — | — | — | |
 | WP-13 | Bridge & cutover tooling | NOT STARTED | — | — | — | Hard NC: real apply needs legacy access/export + workshop (payment vocab / off_days are soft — TS-M build-around) |
@@ -50,6 +50,7 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 | 2026-06-10 | **Sprint Build Mode** (second run) | **WP-01→02→03→04/05→06 ALL DONE in one session** — 6 atomic WPs, each branch→scope→suites→green-CI→merge→register→push. 74 tests (12 files) green; 6 CI runs 13/13 (one ts-a Docker-registry flake re-run, never merged past red). Local PostgreSQL 16 installed for DB-backed suites. Amendment A6 raised (ingredient_allergen). Boundary scan caught 3 real ADR-010 violations mid-sprint (fixed via owning-module import APIs). Sprint stopped honestly at WP-07's workshop NC (stop-rule; NC-carry ends at WP-06). |
 | 2026-06-10 | Discovery Mode - Legacy-first section alignment audit | Audit created at `19_Roadmap/legacy_first_section_alignment_audit.md`. Result **PASS_WITH_GAPS**: old-system section evidence is sufficient for a baseline map, current build coverage is foundation-heavy through WP-06, and WP-07 remains blocked on the mandatory intake-field set/workshop S3 Q8. No WP statuses changed; no feature code/tables/APIs/UI created. |
 | 2026-06-10 | Discovery Mode - WP-07 `/orders/create` legacy review pack | Pack created at `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md`. Result **READY_FOR_SPONSOR_SIGNOFF**: old `/orders/create` field categories are documented, but submit blockers/defaults/warnings/customer identity/WhatsApp/allergy/payment/coupon/delivery decisions remain missing. WP-07 stays **BLOCKED**; no feature code/tables/APIs/UI created. |
+| 2026-06-10 | Assumption-carry setup for WP-07+ | `ASSUMPTION_REGISTER.md`, `20_Decisions/NOTE_assumption_carry_wp07_plus.md`, and `22_Meeting_Notes/sponsor_review_package_unresolved_business_questions.md` created from sponsor/user directive. Result: WP-07 is eligible under explicit Assumed-for-build values; unresolved questions remain sponsor-review-required. No feature code/tables/APIs/UI created in this doc-only step. |
 
 ## Amendments log (continues `phase_4_to_build_handoff.md` §4 — A1–A4 recorded there)
 
@@ -57,4 +58,5 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 |---|---|---|---|
 | A5 | 2026-06-10 | WP-00 "Environment standup" added ahead of WP-01 to satisfy global gate ④ (staging+CI) — resolves the bootstrap circularity in the Phase 4 gate; entry gate ①+③ only, no business code; staging provisioning conditional on a PG-region residency note in 20_Decisions/ (stop-rule carve-out); CI guards remain placeholders until WP-01 implements them | Phase 5 master prompt |
 | A6 | 2026-06-10 | `ingredient_allergen` link table added (wave-2 catalog DDL) — AllergenResolver's derived_from_ingredient semantics required ingredient→allergen links missing from the logical data model; structure-only, discovered during WP-05 | WP-05 build session |
-| *next: A7* | | | |
+| A7 | 2026-06-10 | Assumption-carry control added for WP-07+ after sponsor/user directive: unresolved business decisions are captured in `ASSUMPTION_REGISTER.md`, assigned risk, marked sponsor-review-required, and allowed for implementation until revised; hard technical gates, dormant-module boundaries, real legacy access/export, and WP-14 staging gate still stop the build | Sponsor/user directive |
+| *next: A8* | | | |
