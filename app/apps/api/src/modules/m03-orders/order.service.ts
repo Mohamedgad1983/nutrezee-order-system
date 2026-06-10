@@ -57,6 +57,15 @@ export interface OrderItemForKitchen {
   allergensFrozen: Array<Record<string, unknown>>;
 }
 
+export interface OrderForPayment {
+  id: string;
+  status: OrderStatus;
+  customerId: string;
+  total: number;
+  currency: string;
+  expectedPaymentMethod: string | null;
+}
+
 export class OrderService {
   constructor(
     private readonly pool: Pool,
@@ -273,6 +282,25 @@ export class OrderService {
       qty: Number(r.qty),
       allergensFrozen: (r.allergens_frozen as Array<Record<string, unknown>> | null) ?? [],
     }));
+  }
+
+  async orderForPayment(orderId: string): Promise<OrderForPayment> {
+    const { rows } = await this.pool.query(
+      `SELECT co.id, co.status, co.customer_id, co.total, co.currency, d.expected_payment_method
+       FROM customer_order co
+       LEFT JOIN draft_order d ON d.id = co.source_draft_id
+       WHERE co.id = $1`,
+      [orderId],
+    );
+    if (rows.length === 0) throw new OrderError('not_found');
+    return {
+      id: rows[0].id as string,
+      status: rows[0].status as OrderStatus,
+      customerId: rows[0].customer_id as string,
+      total: Number(rows[0].total),
+      currency: rows[0].currency as string,
+      expectedPaymentMethod: rows[0].expected_payment_method as string | null,
+    };
   }
 
   async createChangeRequest(actor: StaffContext, orderId: string, diff: Record<string, unknown>): Promise<string> {
