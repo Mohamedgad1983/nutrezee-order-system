@@ -1,0 +1,84 @@
+import { BadRequestException } from '@nestjs/common';
+import type { Request } from 'express';
+import { describe, expect, it, vi } from 'vitest';
+import { OrderController } from '../../apps/api/src/modules/m03-orders/order.controller';
+import type { OrderService } from '../../apps/api/src/modules/m03-orders/order.service';
+import type { SessionService, StaffContext } from '../../apps/api/src/platform/auth/session.service';
+import type { AccessService } from '../../apps/api/src/platform/rbac/access.service';
+
+const ctx: StaffContext = {
+  staffId: 'ops-1', name: 'Ops', email: 'ops@t', locale: 'en', roles: ['ops_manager'], sessionId: 's',
+};
+const req = { cookies: { nz_session: 'session-1' } } as unknown as Request;
+
+function controllerWith(orders: Partial<OrderService>) {
+  const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
+  const access = {
+    decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+  } as unknown as AccessService;
+  return new OrderController(sessions, access, orders as OrderService);
+}
+
+describe('TS-C API contract — orders controller (WP-09)', () => {
+  it('creates an order from an approved draft using POST /orders', async () => {
+    const createFromApprovedDraft = vi.fn().mockResolvedValue({ id: 'order-1', replay: false });
+    const c = controllerWith({ createFromApprovedDraft });
+    await expect(c.createFromDraft(req, { draft_id: 'draft-1' })).resolves.toEqual({ id: 'order-1', replay: false });
+    expect(createFromApprovedDraft).toHaveBeenCalledWith(ctx, 'draft-1');
+  });
+
+  it('requires draft_id on order creation', async () => {
+    const c = controllerWith({ createFromApprovedDraft: vi.fn() });
+    await expect(c.createFromDraft(req, {})).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('maps list and fulfillment-day reads to read contracts', async () => {
+    const listOrders = vi.fn().mockResolvedValue([{ id: 'order-1' }]);
+    const listDays = vi.fn().mockResolvedValue([{ id: 'day-1' }]);
+    const c = controllerWith({ listOrders, listDays });
+    await expect(c.list(req, 'approved')).resolves.toEqual({ items: [{ id: 'order-1' }], page: { limit: 100 } });
+    await expect(c.listDays(req, 'order-1')).resolves.toEqual({ items: [{ id: 'day-1' }], page: { limit: 100 } });
+    expect(listOrders).toHaveBeenCalledWith({ status: 'approved' });
+    expect(listDays).toHaveBeenCalledWith('order-1');
+  });
+
+  it('maps order and fulfillment transitions to config-engine service calls', async () => {
+    const transitionOrder = vi.fn().mockResolvedValue(undefined);
+    const transitionDay = vi.fn().mockResolvedValue(undefined);
+    const c = controllerWith({ transitionOrder, transitionDay });
+    await expect(c.transitionOrder(req, 'order-1', { to: 'cancelled', reason_code: 'other', note: 'customer request' }))
+      .resolves.toEqual({ ok: true });
+    await expect(c.transitionDay(req, 'day-1', { to: 'cancelled_day', reason_code: 'other' }))
+      .resolves.toEqual({ ok: true });
+    expect(transitionOrder).toHaveBeenCalledWith(ctx, 'order-1', 'cancelled', { code: 'other', note: 'customer request' });
+    expect(transitionDay).toHaveBeenCalledWith(ctx, 'day-1', 'cancelled_day', { code: 'other', note: undefined });
+  });
+
+  it('maps change request decisions and exception resolution', async () => {
+    const createChangeRequest = vi.fn().mockResolvedValue('cr-1');
+    const decideChangeRequest = vi.fn().mockResolvedValue(undefined);
+    const createException = vi.fn().mockResolvedValue('ex-1');
+    const resolveException = vi.fn().mockResolvedValue(undefined);
+    const c = controllerWith({ createChangeRequest, decideChangeRequest, createException, resolveException });
+
+    await expect(c.createChangeRequest(req, 'order-1', { diff: { end_date: '2099-01-10' } }))
+      .resolves.toEqual({ id: 'cr-1' });
+    await expect(c.decideChangeRequest(req, 'cr-1', { decision: 'approve' })).resolves.toEqual({ ok: true });
+    await expect(c.createException(req, 'order-1', {
+      type_code: 'allergy_incident',
+      refs: { fulfillment_day_id: 'day-1' },
+      notes: 'kitchen raised',
+    })).resolves.toEqual({ id: 'ex-1' });
+    await expect(c.resolveException(req, 'ex-1', { resolution_code: 'other', notes: 'closed' })).resolves.toEqual({ ok: true });
+
+    expect(createChangeRequest).toHaveBeenCalledWith(ctx, 'order-1', { end_date: '2099-01-10' });
+    expect(decideChangeRequest).toHaveBeenCalledWith(ctx, 'cr-1', true);
+    expect(createException).toHaveBeenCalledWith(ctx, {
+      typeCode: 'allergy_incident',
+      refs: { fulfillment_day_id: 'day-1', order_id: 'order-1' },
+      severity: undefined,
+      notes: 'kitchen raised',
+    });
+    expect(resolveException).toHaveBeenCalledWith(ctx, 'ex-1', { resolutionCode: 'other', notes: 'closed' });
+  });
+});

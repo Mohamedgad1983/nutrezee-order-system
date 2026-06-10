@@ -14,7 +14,7 @@ This package collects unresolved questions in one place. The build may continue 
 | P0 | Customer identity and duplicates | ASM-007 to ASM-009 | Determines customer matching, duplicate prevention, merge behavior, and import risk. |
 | P0 | Allergy/health safety | ASM-010 to ASM-012 | Determines whether unsafe meals are blocked, warned, or overridden. |
 | P0 | Payment capture and unpaid policy | ASM-019 to ASM-022, ASM-031 to ASM-032 | Determines payment readiness and finance workflow. |
-| P1 | Order status, review, kitchen | ASM-023 to ASM-030 | Determines downstream lifecycle and operational handoffs. |
+| P1 | Order status, review, order core, kitchen | ASM-023 to ASM-030, ASM-043 to ASM-046 | Determines downstream lifecycle, order conversion, and operational handoffs. |
 | P1 | Reports, notifications, migration | ASM-033 to ASM-038 | Determines reporting scope, trigger content, and bridge behavior. |
 | P1 | Out-of-scope boundaries | ASM-039 to ASM-042 | Keeps dormant modules and WP-14 staging gate explicit. |
 
@@ -65,9 +65,13 @@ This package collects unresolved questions in one place. The build may continue 
 2. Can OA edit a submitted draft directly, or only after OM returns/reopens it?
 3. Confirm final order status model and whether delivered/completed exists.
 4. What is the business kitchen cutoff time?
-5. Confirm pilot kitchen sections and item-to-section routing ownership.
-6. Is shared tablet with name tap acceptable for kitchen transitions?
-7. Confirm ticket statuses and blocked reasons.
+5. Should WP-09 generate continuous calendar fulfillment days, or skip configured off-days/holidays immediately?
+6. Can an approved draft with an unverified customer become an order, or must staff link/create the customer first?
+7. Which order change request types are allowed at MVP beyond end-date extension/reduction?
+8. What exception type taxonomy should replace the temporary escalation `other` code for allergy incidents?
+9. Confirm pilot kitchen sections and item-to-section routing ownership.
+10. Is shared tablet with name tap acceptable for kitchen transitions?
+11. Confirm ticket statuses and blocked reasons.
 
 ### Payment, reports, notifications, migration
 

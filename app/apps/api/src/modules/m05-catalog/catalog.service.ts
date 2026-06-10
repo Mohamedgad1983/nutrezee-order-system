@@ -17,6 +17,21 @@ export interface ResolvedAllergen {
   source: 'declared' | 'derived_from_ingredient';
 }
 
+export interface ProductForOrder {
+  id: string;
+  nameEn: string;
+  nameAr: string | null;
+  price: number | null;
+}
+
+export interface PackageForOrder {
+  id: string;
+  nameEn: string;
+  nameAr: string | null;
+  durationDays: number | null;
+  price: number | null;
+}
+
 // M05 catalog. MIRROR MODE until catalog cutover (ADR-010 / legacy_transition §4):
 // while cutover_catalog is OFF, core product/package creation is allowed only via
 // the import path (M19); ENRICHMENT (nutrition, allergens, routing) is always open —
@@ -179,6 +194,35 @@ export class CatalogService {
       [packageId],
     );
     return rows.length > 0;
+  }
+
+  async productForOrder(productId: string): Promise<ProductForOrder | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, price FROM product WHERE id = $1 AND active`,
+      [productId],
+    );
+    if (rows.length === 0) return null;
+    return {
+      id: rows[0].id as string,
+      nameEn: rows[0].name_en as string,
+      nameAr: rows[0].name_ar as string | null,
+      price: rows[0].price === null ? null : Number(rows[0].price),
+    };
+  }
+
+  async packageForOrder(packageId: string): Promise<PackageForOrder | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, duration_days, price FROM package WHERE id = $1 AND active`,
+      [packageId],
+    );
+    if (rows.length === 0) return null;
+    return {
+      id: rows[0].id as string,
+      nameEn: rows[0].name_en as string,
+      nameAr: rows[0].name_ar as string | null,
+      durationDays: rows[0].duration_days === null ? null : Number(rows[0].duration_days),
+      price: rows[0].price === null ? null : Number(rows[0].price),
+    };
   }
 
   /** Import path for bilingual masters (M19 calls this — ADR-010): match-or-create

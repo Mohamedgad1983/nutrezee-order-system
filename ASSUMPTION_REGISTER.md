@@ -65,9 +65,14 @@ Risk scale:
 | ASM-040 | Dispatch and drivers | Dispatch/driver app remains dormant/out of scope. Delivery fields may be captured, but assignment execution is not built in WP-07 through WP-12. | Medium | Yes | WP-07 to WP-12 | DEC-008. |
 | ASM-041 | Branch and area master content | Area and branch/site content can remain zero-row/configurable in implementation; tests use synthetic seed data only. | Medium | Yes | WP-07, WP-09, WP-13 | Ops settings review. |
 | ASM-042 | Staging and pilot gate | Lack of cloud credentials/staging cannot be assumed away. WP-14 remains blocked until staging is provisioned, live, and smoke-tested. | Critical | Yes | WP-14 | Cloud provisioning. |
+| ASM-043 | WP-09 order day generation | Until package calendar/off-day rules are signed, OrderFactory generates continuous fulfillment days from start date through explicit/derived end date. Off-day exceptions remain review/import data, not automatic day skipping. | High | Yes | WP-09, WP-13 | Package/calendar review. |
+| ASM-044 | Unverified customer conversion | A draft submitted with `unverified_customer=true` can enter review, but cannot convert to `customer_order` until staff links or creates a real customer profile. | High | Yes | WP-09 | Intake/review workflow signoff. |
+| ASM-045 | Exception taxonomy | Until sponsor signs exception code taxonomy, WP-09 stores allergy incidents under configurable escalation reason `other`, preserves requested type `allergy_incident` in audit, and forces severity HIGH. | Medium | Yes | WP-09, WP-10, WP-12 | Exception/escalation taxonomy review. |
+| ASM-046 | Change request mutation scope | WP-09 supports end-date extension/reduction change requests only. Other order mutations require later signed change types before implementation. | High | Yes | WP-09 | Change-request workflow signoff. |
 
 ## Revision log
 
 | Date | Change |
 |---|---|
 | 2026-06-10 | Initial assumption register created from sponsor/user directive to continue WP execution as far as technically possible. |
+| 2026-06-10 | Added WP-09 assumptions ASM-043 to ASM-046 for day generation, unverified-customer conversion, exception taxonomy, and change-request mutation scope. |
