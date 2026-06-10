@@ -18,7 +18,15 @@ const OWNERSHIP = {
   reason_code: 'platform', section_master: 'platform', area: 'platform',
   delivery_slot: 'platform', delivery_method: 'platform', transition_config: 'platform',
   outbox_event: 'platform', idempotency_key: 'platform', audit_read_queue: 'platform',
-  // wave 2+ tables register here as their modules are built (WP-04+)
+  // wave 2 (WP-04/05/06)
+  customer: 'm04-customers', customer_phone: 'm04-customers', address: 'm04-customers',
+  customer_allergy: 'm04-customers', preference: 'm04-customers', merge_record: 'm04-customers',
+  meal_type: 'm05-catalog', diet_status: 'm05-catalog', tag: 'm05-catalog',
+  package_for_type: 'm05-catalog', ingredient: 'm05-catalog', allergen: 'm05-catalog',
+  product: 'm05-catalog', product_component: 'm05-catalog', product_ingredient: 'm05-catalog',
+  product_allergen: 'm05-catalog', nutrition_facts: 'm05-catalog', package: 'm05-catalog',
+  routing_rule: 'm05-catalog',
+  import_batch: 'm19-migration', import_row_result: 'm19-migration', sync_record: 'm18-bridge',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;
