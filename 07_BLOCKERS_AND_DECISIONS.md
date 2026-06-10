@@ -25,7 +25,7 @@
 
 WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–06 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (NC-carry, WP-01–06).
 
-**→ WP-01–06: no entry blockers. WP-01 is ELIGIBLE.**
+**→ WP-01–06: ALL DONE (built 2026-06-10, Sprint Build Mode — 6 WPs, 74 tests, 6× CI 13/13). The NC-carry envelope is exhausted; WP-07 is the frontier and is workshop-blocked.**
 
 Still standing, clearly scoped:
 1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–06 build). Region: AWS me-south-1 interim.
