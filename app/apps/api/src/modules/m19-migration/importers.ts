@@ -5,6 +5,8 @@ import { SyncRecordService } from '../m18-bridge/sync-record.service';
 import { normalizePhone } from '../m04-customers/phone';
 import type { StaffContext } from '../../platform/auth/session.service';
 import type { RowImporter, RowResult } from './batch-runner';
+import { OrderService, type OrderStatus } from '../m03-orders/order.service';
+import { PaymentService } from '../m07-payments/payment.service';
 
 // Importers per migration_mapping.md (screen-evidenced legacy fields only [V]).
 // Imports go through the OWNING modules' import APIs — never raw foreign tables
@@ -122,4 +124,175 @@ export function catalogImporter(catalog: CatalogService, sync: SyncRecordService
 
     return { rowNo, action: 'error', messages: [`unknown kind ${kind}`] };
   };
+}
+
+/** Batch 3 — active plans (WP-13): legacy orders are imported through M03/M07
+ * owner APIs, not by M19 writing order/payment tables. Real legacy apply remains
+ * blocked until export/access exists; this importer is fixture-driven and dry-run
+ * reviewable. */
+export function activePlanImporter(
+  customers: CustomerService,
+  catalog: CatalogService,
+  orders: OrderService,
+  payments: PaymentService,
+  sync: SyncRecordService,
+  defaultCountryCode: string,
+): RowImporter {
+  return async (client: PoolClient, row, rowNo, batchId): Promise<RowResult> => {
+    const messages: string[] = [];
+    const legacyKey = String(row['legacy_id'] ?? `row-${rowNo}`);
+    const existing = await sync.lookup(client, 'order', legacyKey);
+    if (existing) return { rowNo, action: 'matched', targetRef: existing, messages: ['sync_record'] };
+
+    const orderNumber = String(row['order_number'] ?? legacyKey).trim();
+    if (!orderNumber) return { rowNo, action: 'error', messages: ['missing order_number'] };
+    const byOrderNumber = await orders.findByOrderNumberInTx(client, orderNumber);
+    if (byOrderNumber) {
+      await sync.record(client, 'order', legacyKey, byOrderNumber);
+      return { rowNo, action: 'matched', targetRef: byOrderNumber, messages: ['order_number match'] };
+    }
+
+    const customerId = await resolveCustomer(client, customers, sync, row, defaultCountryCode);
+    if (!customerId) return { rowNo, action: 'error', messages: ['customer not found by legacy id or phone'] };
+
+    const startDate = stringField(row['start_date']);
+    const endDate = stringField(row['end_date']);
+    if (!startDate) return { rowNo, action: 'error', messages: ['missing start_date'] };
+    if (!endDate) return { rowNo, action: 'error', messages: ['missing end_date'] };
+
+    const packageResolved = await resolvePackage(client, catalog, sync, row);
+    if (!packageResolved.id && !packageResolved.nameEn) messages.push('package unresolved; frozen legacy package name retained if present');
+
+    const offDays = parseOffDays(row['off_days']);
+    if (offDays.unverified) messages.push('off_days_unverified=true; sponsor review required');
+    const orderStatus = parseOrderStatus(row['status']);
+    if (orderStatus.unverified) messages.push(`legacy order status defaulted to active: ${String(row['status'])}`);
+
+    const created = await orders.createImportedActivePlanInTx(client, 'import', {
+      orderNumber,
+      customerId,
+      packageId: packageResolved.id,
+      packageNameEn: packageResolved.nameEn,
+      packageNameAr: packageResolved.nameAr ?? undefined,
+      status: orderStatus.value,
+      startDate,
+      endDate,
+      offDays: offDays.values,
+      offDaysUnverified: offDays.unverified,
+      channel: stringField(row['channel']) ?? 'legacy',
+      total: numberField(row['total']),
+      currency: stringField(row['currency']) ?? 'SAR',
+      importBatchId: batchId,
+      addressFrozen: {
+        legacy_import: true,
+        address_unverified: true,
+        address_text: stringField(row['address']) ?? null,
+        area: stringField(row['area']) ?? null,
+      },
+    });
+    await sync.record(client, 'order', legacyKey, created.id);
+
+    if (row['payment_status']) {
+      const payment = await payments.importLegacyPaymentInTx(client, 'import', {
+        orderId: created.id,
+        legacyStatus: String(row['payment_status']),
+        method: stringField(row['payment_method']),
+        amount: numberField(row['payment_amount']) ?? numberField(row['total']),
+        currency: stringField(row['currency']) ?? 'SAR',
+        transactionRef: stringField(row['transaction_ref']),
+        evidenceNote: stringField(row['payment_note']),
+        importBatchId: batchId,
+      });
+      await sync.record(client, 'payment', legacyKey, payment.paymentId);
+      if (payment.unmapped) messages.push(`legacy payment status queued for finance review: ${String(row['payment_status'])}`);
+      else messages.push(`legacy payment status mapped: ${payment.mappedStatus}`);
+    }
+
+    return { rowNo, action: 'created', targetRef: created.id, messages };
+  };
+}
+
+async function resolveCustomer(
+  client: PoolClient,
+  customers: CustomerService,
+  sync: SyncRecordService,
+  row: Record<string, unknown>,
+  defaultCountryCode: string,
+): Promise<string | null> {
+  const legacyCustomer = stringField(row['customer_legacy_id']);
+  if (legacyCustomer) {
+    const mapped = await sync.lookup(client, 'customer', legacyCustomer);
+    if (mapped) return mapped;
+  }
+  const phone = stringField(row['customer_phone']);
+  if (!phone) return null;
+  try {
+    return customers.findActiveByPhone(client, normalizePhone(phone, defaultCountryCode));
+  } catch {
+    return null;
+  }
+}
+
+async function resolvePackage(
+  client: PoolClient,
+  catalog: CatalogService,
+  sync: SyncRecordService,
+  row: Record<string, unknown>,
+): Promise<{ id?: string; nameEn?: string; nameAr?: string | null }> {
+  const legacyPackage = stringField(row['package_legacy_id']);
+  if (legacyPackage) {
+    const mapped = await sync.lookup(client, 'package', `package:${legacyPackage}`);
+    if (mapped) {
+      const pkg = await catalog.packageForOrder(mapped);
+      if (pkg) return { id: pkg.id, nameEn: pkg.nameEn, nameAr: pkg.nameAr };
+    }
+  }
+  const packageName = stringField(row['package_name']);
+  if (!packageName) return {};
+  const pkg = await catalog.packageByNameInTx(client, packageName);
+  if (pkg) return { id: pkg.id, nameEn: pkg.nameEn, nameAr: pkg.nameAr };
+  return { nameEn: packageName, nameAr: stringField(row['package_name_ar']) };
+}
+
+function parseOrderStatus(value: unknown): { value: OrderStatus; unverified: boolean } {
+  if (value === undefined || value === null || value === '') return { value: 'active', unverified: false };
+  const status = String(value ?? 'active').trim().toLowerCase();
+  if (['approved', 'active', 'paused', 'completed', 'expired', 'cancelled', 'rejected'].includes(status)) {
+    return { value: status as OrderStatus, unverified: false };
+  }
+  return { value: 'active', unverified: true };
+}
+
+function parseOffDays(value: unknown): { values: string[]; unverified: boolean } {
+  if (value === undefined || value === null || value === '') return { values: [], unverified: false };
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return { values: value, unverified: false };
+  if (typeof value !== 'string') return { values: [], unverified: true };
+  const trimmed = value.trim();
+  if (!trimmed) return { values: [], unverified: false };
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
+        return { values: parsed, unverified: false };
+      }
+    } catch {
+      return { values: [], unverified: true };
+    }
+  }
+  const normalized = trimmed.split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+  const allowed = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+  if (normalized.length > 0 && normalized.every((v) => allowed.has(v))) return { values: normalized, unverified: false };
+  return { values: [], unverified: true };
+}
+
+function stringField(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const out = String(value).trim();
+  return out ? out : undefined;
+}
+
+function numberField(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const out = Number(value);
+  return Number.isFinite(out) ? out : undefined;
 }

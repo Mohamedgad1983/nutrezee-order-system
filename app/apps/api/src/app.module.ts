@@ -14,6 +14,7 @@ import { RoleAdminService } from './platform/rbac/role-admin.service';
 import { StaffService } from './platform/staff/staff.service';
 import { SettingsService } from './platform/settings/settings.service';
 import { SettingsController } from './platform/settings/settings.controller';
+import { FeatureFlagService } from './platform/feature-flags/feature-flag.service';
 import { TransitionEngine } from './platform/transition/transition-engine';
 import { CustomerService } from './modules/m04-customers/customer.service';
 import { CatalogService } from './modules/m05-catalog/catalog.service';
@@ -32,6 +33,13 @@ import { NotificationService } from './modules/m11-notifications/notification.se
 import { ReportController } from './modules/m15-reports/report.controller';
 import { ReportService } from './modules/m15-reports/report.service';
 import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
+import { BridgeController } from './modules/m18-bridge/bridge.controller';
+import { CutoverFlagService } from './modules/m18-bridge/cutover-flag.service';
+import { ReconciliationService } from './modules/m18-bridge/reconciliation.service';
+import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
+import { BatchRunner } from './modules/m19-migration/batch-runner';
+import { MigrationController } from './modules/m19-migration/migration.controller';
+import { MigrationService } from './modules/m19-migration/migration.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
@@ -42,6 +50,7 @@ export const POOL = 'POOL';
     HealthController, AuthController, StaffController, SettingsController,
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
+    BridgeController, MigrationController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -92,6 +101,7 @@ export const POOL = 'POOL';
       ) => new SettingsService(pool, audit, outbox, reader, [() => engine.invalidate()]),
       inject: [POOL, AuditService, OutboxService, SettingsReader, TransitionEngine],
     },
+    { provide: FeatureFlagService, useFactory: (pool: Pool) => new FeatureFlagService(pool), inject: [POOL] },
     {
       provide: CustomerService,
       useFactory: (
@@ -171,6 +181,39 @@ export const POOL = 'POOL';
       provide: ReportService,
       useFactory: (pool: Pool, audit: AuditService) => new ReportService(pool, audit),
       inject: [POOL, AuditService],
+    },
+    SyncRecordService,
+    {
+      provide: ReconciliationService,
+      useFactory: (pool: Pool, audit: AuditService, outbox: OutboxService) =>
+        new ReconciliationService(pool, audit, outbox),
+      inject: [POOL, AuditService, OutboxService],
+    },
+    {
+      provide: CutoverFlagService,
+      useFactory: (pool: Pool, audit: AuditService, flags: FeatureFlagService) =>
+        new CutoverFlagService(pool, audit, flags),
+      inject: [POOL, AuditService, FeatureFlagService],
+    },
+    {
+      provide: BatchRunner,
+      useFactory: (
+        pool: Pool, audit: AuditService, sync: SyncRecordService,
+        orders: OrderService, payments: PaymentService,
+      ) => new BatchRunner(pool, audit, sync, orders, payments),
+      inject: [POOL, AuditService, SyncRecordService, OrderService, PaymentService],
+    },
+    {
+      provide: MigrationService,
+      useFactory: (
+        runner: BatchRunner, customers: CustomerService, catalog: CatalogService,
+        sync: SyncRecordService, orders: OrderService, payments: PaymentService,
+        settings: SettingsReader,
+      ) => new MigrationService(runner, customers, catalog, sync, orders, payments, settings),
+      inject: [
+        BatchRunner, CustomerService, CatalogService, SyncRecordService,
+        OrderService, PaymentService, SettingsReader,
+      ],
     },
   ],
 })

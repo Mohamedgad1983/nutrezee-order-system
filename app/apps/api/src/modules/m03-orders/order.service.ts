@@ -66,6 +66,25 @@ export interface OrderForPayment {
   expectedPaymentMethod: string | null;
 }
 
+export interface ImportedActivePlanInput {
+  orderNumber: string;
+  customerId: string;
+  startDate: string;
+  endDate: string;
+  status?: OrderStatus;
+  packageId?: string;
+  packageNameEn?: string;
+  packageNameAr?: string;
+  offDays?: string[];
+  offDaysUnverified?: boolean;
+  channel?: string;
+  total?: number;
+  currency?: string;
+  importBatchId: string;
+  addressFrozen?: Record<string, unknown>;
+  slotId?: string;
+}
+
 export class OrderService {
   constructor(
     private readonly pool: Pool,
@@ -301,6 +320,62 @@ export class OrderService {
       currency: rows[0].currency as string,
       expectedPaymentMethod: rows[0].expected_payment_method as string | null,
     };
+  }
+
+  async findByOrderNumberInTx(client: PoolClient, orderNumber: string): Promise<string | null> {
+    const { rows } = await client.query(`SELECT id FROM customer_order WHERE order_number = $1`, [orderNumber]);
+    return rows.length > 0 ? rows[0].id as string : null;
+  }
+
+  async createImportedActivePlanInTx(
+    client: PoolClient,
+    actorId: string,
+    input: ImportedActivePlanInput,
+  ): Promise<{ id: string; dayCount: number }> {
+    const status = input.status ?? 'active';
+    if (!['approved', 'active', 'paused', 'completed', 'expired', 'cancelled', 'rejected'].includes(status)) {
+      throw new OrderError('validation_failed', { field: 'status' });
+    }
+    const existing = await this.findByOrderNumberInTx(client, input.orderNumber);
+    if (existing) return { id: existing, dayCount: 0 };
+    const id = newId();
+    const addressFrozen = input.addressFrozen ?? { legacy_import: true, address_unverified: true };
+    await client.query(
+      `INSERT INTO customer_order
+        (id, order_number, customer_id, package_id, package_name_frozen_en, package_name_frozen_ar,
+         status, start_date, end_date, off_days, off_days_unverified, channel, package_amount,
+         discount, total, currency, origin, import_batch_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$13,$14,'legacy',$15,$16)`,
+      [
+        id, input.orderNumber, input.customerId, input.packageId ?? null,
+        input.packageNameEn ?? null, input.packageNameAr ?? null, status,
+        input.startDate, input.endDate, JSON.stringify(input.offDays ?? []),
+        input.offDaysUnverified ?? false, input.channel ?? 'legacy',
+        input.total ?? 0, input.currency ?? 'SAR', input.importBatchId, actorId,
+      ],
+    );
+    let dayCount = 0;
+    for (const date of this.dateRange(input.startDate, input.endDate)) {
+      await client.query(
+        `INSERT INTO fulfillment_day (id, order_id, date, slot_id, address_frozen, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [newId(), id, date, input.slotId ?? null, JSON.stringify(addressFrozen), actorId],
+      );
+      dayCount += 1;
+    }
+    return { id, dayCount };
+  }
+
+  async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {
+    const { rows } = await client.query(
+      `SELECT id FROM customer_order WHERE import_batch_id = $1 FOR UPDATE`,
+      [batchId],
+    );
+    const orderIds = rows.map((r) => r.id as string);
+    if (orderIds.length === 0) return [];
+    await client.query(`DELETE FROM fulfillment_day WHERE order_id = ANY($1)`, [orderIds]);
+    await client.query(`DELETE FROM customer_order WHERE id = ANY($1)`, [orderIds]);
+    return orderIds;
   }
 
   async createChangeRequest(actor: StaffContext, orderId: string, diff: Record<string, unknown>): Promise<string> {

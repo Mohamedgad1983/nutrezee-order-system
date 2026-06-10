@@ -231,6 +231,23 @@ export class CatalogService {
     };
   }
 
+  async packageByNameInTx(client: PoolClient, nameEn: string): Promise<PackageForOrder | null> {
+    const { rows } = await client.query(
+      `SELECT id, name_en, name_ar, duration_days, price
+       FROM package WHERE lower(name_en) = lower($1) AND active
+       ORDER BY created_at DESC LIMIT 1`,
+      [nameEn],
+    );
+    if (rows.length === 0) return null;
+    return {
+      id: rows[0].id as string,
+      nameEn: rows[0].name_en as string,
+      nameAr: rows[0].name_ar as string | null,
+      durationDays: rows[0].duration_days === null ? null : Number(rows[0].duration_days),
+      price: rows[0].price === null ? null : Number(rows[0].price),
+    };
+  }
+
   async routingForKitchenProduct(productId: string): Promise<RoutingSectionForKitchen | null> {
     const { rows } = await this.pool.query(
       `SELECT s.id AS section_id, s.code, s.name_en

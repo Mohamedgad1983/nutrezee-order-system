@@ -43,6 +43,8 @@ const OWNERSHIP = {
   kitchen_ticket: 'm08-kitchen', ticket_status_event: 'm08-kitchen', escalation: 'm08-kitchen',
   // wave 5 (WP-12)
   notification_template: 'm11-notifications', notification_log: 'm11-notifications',
+  // wave 5 (WP-13)
+  reconciliation_run: 'm18-bridge',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;
