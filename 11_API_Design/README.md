@@ -8,7 +8,10 @@
 - `event_catalog.md` — event families v1, envelope, consumer/replay contracts
 - `module_api_contracts.md` — per-MVP-module operations with RBAC role lists; dormant stubs named
 
-OpenAPI/formal specs: Phase 4, after DEC-011.
+## Contents (Phase 4, 2026-06-11)
+- `backend_module_specs.md` — per-MVP-module technical specs (owned tables, services, events, settings, audit) + the closed list of allowed cross-module calls
+
+OpenAPI generation: build phase, after DEC-011 signature.
 **Owner:** Tech Lead
 **Depends on:** 10_Data_Model, 13_Architecture
 

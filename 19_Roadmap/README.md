@@ -8,9 +8,11 @@
 - `phase_2_to_phase_3_handoff.md` — architecture → data/API handoff
 - `phase_3_master_prompt.md` — executed 2026-06-11 (Phase 3 complete)
 - `phase_3_to_phase_4_handoff.md` — data/API → physical design handoff
-- `phase_4_master_prompt.md` — **next to execute**: physical DB design + backend specs + testing strategy + migration execution plan; produces `codex_implementation_sequence.md` and `phase_4_to_build_handoff.md`
+- `phase_4_master_prompt.md` — executed 2026-06-11 (Phase 4 complete)
+- `codex_implementation_sequence.md` — WP-01…14 work packages with stop-rules and the five-condition build entry gate
+- `phase_4_to_build_handoff.md` — **current gate**: build entry ticket, open-NC register, amendments log (next id A5)
 
-Execution order: handoff blockers first (workshop, DEC-003/005/011, R1 remote backup), then run the Phase 4 prompt. No coding before Phase 4 completes.
+Status: all documentation phases (1–4) complete. Build (WP-01) blocked on: DEC-011, DEC-003, R1 remote backup, staging/CI, workshop (or sponsor NC-carry acceptance for WP-01–06).
 **Owner:** PM
 **Depends on:** 04, 20_Decisions
 

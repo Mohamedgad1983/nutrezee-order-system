@@ -21,6 +21,9 @@
 | `mvp_architecture_cut.md` | Strict MVP scope (= DEC-003 recommendation) |
 | `domain_map.md` | Phase 5 (discovery consolidation) domain map |
 
-Still to come (Phase 3): context/container diagrams post-DEC-011, ADR addenda.
+## Phase 4 addition (2026-06-11)
+| `backend_foundation_blueprint.md` | Binding build patterns: layering, same-transaction audit, transactional outbox, config-seeded transition engine, staged RBAC enforcement |
+
+Still to come: container/deployment diagrams + ADR addenda after DEC-011 signature.
 
 See `00_Documentation_Structure.md` for full conventions (IDs, status headers, source-of-truth rules).
