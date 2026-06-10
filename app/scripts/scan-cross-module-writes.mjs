@@ -37,6 +37,8 @@ const OWNERSHIP = {
   // wave 4 (WP-09)
   customer_order: 'm03-orders', order_item: 'm03-orders', fulfillment_day: 'm03-orders',
   order_status_history: 'm03-orders', change_request: 'm03-orders', exception_case: 'm03-orders',
+  // wave 5 (WP-10)
+  kitchen_ticket: 'm08-kitchen', ticket_status_event: 'm08-kitchen', escalation: 'm08-kitchen',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;

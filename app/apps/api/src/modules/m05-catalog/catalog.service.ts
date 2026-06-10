@@ -32,6 +32,12 @@ export interface PackageForOrder {
   price: number | null;
 }
 
+export interface RoutingSectionForKitchen {
+  sectionId: string;
+  sectionCode: string;
+  sectionNameEn: string;
+}
+
 // M05 catalog. MIRROR MODE until catalog cutover (ADR-010 / legacy_transition §4):
 // while cutover_catalog is OFF, core product/package creation is allowed only via
 // the import path (M19); ENRICHMENT (nutrition, allergens, routing) is always open —
@@ -222,6 +228,24 @@ export class CatalogService {
       nameAr: rows[0].name_ar as string | null,
       durationDays: rows[0].duration_days === null ? null : Number(rows[0].duration_days),
       price: rows[0].price === null ? null : Number(rows[0].price),
+    };
+  }
+
+  async routingForKitchenProduct(productId: string): Promise<RoutingSectionForKitchen | null> {
+    const { rows } = await this.pool.query(
+      `SELECT s.id AS section_id, s.code, s.name_en
+       FROM routing_rule rr
+       JOIN section_master s ON s.id = rr.section_id AND s.active
+       WHERE rr.scope = 'product' AND rr.target_ref = $1 AND rr.active
+       ORDER BY rr.effective_from DESC NULLS LAST, rr.created_at DESC
+       LIMIT 1`,
+      [productId],
+    );
+    if (rows.length === 0) return null;
+    return {
+      sectionId: rows[0].section_id as string,
+      sectionCode: rows[0].code as string,
+      sectionNameEn: rows[0].name_en as string,
     };
   }
 

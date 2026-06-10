@@ -80,9 +80,9 @@ describe('TS-I integration — M16 settings (WP-03 DoD: invalidation proven)', (
       .rejects.toMatchObject({ code: 'unknown_domain' });
   });
 
-  it('ops masters are zero-row-ready: adding a section works and audits (DEC-006 content slot)', async () => {
+  it('ops masters remain editable: adding a section works and audits (DEC-006 content slot)', async () => {
     const id = await service.addMaster(ops, 'section_master', {
-      code: 'hot', name_en: 'Hot Kitchen', name_ar: 'المطبخ الساخن',
+      code: 'test_hot', name_en: 'Test Hot Kitchen', name_ar: 'المطبخ الساخن',
     });
     const row = await pool.query('SELECT 1 FROM section_master WHERE id = $1', [id]);
     expect(row.rowCount).toBe(1);

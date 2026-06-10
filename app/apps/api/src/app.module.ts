@@ -23,6 +23,8 @@ import { ReviewController } from './modules/m02-review/review.controller';
 import { ReviewService } from './modules/m02-review/review.service';
 import { OrderController } from './modules/m03-orders/order.controller';
 import { OrderService } from './modules/m03-orders/order.service';
+import { KitchenController } from './modules/m08-kitchen/kitchen.controller';
+import { KitchenService } from './modules/m08-kitchen/kitchen.service';
 import { MessageRefService } from './modules/m17-whatsapp/message-ref.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
@@ -32,7 +34,7 @@ export const POOL = 'POOL';
 @Module({
   controllers: [
     HealthController, AuthController, StaffController, SettingsController,
-    DraftController, ReviewController, OrderController,
+    DraftController, ReviewController, OrderController, KitchenController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -129,6 +131,18 @@ export const POOL = 'POOL';
       inject: [
         POOL, AuditService, OutboxService, SettingsReader, TransitionEngine,
         DraftService, ReviewService, CustomerService, CatalogService,
+      ],
+    },
+    {
+      provide: KitchenService,
+      useFactory: (
+        pool: Pool, audit: AuditService, outbox: OutboxService,
+        transitions: TransitionEngine, orders: OrderService,
+        catalog: CatalogService, customers: CustomerService,
+      ) => new KitchenService(pool, audit, outbox, transitions, orders, catalog, customers),
+      inject: [
+        POOL, AuditService, OutboxService, TransitionEngine,
+        OrderService, CatalogService, CustomerService,
       ],
     },
   ],
