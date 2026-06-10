@@ -5,3 +5,6 @@
 # Independent git repo (Step 0-2C discovery evidence record, own history).
 # Tracked and pushed separately — see risk R1 in 21_Risks/risk_register.md.
 nutrezee-step-1-discovery/
+
+# macOS
+.DS_Store
