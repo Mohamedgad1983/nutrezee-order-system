@@ -22,7 +22,7 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | WP | Title | Status | Branch / merge commit | Suites green | Amendments | Notes / NC carried |
 |---|---|---|---|---|---|---|
 | WP-00 | Environment standup | **DONE 2026-06-10** | `build/wp-00-environment-standup` → merge `e704eca` (feat `213478c`) | lint ✅ typecheck ✅ build ✅ placeholder suites 8/8 ✅ + `GET /health` runtime smoke ✅ (all local) | A5 | Staging deferred per A5 carve-out (no PG-region note); compose authored but unvalidated locally (Docker not installed); first GitHub CI run to be verified post-push |
-| WP-01 | Platform foundation | **ELIGIBLE** (2026-06-10, per DEC-003 + NC-carry + DEC-014) | — | — | — | All gates pass for WP-01–06; local + CI verification per DEC-014; CI green mandatory per WP. NC carried per `NOTE_nc_carry_acceptance_wp01_06.md`. |
+| WP-01 | Platform foundation | **DONE 2026-06-10** | `build/wp-01-platform-foundation` → merge `569dfe1` (feat `fddb1d1`) | Local: 25/25 (TS-I, TS-A #2/#3, TS-R generated 132-case, TS-U auth) + lint/typecheck/build/scans. CI run 27281542344: **13/13 jobs green** incl. DB-backed suites vs postgres:16 service + real boundary/no-GET-mutation scans | — | Wave-1 schema (18 tables) + seeds (12 roles, 48 transition rows [Proposed DEC-005], 13 settings); audit/outbox/idempotency/sessions/staged-RBAC platform. NC carried: DEC-005 enums Proposed; argon2 params pinned at WP-02; audit monthly-partition automation deferred (default partition) |
 | WP-02 | RBAC & staff admin | NOT STARTED | — | — | — | |
 | WP-03 | Settings & transition engine | NOT STARTED | — | — | — | |
 | WP-04 | Customers | NOT STARTED | — | — | — | |
