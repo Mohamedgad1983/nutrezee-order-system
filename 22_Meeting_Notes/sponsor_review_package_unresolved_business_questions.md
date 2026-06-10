@@ -14,7 +14,7 @@ This package collects unresolved questions in one place. The build may continue 
 | P0 | Customer identity and duplicates | ASM-007 to ASM-009 | Determines customer matching, duplicate prevention, merge behavior, and import risk. |
 | P0 | Allergy/health safety | ASM-010 to ASM-012 | Determines whether unsafe meals are blocked, warned, or overridden. |
 | P0 | Payment capture and unpaid policy | ASM-019 to ASM-022, ASM-031 to ASM-032 | Determines payment readiness and finance workflow. |
-| P1 | Order status, review, order core, kitchen | ASM-023 to ASM-030, ASM-043 to ASM-046 | Determines downstream lifecycle, order conversion, and operational handoffs. |
+| P1 | Order status, review, order core, kitchen | ASM-023 to ASM-030, ASM-043 to ASM-048 | Determines downstream lifecycle, order conversion, and operational handoffs. |
 | P1 | Reports, notifications, migration | ASM-033 to ASM-038 | Determines reporting scope, trigger content, and bridge behavior. |
 | P1 | Out-of-scope boundaries | ASM-039 to ASM-042 | Keeps dormant modules and WP-14 staging gate explicit. |
 
@@ -70,8 +70,10 @@ This package collects unresolved questions in one place. The build may continue 
 7. Which order change request types are allowed at MVP beyond end-date extension/reduction?
 8. What exception type taxonomy should replace the temporary escalation `other` code for allergy incidents?
 9. Confirm pilot kitchen sections and item-to-section routing ownership.
-10. Is shared tablet with name tap acceptable for kitchen transitions?
-11. Confirm ticket statuses and blocked reasons.
+10. Should routing use product-level rules only for MVP, or also component and meal-type rules?
+11. Can Ops Manager override a day to packed before all tickets are prepared? If yes, what reason/evidence is required?
+12. Is shared tablet with name tap acceptable for kitchen transitions?
+13. Confirm ticket statuses and blocked reasons.
 
 ### Payment, reports, notifications, migration
 

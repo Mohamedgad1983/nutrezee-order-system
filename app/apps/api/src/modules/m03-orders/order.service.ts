@@ -40,6 +40,23 @@ export interface OrderRecord {
   total: number;
 }
 
+export interface FulfillmentDayForKitchen {
+  id: string;
+  orderId: string;
+  date: string;
+  status: FulfillmentStatus;
+  customerId: string;
+}
+
+export interface OrderItemForKitchen {
+  id: string;
+  productId: string | null;
+  nameEn: string;
+  nameAr: string | null;
+  qty: number;
+  allergensFrozen: Array<Record<string, unknown>>;
+}
+
 export class OrderService {
   constructor(
     private readonly pool: Pool,
@@ -172,27 +189,90 @@ export class OrderService {
 
   async transitionDay(actor: StaffContext | 'system', dayId: string, to: FulfillmentStatus, reason?: { code: string; note?: string }): Promise<void> {
     await withTransaction(this.pool, async (client) => {
-      const day = await this.loadDayInTx(client, dayId, true);
-      await this.transitions.transitionInTx({
-        machine: 'fulfillment',
-        subjectType: 'fulfillment_day',
-        subjectId: dayId,
-        from: day.status,
-        to,
-        actor,
-        reason,
-        eventType: 'fulfillment.status_changed',
-        refs: { fulfillment_day_id: dayId, order_id: day.order_id },
-        apply: async (tx) => {
-          await tx.query(
-            `UPDATE fulfillment_day SET status = $2, updated_at = now(),
-             updated_by = $3, version = version + 1 WHERE id = $1`,
-            [dayId, to, actor === 'system' ? 'system' : actor.staffId],
-          );
-          await this.historyInTx(tx, 'fulfillment_day', dayId, day.status, to, actor === 'system' ? null : actor.staffId, null);
-        },
-      }, client);
+      await this.transitionDayInTx(client, actor, dayId, to, reason);
     });
+  }
+
+  async transitionDayInTx(
+    client: PoolClient,
+    actor: StaffContext | 'system',
+    dayId: string,
+    to: FulfillmentStatus,
+    reason?: { code: string; note?: string },
+  ): Promise<void> {
+    const day = await this.loadDayInTx(client, dayId, true);
+    await this.transitions.transitionInTx({
+      machine: 'fulfillment',
+      subjectType: 'fulfillment_day',
+      subjectId: dayId,
+      from: day.status,
+      to,
+      actor,
+      reason,
+      eventType: 'fulfillment.status_changed',
+      refs: { fulfillment_day_id: dayId, order_id: day.order_id },
+      apply: async (tx) => {
+        await tx.query(
+          `UPDATE fulfillment_day SET status = $2, updated_at = now(),
+           updated_by = $3, version = version + 1 WHERE id = $1`,
+          [dayId, to, actor === 'system' ? 'system' : actor.staffId],
+        );
+        await this.historyInTx(tx, 'fulfillment_day', dayId, day.status, to, actor === 'system' ? null : actor.staffId, null);
+      },
+    }, client);
+  }
+
+  async fulfillmentDaysForKitchen(date: string): Promise<FulfillmentDayForKitchen[]> {
+    const { rows } = await this.pool.query(
+      `SELECT fd.id, fd.order_id, fd.date, fd.status, co.customer_id
+       FROM fulfillment_day fd JOIN customer_order co ON co.id = fd.order_id
+       WHERE fd.date = $1 AND fd.status NOT IN ('cancelled_day','skipped')
+       ORDER BY fd.date, co.order_number`,
+      [date],
+    );
+    return rows.map((r) => ({
+      id: r.id as string,
+      orderId: r.order_id as string,
+      date: this.dateString(r.date),
+      status: r.status as FulfillmentStatus,
+      customerId: r.customer_id as string,
+    }));
+  }
+
+  async dayForKitchen(dayId: string): Promise<FulfillmentDayForKitchen> {
+    const { rows } = await this.pool.query(
+      `SELECT fd.id, fd.order_id, fd.date, fd.status, co.customer_id
+       FROM fulfillment_day fd JOIN customer_order co ON co.id = fd.order_id
+       WHERE fd.id = $1`,
+      [dayId],
+    );
+    if (rows.length === 0) throw new OrderError('not_found');
+    return {
+      id: rows[0].id as string,
+      orderId: rows[0].order_id as string,
+      date: this.dateString(rows[0].date),
+      status: rows[0].status as FulfillmentStatus,
+      customerId: rows[0].customer_id as string,
+    };
+  }
+
+  async orderItemsForKitchen(dayId: string): Promise<OrderItemForKitchen[]> {
+    const { rows } = await this.pool.query(
+      `SELECT oi.id, oi.product_id, oi.name_frozen_en, oi.name_frozen_ar, oi.qty, oi.allergens_frozen
+       FROM fulfillment_day fd
+       JOIN order_item oi ON oi.order_id = fd.order_id
+       WHERE fd.id = $1
+       ORDER BY oi.created_at, oi.id`,
+      [dayId],
+    );
+    return rows.map((r) => ({
+      id: r.id as string,
+      productId: r.product_id as string | null,
+      nameEn: r.name_frozen_en as string,
+      nameAr: r.name_frozen_ar as string | null,
+      qty: Number(r.qty),
+      allergensFrozen: (r.allergens_frozen as Array<Record<string, unknown>> | null) ?? [],
+    }));
   }
 
   async createChangeRequest(actor: StaffContext, orderId: string, diff: Record<string, unknown>): Promise<string> {
