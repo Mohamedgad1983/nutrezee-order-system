@@ -76,6 +76,32 @@ describe('TS-R rbac — staged enforcement modes', () => {
     expect(allowed).toMatchObject({ allowed: true, enforced: false });
   });
 
+  it('full matrix sweep in WARN mode: never enforced (WP-02 DoD)', async () => {
+    const { roles, perms, granted } = await matrixFromDb();
+    for (const role of roles) await setMode(role, 'warn');
+    for (const role of roles) {
+      for (const perm of perms) {
+        const d = await access.decide([role], perm, 'test-actor');
+        expect(d.allowed).toBe(granted.has(`${role}::${perm}`));
+        expect(d.enforced).toBe(false);
+      }
+    }
+  }, 120_000);
+
+  it('full matrix sweep in DENY mode: enforced exactly when not granted (WP-02 DoD)', async () => {
+    const { roles, perms, granted } = await matrixFromDb();
+    for (const role of roles) await setMode(role, 'deny');
+    for (const role of roles) {
+      for (const perm of perms) {
+        const expected = granted.has(`${role}::${perm}`);
+        const d = await access.decide([role], perm, 'test-actor');
+        expect(d.allowed).toBe(expected);
+        expect(d.enforced).toBe(!expected);
+      }
+    }
+    for (const role of roles) await setMode(role, 'log'); // restore
+  }, 120_000);
+
   it('would-deny decisions leave an audit trail', async () => {
     const { rows } = await pool.query(
       "SELECT count(*)::int AS n FROM audit_event WHERE event_type = 'rbac.would_deny'",
