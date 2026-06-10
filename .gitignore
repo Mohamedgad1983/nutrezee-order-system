@@ -9,3 +9,6 @@ nutrezee-step-1-discovery/
 
 # macOS
 .DS_Store
+
+# Node (root stray-run protection; app/ has its own)
+node_modules/
