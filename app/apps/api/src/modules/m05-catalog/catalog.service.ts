@@ -162,6 +162,25 @@ export class CatalogService {
     return rows.map((r) => ({ allergenId: r.allergen_id, nameEn: r.name_en, source: r.source }));
   }
 
+  /** Read API for M01: validate item references without allowing M01 table reads. */
+  async productExists(productId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM product WHERE id = $1 AND active`,
+      [productId],
+    );
+    return rows.length > 0;
+  }
+
+  /** Read API for M01: package selection is captured at intake; calendar expansion
+   * waits for WP-09. */
+  async packageExists(packageId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM package WHERE id = $1 AND active`,
+      [packageId],
+    );
+    return rows.length > 0;
+  }
+
   /** Import path for bilingual masters (M19 calls this — ADR-010): match-or-create
    *  by name within the CALLER's transaction. */
   async importMaster(
