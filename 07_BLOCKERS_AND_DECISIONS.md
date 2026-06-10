@@ -15,7 +15,7 @@
 
 | Item | Status |
 |---|---|
-| CI | ✅ Workflow live since WP-00 (`.github/workflows/ci.yml`); `gh` CLI verified locally; latest WP-12 merge run 27296643148 = 13/13 jobs green |
+| CI | ✅ Workflow live since WP-00 (`.github/workflows/ci.yml`); `gh` CLI verified locally; latest WP-13 merge run 27297588422 = 13/13 jobs green |
 | Staging | ❌ **Deferred** — blocked by the PG-region/data-residency item below; provisioning checklist ready (`16_Deployment/environment_plan.md` §3) |
 | Local environment | ✅ Verified (typecheck/lint/tests/build/smoke); Docker compose authored but **unvalidated locally** (Docker not installed) |
 | Workshop / assumption-carry | ✅ **Assumption-carry accepted 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
@@ -23,14 +23,14 @@
 
 ## What blocks WP-01+ (after DEC-014 staging re-scope, 2026-06-10)
 
-WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–12 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (assumption-carry, WP-07+ active).
+WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–13 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (assumption-carry, WP-07+ active).
 
-**→ WP-01–12: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-12 merge `9768842`, 138 local tests, CI run 27296643148 13/13). The WP-07+ assumption-carry directive is active; WP-13 is the next eligible WP, subject to the active assumptions and normal technical gates.**
+**→ WP-01–13: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-13 merge `369266f`, 147 local tests, CI run 27297588422 13/13). WP-14 is BLOCKED on the hard staging-live/smoke-tested entry gate.**
 
 Still standing, clearly scoped:
-1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–12 build). Region: AWS me-south-1 interim.
+1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–13 build). Region: AWS me-south-1 interim.
 2. **WP-07+ business decisions** — intake field set, DEC-005 finals, DEC-006 sections, and related OPEN decisions are now carried as explicit assumptions in `ASSUMPTION_REGISTER.md`. They do not block build by themselves, but they remain sponsor-review-required and reversible.
-3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest WP-12 merge run 27296643148 = 13/13 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
+3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest WP-13 merge run 27297588422 = 13/13 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
 ## WP-07 legacy review pack and build status
 
@@ -51,4 +51,4 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-Execute WP-13 in Sprint Build Mode using `ASSUMPTION_REGISTER.md` as the active Assumed-for-build control. Continue to later WPs while technical gates pass, stopping only for real technical blockers, forbidden scope, failed suites, missing credentials/access that make implementation impossible, or no eligible WPs remaining. WP-13 may build synthetic/import-safe bridge tooling, but real legacy apply remains limited by legacy access/export availability. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
+Provision staging per `16_Deployment/environment_plan.md` §3, supply required cloud credentials/details, deploy the current `main`, and record a live smoke test. That is the single next unblock action for WP-14; unresolved sponsor assumptions remain review-required but are not the current technical blocker.
