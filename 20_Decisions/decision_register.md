@@ -14,5 +14,5 @@
 | DEC-008 | Dispatch model | Area definitions; capacity unit (orders/boxes/weight/route time); override rules | Dispatch + Ops | Phase 3 entry | OPEN |
 | DEC-009 | Payment & refund rules | Methods; confirmation timing vs kitchen start; refund/credit policy | Finance | Phase 1 | OPEN |
 | DEC-010 | Day-one KPIs | P0 management analytics set | Management | Phase 4 entry (G3) | OPEN |
-| DEC-011 | Hosting & stack | Platform, language/framework, database for new modules | Tech Lead | End Phase 0 | OPEN |
+| DEC-011 | Hosting & stack | DECIDED — see DEC-011_stack_hosting.md | Tech Lead + Sponsor | End Phase 0 | **SIGNED 2026-06-10 — TypeScript/NestJS modular monolith + PostgreSQL (managed) + React/Vite admin & PWAs; SQL-first migrations; server-side sessions; GitHub Actions CI/CD; staging+prod containers. PostgreSQL posture of Phase 4 confirmed unchanged.** |
 | DEC-012 | Data migration approach | Scope of old data migrated; timing; validation method | Tech Lead + Ops | Phase 1 | OPEN |
