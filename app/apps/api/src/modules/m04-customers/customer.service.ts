@@ -209,6 +209,51 @@ export class CustomerService {
     });
   }
 
+  /** Import path (M19 calls this — ADR-010: imports go through the owning module).
+   *  Runs inside the CALLER's transaction; origin=legacy + batch stamp; no dup checks
+   *  here — the import pipeline decides created/matched/merge_review before calling. */
+  async createImported(
+    client: PoolClient,
+    input: { fullNameEn: string; fullNameAr?: string; email?: string; dob?: string; phoneNormalized?: string; phoneRaw?: string },
+    batchId: string,
+  ): Promise<string> {
+    const id = newId();
+    await client.query(
+      `INSERT INTO customer (id, full_name_en, full_name_ar, email, dob, origin, import_batch_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,'legacy',$6,'import')`,
+      [id, input.fullNameEn, input.fullNameAr ?? null, input.email ?? null, input.dob ?? null, batchId],
+    );
+    if (input.phoneNormalized) {
+      await client.query(
+        `INSERT INTO customer_phone (id, customer_id, phone_normalized, phone_raw, is_primary, origin, import_batch_id, created_by)
+         VALUES ($1,$2,$3,$4,true,'legacy',$5,'import')`,
+        [newId(), id, input.phoneNormalized, input.phoneRaw ?? null, batchId],
+      );
+    }
+    return id;
+  }
+
+  /** Exact-phone lookup against ACTIVE customers (import dedup step 1). */
+  async findActiveByPhone(client: PoolClient, phoneNormalized: string): Promise<string | null> {
+    const { rows } = await client.query(
+      `SELECT c.id FROM customer_phone p JOIN customer c ON c.id = p.customer_id
+       WHERE p.phone_normalized = $1 AND c.status = 'active' LIMIT 1`,
+      [phoneNormalized],
+    );
+    return rows.length > 0 ? (rows[0].id as string) : null;
+  }
+
+  /** Fuzzy name+dob candidates (import dedup step 2 — merge_review, never auto-merge). */
+  async findFuzzy(client: PoolClient, fullNameEn: string, dob?: string): Promise<string[]> {
+    const { rows } = await client.query(
+      `SELECT id FROM customer
+       WHERE lower(full_name_en) = lower($1)
+         AND ($2::date IS NULL OR dob = $2::date) AND status = 'active'`,
+      [fullNameEn, dob ?? null],
+    );
+    return rows.map((r) => r.id as string);
+  }
+
   private async assertExists(c: PoolClient, id: string): Promise<Record<string, unknown>> {
     const { rows } = await c.query('SELECT * FROM customer WHERE id = $1 FOR UPDATE', [id]);
     if (rows.length === 0) throw new CustomerError('not_found');
