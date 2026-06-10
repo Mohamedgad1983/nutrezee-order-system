@@ -30,7 +30,7 @@ WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ 
 Still standing, clearly scoped:
 1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–06 build). Region: AWS me-south-1 interim.
 2. **WP-07+ workshop blockers** — intake field set (S3), DEC-005 finals, DEC-006 sections; untouched by NC-carry or DEC-014.
-3. Practical session duty: each WP merge requires green CI on GitHub — the executing session must verify runs (Actions tab; `gh` CLI not installed on the authoring machine).
+3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest 14/14 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
 ## Exact next action
 

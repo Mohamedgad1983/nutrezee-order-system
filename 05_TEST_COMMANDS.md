@@ -19,7 +19,8 @@ All commands run from `app/` unless noted.
 | `npm run typecheck -w apps/api` (or `-w apps/admin`, `-w packages/shared`) | Single-workspace typecheck | Inferred (all-workspace form Verified) |
 | `docker compose -f docker/compose.yml up -d postgres` (repo root) | Local PostgreSQL 16 | **NC — Docker not installed on the authoring machine**; compose/Dockerfiles unvalidated |
 | `docker compose -f docker/compose.yml up --build` | Full local stack (postgres + api + admin) | **NC** (same reason) |
-| GitHub Actions `ci.yml` (push to `main`/`build/**`, PRs): jobs `install`, `lint`, `typecheck`, `build`, suite matrix `ts-u…ts-s`, `boundary-scan`*, `no-get-mutation-scan`* | CI gates per test_strategy | **NC — first run on GitHub not yet verified** (no `gh` CLI locally; check the Actions tab). *Scan jobs are placeholders until WP-01 implements the real guards |
+| GitHub Actions `ci.yml` (push to `main`/`build/**`, PRs): jobs `install`, `lint`, `typecheck`, `build`, suite matrix `ts-u…ts-s`, `boundary-scan`*, `no-get-mutation-scan`* | CI gates per test_strategy | **Verified 2026-06-10** — all runs green since WP-00; run 27279685845 = 14/14 jobs success. *Scan jobs are placeholders until WP-01 implements the real guards |
+| `gh run list --limit N` / `gh run view <id> --json jobs` / `gh run watch <id>` | Per-WP CI verification from the session | **Verified** (`gh` 2.93 installed + authed 2026-06-10, account Mohamedgad1983) |
 | `git status --short && git branch -vv` | STEP 0 #4 clean-tree/sync check | **Verified** |
 
 ## Coming with later WPs (do not invent earlier)

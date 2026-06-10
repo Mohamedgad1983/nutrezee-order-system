@@ -12,10 +12,10 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | ① DEC-011 stack signed | ✅ SIGNED 2026-06-10 |
 | ② DEC-003 MVP cut signed | ✅ **SIGNED 2026-06-10** (`20_Decisions/DEC-003_mvp_cut.md`) |
 | ③ R1 remote backup | ✅ CLOSED 2026-06-10 (GitHub, both branches) |
-| ④ Staging + CI live | ✅ **for WP-01–06 per DEC-014 re-scope** (CI half ✅ — workflow live, mandatory, unweakened; verify each WP's run on GitHub). Staging half: **NOT provisioned, NOT done** — re-scoped to a **hard pre-pilot/WP-14 entry gate**; region AWS me-south-1 interim; provisioning still needs cloud credentials |
+| ④ Staging + CI live | ✅ **for WP-01–06 per DEC-014 re-scope**. CI half **Verified on GitHub 2026-06-10**: all runs green since WP-00; latest run 27279685845 = 14/14 jobs success (lint, typecheck, build, ts-u…ts-s, scans); `gh` CLI authed locally for per-WP verification. Staging half: **NOT provisioned, NOT done** — hard pre-pilot/WP-14 entry gate; region AWS me-south-1 interim; provisioning still needs cloud credentials |
 | ⑤ Workshop held / NC-carry acceptance | ✅ **NC-carry acceptance recorded 2026-06-10** for WP-01–06 only (`NOTE_nc_carry_acceptance_wp01_06.md`); workshop itself still outstanding — WP-07+ remain workshop-blocked |
 
-**Currently eligible: WP-01** (per DEC-014 staging re-scope, 2026-06-10): ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–06 ⑤ ✅ (NC-carry). WP-01–06 proceed on **local + CI verification**; each WP merges only on green CI. Practical duty for the executing session: verify CI runs on GitHub (Actions tab; `gh` CLI not installed locally). **Staging live + smoke-tested is a hard WP-14/pre-pilot entry gate** — not done, not to be marked done. WP-07+ remain workshop-blocked.
+**Currently eligible: WP-01** (per DEC-014 staging re-scope, 2026-06-10): ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–06 ⑤ ✅ (NC-carry). WP-01–06 proceed on **local + CI verification**; each WP merges only on green CI — verifiable in-session now (`gh` CLI installed + authed 2026-06-10; all CI runs to date green). **Staging live + smoke-tested is a hard WP-14/pre-pilot entry gate** — not done, not to be marked done. WP-07+ remain workshop-blocked.
 
 ## Work package status
 
