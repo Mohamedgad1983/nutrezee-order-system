@@ -3,6 +3,7 @@
 **Document type:** Phase 8 deliverable — consolidation of completed discovery
 **Date:** 2026-06-10
 **Status:** Baseline v1.0 — for stakeholder review
+> **Status update 2026-06-10:** risk R1 (no remote backup) is CLOSED — repository pushed to the private GitHub remote `Mohamedgad1983/nutrezee-order-system` (both `main` and the discovery evidence branch). Mentions below of an "inner/independent discovery repo with no remote" are superseded: filesystem verification shows `nutrezee-step-1-discovery/` is a linked worktree of this repository. Live status: `21_Risks/risk_register.md`.
 **Source of evidence:** `nutrezee-step-1-discovery/` (Steps 0–2C + Phase 3 module analysis, completed 2026-06-09)
 **Strategic direction:** Improve and extend the existing operation — not a big-bang replacement. The existing admin dashboard, workflows, staff, and delivery process are treated as the running baseline to be enhanced incrementally.
 

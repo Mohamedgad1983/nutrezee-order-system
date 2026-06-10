@@ -12,7 +12,7 @@
 - `codex_implementation_sequence.md` — WP-01…14 work packages with stop-rules and the five-condition build entry gate
 - `phase_4_to_build_handoff.md` — **current gate**: build entry ticket, open-NC register, amendments log (next id A5)
 
-Status: all documentation phases (1–4) complete. Build (WP-01) blocked on: DEC-011, DEC-003, R1 remote backup, staging/CI, workshop (or sponsor NC-carry acceptance for WP-01–06).
+Status: all documentation phases (1–4) complete. R1 remote backup **closed 2026-06-10** (GitHub private remote, both branches). Build (WP-01) still blocked on: DEC-011, DEC-003, staging/CI, workshop (or sponsor NC-carry acceptance for WP-01–06).
 **Owner:** PM
 **Depends on:** 04, 20_Decisions
 

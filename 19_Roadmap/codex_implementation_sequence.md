@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-11 · **Status:** Proposed — execution order for post-Phase-4 coding sessions (Codex / Claude Code)
 **Global stop-rule:** a WP may not start while an [NC] dependency that affects its Definition of Done is unresolved. A WP may build *around* an open NC only when the NC is config-content (zero-row-ready) — never when it changes structure or DoD.
-**Global entry gate (blocks WP-01, i.e., ALL coding):** ① DEC-011 signed (stack + confirms/overrides PostgreSQL-Proposed) ② DEC-003 signed (MVP cut) ③ R1 closed (both repos pushed to remote) ④ staging environment + CI skeleton live (`16_Deployment/`) ⑤ workshop held **or** sponsor explicitly accepts NC-carry build risk for WP-01–06 only (foundation/data WPs tolerate it; WP-07+ do not).
+**Global entry gate (blocks WP-01, i.e., ALL coding):** ① DEC-011 signed (stack + confirms/overrides PostgreSQL-Proposed) ② DEC-003 signed (MVP cut) ③ R1 closed *(✅ satisfied 2026-06-10 — GitHub private remote, both branches)* ④ staging environment + CI skeleton live (`16_Deployment/`) ⑤ workshop held **or** sponsor explicitly accepts NC-carry build risk for WP-01–06 only (foundation/data WPs tolerate it; WP-07+ do not).
 Sizes: S ≈ days · M ≈ 1–2 wk · L ≈ 2–4 wk (single squad; re-baseline at DEC-011).
 
 | WP | Scope | Key inputs | Definition of Done (all = CI-green per test_strategy gates) | Out of scope | Size | NC blockers |

@@ -15,7 +15,7 @@
 
 ## 2. The build entry gate (verbatim from the sequence — ALL five before WP-01)
 
-① DEC-011 signed · ② DEC-003 signed · ③ **R1 closed — repos pushed to remote** · ④ staging + CI live · ⑤ workshop held, or sponsor accepts NC-carry for WP-01–06 only (WP-07+ and WP-14 have hard workshop dependencies).
+① DEC-011 signed · ② DEC-003 signed · ③ **R1 closed — repos pushed to remote** *(✅ satisfied 2026-06-10: GitHub private remote, `main` + discovery branch)* · ④ staging + CI live · ⑤ workshop held, or sponsor accepts NC-carry for WP-01–06 only (WP-07+ and WP-14 have hard workshop dependencies).
 
 ## 3. Open [NC] register at handoff (carried, never silently resolved)
 

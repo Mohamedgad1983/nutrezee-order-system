@@ -1,7 +1,7 @@
 # Phase 6 — Project Documentation Structure
 
 **Date:** 2026-06-10 · **Status:** Active
-Root: `NutrezeeOrderSystem/`. The original discovery repo (`nutrezee-step-1-discovery/`) is preserved unmodified as the evidence record; folders below hold the consolidated, living documentation. Each folder contains a `README.md` restating its charter.
+Root: `NutrezeeOrderSystem/`. The discovery evidence record (`nutrezee-step-1-discovery/`) is preserved unmodified as a **linked worktree of this repository** (branch `claude-codex/step-1-discovery`; corrected 2026-06-10 — it is not an independent repo); folders below hold the consolidated, living documentation. Each folder contains a `README.md` restating its charter.
 
 | Folder | Purpose | Documents to store | Owner | Depends on |
 |---|---|---|---|---|
@@ -33,4 +33,4 @@ Root: `NutrezeeOrderSystem/`. The original discovery repo (`nutrezee-step-1-disc
 - **One source of truth per fact.** Raw evidence stays in `nutrezee-step-1-discovery/` and is linked, never copied-and-drifted.
 - **IDs everywhere:** BR-xxx (requirements), GAP-xx-nn (gaps), ENH-x-nn (enhancements), DEC-nnn (decisions), R-n (risks). The traceability matrix in `05_Requirements/` joins them.
 - **Status header** on every doc: Draft → In Review → Baselined → Superseded.
-- **Git:** this entire tree is version-controlled; baseline changes go through review. Push to a private remote (ENH-QW-01).
+- **Git:** this entire tree is version-controlled; baseline changes go through review. Backed up on the private GitHub remote `git@github.com:Mohamedgad1983/nutrezee-order-system.git` since 2026-06-10 (ENH-QW-01 done; R1 closed) — push after every working session.

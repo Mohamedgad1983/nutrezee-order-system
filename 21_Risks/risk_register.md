@@ -2,9 +2,11 @@
 
 **Status:** Living document · Review weekly · Scales: Likelihood/Impact = Low/Med/High. Exposure = L×I.
 
+> **2026-06-10 — R1 CLOSED.** Repository backed up on GitHub private remote (`Mohamedgad1983/nutrezee-order-system`); working tree clean; `main` tracks `origin/main`. Filesystem verification also corrected an earlier misstatement: `nutrezee-step-1-discovery/` is **not an independent git repository** — it is a linked **worktree of this same repository** (branch `claude-codex/step-1-discovery`), now also pushed to the remote and its worktree registration repaired.
+
 | ID | Risk | L | I | Mitigation | Owner | Status |
 |---|---|---|---|---|---|---|
-| R1 | Project knowledge exists only on one machine — discovery repo has no git remote, outer repo uncommitted | High (certain) | High | Push both repos to private remote this week (ENH-QW-01) | PM | **OPEN — act now** |
+| R1 | Project knowledge existed only on one machine (no git remote) | High (was) | High | Pushed to private GitHub remote `git@github.com:Mohamedgad1983/nutrezee-order-system.git`: `main` → `origin/main` (716930c) and discovery evidence branch `claude-codex/step-1-discovery` → origin (878f6a6). Residual duty: push after every working session. | PM | **CLOSED 2026-06-10** |
 | R2 | Source/staging access never granted; extend strategy unvalidatable | Med | High | Timebox access requests to 3 weeks in Phase 0; default DEC-001 to strangler-fig on expiry | PM | OPEN |
 | R3 | Requirements built from single-day desk discovery, unvalidated by operations staff | High | High | Verification workshop is the Phase 0/1 gate; no modeling commitments from Assumed-grade evidence | PM/BA | OPEN |
 | R4 | Production incident from existing unsafe surfaces (mutating GET auto-assign, leaked SQL exceptions, no logout) | Med | High | Quick wins ENH-QW-02/03/04 with old-system owner; until then, staff briefed not to open the auto-assign card | Tech Lead | OPEN |

@@ -2,8 +2,9 @@
 .env.*
 !.env.example
 
-# Independent git repo (Step 0-2C discovery evidence record, own history).
-# Tracked and pushed separately — see risk R1 in 21_Risks/risk_register.md.
+# Linked worktree of THIS repository (not an independent repo): discovery
+# evidence record on branch claude-codex/step-1-discovery, pushed to origin.
+# Path ignored because a worktree checkout cannot be tracked by another worktree.
 nutrezee-step-1-discovery/
 
 # macOS
