@@ -32,6 +32,21 @@ Still standing, clearly scoped:
 2. **WP-07+ workshop blockers** — intake field set (S3), DEC-005 finals, DEC-006 sections; untouched by NC-carry or DEC-014.
 3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest 14/14 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
+## WP-07 legacy review pack status
+
+**2026-06-10:** `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md` was created as a sponsor decision pack for old `/orders/create`. Result: **READY_FOR_SPONSOR_SIGNOFF**, not unblocked. The pack confirms the old field categories visible in read-only discovery, but old-system evidence does **not** verify required flags, warning-only behavior, defaults, or submit blockers.
+
+WP-07 stays **BLOCKED** until the sponsor signs or explicitly accepts Assumed-for-build values for these P0 decisions:
+
+1. Mandatory submit field set for `/orders/create` draft intake.
+2. Draft-save vs submit-block rules.
+3. DEC-004 customer identity and duplicate policy: phone matching, multiple phones, exact match, fuzzy match, force duplicate, merge role.
+4. DEC-002 WhatsApp posture: manual reference fields, raw-content privacy, no webhook/API in WP-07 unless signed.
+5. Allergy and health behavior: required allergy question, explicit "no allergy" vs blank, severity levels, conflict warning/blocking, override role.
+6. Package/date/delivery/payment capture: package/sub-package/package-for, start/end or delivery dates, address/area/slot/method, pickup/branch posture, expected payment method, unpaid submit policy.
+7. Coupon validation mode and slot capacity mode.
+8. Order/draft creation state and edit-after-submit rule.
+
 ## Exact next action
 
-`Execute Phase 5 Sprint Build Mode per 19_Roadmap/phase_5_master_prompt.md` — runs WP-01→02→03→04/05→06 atomically, stopping honestly at WP-07's workshop dependency. In parallel (human): provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
+Sponsor/user reviews and signs `22_Meeting_Notes/WP07_orders_create_legacy_review_pack.md` checklist, or records explicit Assumed-for-build values for every P0 missing decision above. Only then update the register to mark WP-07 eligible and start WP-07. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
