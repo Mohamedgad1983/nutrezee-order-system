@@ -6,7 +6,7 @@
 |---|---|---|---|---|---|
 | DEC-001 | Build strategy | (a) Extend old codebase — requires source access · (b) Strangler-fig: new modules beside old dashboard, retire screen-by-screen · (c) Full rebuild | Sponsor + Tech Lead | End Phase 0 | **OPEN** — leaning (b); Step 2A's "from scratch" superseded by extend-and-improve mandate (2026-06-10); (a) feasibility unknown until source access dispositioned |
 | DEC-002 | WhatsApp intake approach | Business API automation · manual-assisted structured entry · phased (manual → API) | Sponsor + Ops | Phase 0 workshop | OPEN |
-| DEC-003 | MVP cut | Which of the 34 P0 BRs ship in release 1 (recommended floor: ENH-1-01/02/03/04) | Sponsor + PM | Before Phase 1 build | OPEN |
+| DEC-003 | MVP cut | DECIDED — see DEC-003_mvp_cut.md (signs `13_Architecture/mvp_architecture_cut.md` / ADR-009 as the Release-1 contract for WP-01+) | Sponsor + PM | Before Phase 1 build | **SIGNED 2026-06-10** |
 | DEC-004 | Customer identity source of truth | Phone · account · WhatsApp ID | Ops + Tech Lead | Phase 1 | OPEN |
 | DEC-005 | Order state machine | Full lifecycle incl. delivered/completed; transition rules; side effects | Ops + PM | Phase 1 | OPEN |
 | DEC-006 | Kitchen model | Section list, item→section routing, chef shift rules | Kitchen Manager | Phase 2 entry (G2) | OPEN |

@@ -10,19 +10,19 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | Gate | State |
 |---|---|
 | ① DEC-011 stack signed | ✅ SIGNED 2026-06-10 |
-| ② DEC-003 MVP cut signed | ❌ OPEN |
+| ② DEC-003 MVP cut signed | ✅ **SIGNED 2026-06-10** (`20_Decisions/DEC-003_mvp_cut.md`) |
 | ③ R1 remote backup | ✅ CLOSED 2026-06-10 (GitHub, both branches) |
-| ④ Staging + CI live | ◐ CI half ✅ (workflow live since WP-00, 2026-06-10 — verify first GitHub run); staging half ❌ deferred pending a PG-region (residency) note in `20_Decisions/` (provisioning checklist ready: `16_Deployment/environment_plan.md` §3) |
-| ⑤ Workshop held / NC-carry acceptance | ❌ Neither recorded |
+| ④ Staging + CI live | ◐ CI half ✅ (workflow live since WP-00 — verify first GitHub run); staging half: region note ✅ (`NOTE_pg_staging_region_interim.md`, AWS me-south-1 interim) → provisioning **unblocked but not yet executed** (`16_Deployment/environment_plan.md` §3 — needs cloud account/credentials); staging is **not live** |
+| ⑤ Workshop held / NC-carry acceptance | ✅ **NC-carry acceptance recorded 2026-06-10** for WP-01–06 only (`NOTE_nc_carry_acceptance_wp01_06.md`); workshop itself still outstanding — WP-07+ remain workshop-blocked |
 
-**Currently eligible:** none — WP-00 is DONE (2026-06-10); WP-01 is **BLOCKED** on ② DEC-003 signature + ⑤ workshop/NC-carry + ④ staging half (region note). Build resumes when those land.
+**Currently eligible:** none yet — sponsor unblock pack of 2026-06-10 cleared ② and ⑤ (WP-01–06) and the region item; **WP-01's sole remaining blocker is gate ④'s staging half: staging is not provisioned/live** (provisioning needs cloud account/credentials — a human/infra action — or a sponsor decision re-scoping the staging-live requirement to pre-pilot). WP-01 becomes eligible the moment ④ is fully satisfied, all other gates passing live.
 
 ## Work package status
 
 | WP | Title | Status | Branch / merge commit | Suites green | Amendments | Notes / NC carried |
 |---|---|---|---|---|---|---|
 | WP-00 | Environment standup | **DONE 2026-06-10** | `build/wp-00-environment-standup` → merge `e704eca` (feat `213478c`) | lint ✅ typecheck ✅ build ✅ placeholder suites 8/8 ✅ + `GET /health` runtime smoke ✅ (all local) | A5 | Staging deferred per A5 carve-out (no PG-region note); compose authored but unvalidated locally (Docker not installed); first GitHub CI run to be verified post-push |
-| WP-01 | Platform foundation | **BLOCKED 2026-06-10** | — | — | — | Exact blockers: ② DEC-003 OPEN (sponsor signature on `13_Architecture/mvp_architecture_cut.md`); ⑤ no workshop minutes in `22_Meeting_Notes/` and no sponsor NC-carry note in `20_Decisions/`; ④ staging half pending PG-region note. No business code may be written until cleared (stop-rule). |
+| WP-01 | Platform foundation | **BLOCKED** (re-assessed 2026-06-10 after unblock pack) | — | — | — | Sole remaining blocker: ④ staging not provisioned/live (region note exists; checklist `16_Deployment/environment_plan.md` §3 needs cloud account/credentials). ② ✅ DEC-003 signed; ⑤ ✅ NC-carry (WP-01–06). Unblock: provision staging, or sponsor decision re-scoping staging-live to pre-pilot. |
 | WP-02 | RBAC & staff admin | NOT STARTED | — | — | — | |
 | WP-03 | Settings & transition engine | NOT STARTED | — | — | — | |
 | WP-04 | Customers | NOT STARTED | — | — | — | |
@@ -45,6 +45,7 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 |---|---|---|
 | 2026-06-10 | Mode A — WP-00 | DONE (merge `e704eca`); suites green locally; staging deferred (region NC); WP-01 declared BLOCKED |
 | 2026-06-10 | **Sprint Mode** (first run, after Mode B added @ `1ac4876`) | STEP 0 re-verified live: ①③ ✅, ② ❌, ⑤ ❌, ④ ◐. WP-00 already DONE (artifacts verified). Next eligible per dependency diagram = WP-01 → entry gate fails (② DEC-003, ⑤ workshop/NC-carry) → sprint stopped honestly, **0 new WPs executed**, no eligible WPs remain. Unblock = sign DEC-003 + record NC-carry note (or hold workshop) + PG-region note. |
+| 2026-06-10 | Sponsor unblock pack (docs only) | DEC-003 SIGNED; NC-carry acceptance recorded (WP-01–06); interim PG staging region noted (AWS me-south-1). Gate re-check: ①②③⑤ ✅, ④ ◐ (CI ✅; staging not provisioned). **WP-01 still blocked on ④ staging-live only.** No WP executed (per session mission). |
 
 ## Amendments log (continues `phase_4_to_build_handoff.md` §4 — A1–A4 recorded there)
 
