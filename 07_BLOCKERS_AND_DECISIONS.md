@@ -15,7 +15,7 @@
 
 | Item | Status |
 |---|---|
-| CI | ✅ Workflow live since WP-00 (`.github/workflows/ci.yml`); `gh` CLI verified locally; latest WP-10 merge run 27294563551 = 13/13 jobs green after rerun of an infra-only Docker pull flake |
+| CI | ✅ Workflow live since WP-00 (`.github/workflows/ci.yml`); `gh` CLI verified locally; latest WP-11 merge run 27295575948 = 13/13 jobs green |
 | Staging | ❌ **Deferred** — blocked by the PG-region/data-residency item below; provisioning checklist ready (`16_Deployment/environment_plan.md` §3) |
 | Local environment | ✅ Verified (typecheck/lint/tests/build/smoke); Docker compose authored but **unvalidated locally** (Docker not installed) |
 | Workshop / assumption-carry | ✅ **Assumption-carry accepted 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
@@ -23,14 +23,14 @@
 
 ## What blocks WP-01+ (after DEC-014 staging re-scope, 2026-06-10)
 
-WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–10 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (assumption-carry, WP-07+ active).
+WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–11 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (assumption-carry, WP-07+ active).
 
-**→ WP-01–10: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-10 merge `df5441d`, 115 local tests, CI run 27294563551 13/13 after rerun of an infra-only Docker pull flake). The WP-07+ assumption-carry directive is active; WP-11 is the next eligible WP, subject to the active assumptions and normal technical gates.**
+**→ WP-01–11: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-11 merge `f551a77`, 128 local tests, CI run 27295575948 13/13). The WP-07+ assumption-carry directive is active; WP-12 is the next eligible WP, subject to the active assumptions and normal technical gates.**
 
 Still standing, clearly scoped:
-1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–08 build). Region: AWS me-south-1 interim.
+1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–11 build). Region: AWS me-south-1 interim.
 2. **WP-07+ business decisions** — intake field set, DEC-005 finals, DEC-006 sections, and related OPEN decisions are now carried as explicit assumptions in `ASSUMPTION_REGISTER.md`. They do not block build by themselves, but they remain sponsor-review-required and reversible.
-3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest WP-10 merge run 27294563551 = 13/13 jobs after rerun of an infra-only Docker pull flake). Sessions verify per-WP runs with `gh run list` / `gh run view`.
+3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest WP-11 merge run 27295575948 = 13/13 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
 ## WP-07 legacy review pack and build status
 
@@ -51,4 +51,4 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-Execute WP-11 in Sprint Build Mode using `ASSUMPTION_REGISTER.md` as the active Assumed-for-build control. Continue to later WPs while technical gates pass, stopping only for real technical blockers, forbidden scope, failed suites, missing credentials/access that make implementation impossible, or no eligible WPs remaining. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
+Execute WP-12 in Sprint Build Mode using `ASSUMPTION_REGISTER.md` as the active Assumed-for-build control. Continue to later WPs while technical gates pass, stopping only for real technical blockers, forbidden scope, failed suites, missing credentials/access that make implementation impossible, or no eligible WPs remaining. In parallel: provision staging per env plan §3 so the WP-14 gate is ready when the build arrives.
