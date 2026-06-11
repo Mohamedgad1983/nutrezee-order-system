@@ -13,6 +13,7 @@ function controllerWith(review: Partial<ReviewService>) {
   const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
   const access = {
     decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+    visibilityGrants: vi.fn().mockResolvedValue(new Set(['pii', 'health', 'payment'])),
   } as unknown as AccessService;
   return new ReviewController(sessions, access, review as ReviewService);
 }
@@ -23,7 +24,7 @@ describe('TS-C API contract — review controller (WP-08)', () => {
   it('maps review queue filters to the M02 service contract', async () => {
     const listQueue = vi.fn().mockResolvedValue([{ id: 'queue-1' }]);
     const c = controllerWith({ listQueue });
-    await expect(c.list(req, 'waiting', 'true')).resolves.toEqual({ items: [{ id: 'queue-1' }], page: { limit: 100 } });
+    await expect(c.list(req, 'waiting', 'true')).resolves.toEqual({ items: [{ id: 'queue-1', masked: false }], page: { limit: 100 } });
     expect(listQueue).toHaveBeenCalledWith(ctx, { state: 'waiting', onlyLate: true });
   });
 

@@ -113,6 +113,43 @@ export class ReviewService {
     return out;
   }
 
+  /** Review fix: the WP-12 trigger map routes `review.sla_alert` (ASM-034 "queue SLA")
+   *  but no emitter existed — fire once per late queue item (outbox-dedup like M01's
+   *  aging alerts). */
+  async fireSlaAlerts(actor: StaffContext | 'system' = 'system'): Promise<string[]> {
+    const { rows } = await this.pool.query(
+      `SELECT rqi.id, rqi.draft_id FROM review_queue_item rqi
+       WHERE rqi.queue_state != 'decided' AND rqi.sla_due_at < now()
+         AND NOT EXISTS (
+           SELECT 1 FROM outbox_event o
+           WHERE o.event_type = 'review.sla_alert'
+             AND o.refs->>'review_queue_item' = rqi.id
+         )
+       ORDER BY rqi.sla_due_at ASC LIMIT 100`,
+    );
+    const alerted: string[] = [];
+    for (const row of rows) {
+      await withTransaction(this.pool, async (client) => {
+        await this.audit.writeInTx(client, {
+          eventType: 'review.sla_alert',
+          actor: actor === 'system' ? 'system' : { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+          entityType: 'review_queue_item',
+          entityId: row.id as string,
+          severity: 'warn',
+          relatedRefs: { draft: row.draft_id as string },
+        });
+        await this.outbox.writeInTx(client, {
+          eventType: 'review.sla_alert',
+          actor: actor === 'system' ? { system: 'review-sla' } : { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+          refs: { review_queue_item: row.id as string, draft: row.draft_id as string },
+          payload: { draft_id: row.draft_id as string },
+        });
+      });
+      alerted.push(row.id as string);
+    }
+    return alerted;
+  }
+
   async claim(actor: StaffContext, draftId: string): Promise<void> {
     this.assertManager(actor);
     await this.syncSubmittedDrafts(actor);
