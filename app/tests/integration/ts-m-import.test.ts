@@ -34,7 +34,7 @@ beforeAll(async () => {
   const customers = new CustomerService(pool, audit, new AuditReadQueue(pool, audit), new OutboxService(), settings);
   const catalog = new CatalogService(pool, audit, settings);
   const sync = new SyncRecordService();
-  runner = new BatchRunner(pool, audit, sync);
+  runner = new BatchRunner(pool, audit, new OutboxService(), sync, { customers, catalog });
   importCustomers = customerImporter(customers, sync, '+966');
   importCatalog = catalogImporter(catalog, sync);
 }, 60_000);
@@ -57,6 +57,13 @@ describe('TS-M migration — dry-run produces a reviewable report without busine
       `SELECT messages FROM import_row_result WHERE batch_id = $1 AND row_no = 2`, [report.batchId],
     );
     expect(JSON.stringify(noted.rows[0].messages)).toMatch(/loyalty_points/); // nothing silently dropped
+    // review fix: the dry-run report itself is auditable (info, dry_run flag)
+    const audit = await pool.query(
+      `SELECT severity, after FROM audit_event WHERE event_type = 'bridge.import_run' AND entity_id = $1`,
+      [report.batchId],
+    );
+    expect(audit.rows[0]).toMatchObject({ severity: 'info' });
+    expect(audit.rows[0].after).toMatchObject({ dry_run: true });
   });
 });
 
@@ -80,6 +87,12 @@ describe('TS-M migration — apply gate + idempotent re-run + audit', () => {
       [applied.batchId],
     );
     expect(audit.rows[0].severity).toBe('high');
+    // review fix: module spec M19 "events out: bridge.import_run" — outbox row on apply
+    const outboxRow = await pool.query(
+      `SELECT payload FROM outbox_event WHERE event_type = 'bridge.import_run' AND refs->>'import_batch_id' = $1`,
+      [applied.batchId],
+    );
+    expect(outboxRow.rows[0].payload).toMatchObject({ applied: true, type: 'customer' });
 
     // idempotent re-run: needs its own dry-run gate first, then everything matches
     const rerun = await runner.run(sa, 'customer', CUSTOMER_FIXTURE, importCustomers, { apply: true });

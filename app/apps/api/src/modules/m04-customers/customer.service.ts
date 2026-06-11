@@ -255,6 +255,24 @@ export class CustomerService {
     return id;
   }
 
+  /** M19 rollback port (ADR-010): deletes THIS module's rows for an import batch.
+   *  FK RESTRICT from later business writes aborts the caller's transaction —
+   *  rollback is valid only while nothing references the imported rows. */
+  async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {
+    await client.query(`DELETE FROM customer_phone WHERE import_batch_id = $1`, [batchId]);
+    await client.query(`DELETE FROM address WHERE import_batch_id = $1`, [batchId]);
+    await client.query(
+      `DELETE FROM customer_allergy WHERE customer_id IN (SELECT id FROM customer WHERE import_batch_id = $1)`,
+      [batchId],
+    );
+    await client.query(
+      `DELETE FROM preference WHERE customer_id IN (SELECT id FROM customer WHERE import_batch_id = $1)`,
+      [batchId],
+    );
+    const del = await client.query(`DELETE FROM customer WHERE import_batch_id = $1 RETURNING id`, [batchId]);
+    return del.rows.map((r) => r.id as string);
+  }
+
   /** Exact-phone lookup against ACTIVE customers (import dedup step 1). */
   async findActiveByPhone(client: PoolClient, phoneNormalized: string): Promise<string | null> {
     const { rows } = await client.query(
