@@ -1,0 +1,86 @@
+# Staging deploy workflow (WP-14 deploy blocker D5) — GATED DRAFT.
+#
+# What works TODAY (no cloud credentials needed): manual dispatch builds both
+# images and publishes them to GHCR under this repository using the built-in
+# GITHUB_TOKEN. The staging operator can then pull them from any Docker host.
+#
+# What stays gated: the `deploy` job is skipped until the sponsor supplies the
+# staging platform + credentials (STG-1/STG-2/STG-5 in
+# 16_Deployment/staging_provisioning_checklist.md §1) and an admin sets the
+# repository variable STAGING_DEPLOY_ENABLED=true plus the platform secrets.
+# NO credentials are invented or assumed here; the deploy job fails loudly with
+# instructions if enabled before it is implemented for the chosen platform.
+name: deploy-staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type deploy-staging to confirm publishing images for the current commit'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: confirm input
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "deploy-staging" ]; then
+            echo "Refusing: confirm input must be exactly 'deploy-staging'." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - name: log in to GHCR (built-in token — not a cloud credential)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: image names (GHCR requires lowercase)
+        run: echo "REPO=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: build + push api image
+        run: |
+          docker build -f docker/Dockerfile.api -t "ghcr.io/$REPO/api:${GITHUB_SHA::12}" -t "ghcr.io/$REPO/api:staging" .
+          docker push "ghcr.io/$REPO/api:${GITHUB_SHA::12}"
+          docker push "ghcr.io/$REPO/api:staging"
+      - name: build + push api migrate image (D3 gated migration step)
+        run: |
+          docker build -f docker/Dockerfile.api --target migrate -t "ghcr.io/$REPO/api-migrate:${GITHUB_SHA::12}" -t "ghcr.io/$REPO/api-migrate:staging" .
+          docker push "ghcr.io/$REPO/api-migrate:${GITHUB_SHA::12}"
+          docker push "ghcr.io/$REPO/api-migrate:staging"
+      - name: build + push admin image (D1 proxy config baked in)
+        run: |
+          docker build -f docker/Dockerfile.admin -t "ghcr.io/$REPO/admin:${GITHUB_SHA::12}" -t "ghcr.io/$REPO/admin:staging" .
+          docker push "ghcr.io/$REPO/admin:${GITHUB_SHA::12}"
+          docker push "ghcr.io/$REPO/admin:staging"
+      - name: publish summary
+        run: |
+          {
+            echo "## Images published"
+            echo "- ghcr.io/$REPO/api:${GITHUB_SHA::12}"
+            echo "- ghcr.io/$REPO/api-migrate:${GITHUB_SHA::12}"
+            echo "- ghcr.io/$REPO/admin:${GITHUB_SHA::12}"
+            echo ""
+            echo "Next: 16_Deployment/staging_provisioning_checklist.md §5 (migrate -> deploy -> bootstrap) and §6 smoke."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Skipped until the sponsor's staging inputs exist (checklist §1) AND a repo
+  # admin sets the repository variable STAGING_DEPLOY_ENABLED=true. Implement the
+  # body for the chosen platform (STG-1) at that point; until then this is a
+  # deliberate placeholder that cannot silently no-op.
+  deploy:
+    needs: build-and-publish
+    if: vars.STAGING_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: not implemented — platform not chosen
+        run: |
+          echo "STAGING_DEPLOY_ENABLED is true but no platform deploy is implemented." >&2
+          echo "Implement this job for the chosen platform (checklist STG-1) using the" >&2
+          echo "host secrets (DATABASE_URL etc. per checklist §1/§2). Failing loudly" >&2
+          echo "instead of pretending to deploy." >&2
+          exit 1

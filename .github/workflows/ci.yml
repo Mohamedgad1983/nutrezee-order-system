@@ -84,3 +84,28 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: node scripts/scan-no-get-mutation.mjs
+
+  # D6 (WP-14 deploy readiness): compose + Dockerfiles + nginx proxy config were
+  # authored on a Docker-less machine and never validated — validate them here.
+  # This proves syntax + image builds; a full `compose up` smoke still happens on
+  # the staging host per 16_Deployment/staging_provisioning_checklist.md §6.
+  docker-validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - name: compose config
+        run: docker compose -f docker/compose.yml config --quiet
+      - name: nginx proxy config syntax (D1) — fake the api host so config-load DNS resolves
+        run: |
+          docker run --rm --add-host api:127.0.0.1 \
+            -v "$PWD/docker/nginx.admin.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:alpine nginx -t
+      - name: build api migrate stage (D3)
+        run: docker build -f docker/Dockerfile.api --target migrate -t nutrezee-api:migrate .
+      - name: build api runtime image
+        run: docker build -f docker/Dockerfile.api -t nutrezee-api:ci .
+      - name: build admin image (D1 config baked in)
+        run: docker build -f docker/Dockerfile.admin -t nutrezee-admin:ci .

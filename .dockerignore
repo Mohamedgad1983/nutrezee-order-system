@@ -1,0 +1,11 @@
+# Build context = repo root (docker/compose.yml uses context: ..; CI builds use
+# `docker build -f docker/Dockerfile.* .`). Keep host artifacts and secrets out of
+# images (GAP-SEC-05) and the context small. The images only need app/ sources
+# (builds run inside the image) and docker/nginx.admin.conf.
+**/node_modules
+**/dist
+.git
+.github
+**/.env
+**/.env.*
+!app/.env.example
