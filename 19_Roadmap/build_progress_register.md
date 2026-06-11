@@ -5,14 +5,14 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 **This file's §Amendments table is the sole canonical A-id counter** — stale "next free id" notes in earlier documents are superseded.
 *(Date note: Phase 2–4 documents carry 2026-06-11 date stamps written one day ahead in error; git history — all commits 2026-06-10 — is authoritative.)*
 
-## Gate snapshot (re-verify live each session — last verified 2026-06-10)
+## Gate snapshot (re-verify live each session — last verified 2026-06-11)
 
 | Gate | State |
 |---|---|
 | ① DEC-011 stack signed | ✅ SIGNED 2026-06-10 |
 | ② DEC-003 MVP cut signed | ✅ **SIGNED 2026-06-10** (`20_Decisions/DEC-003_mvp_cut.md`) |
 | ③ R1 remote backup | ✅ CLOSED 2026-06-10 (GitHub, both branches) |
-| ④ Staging + CI live | ✅ **for WP-01–13 per DEC-014 re-scope**. CI half **Verified on GitHub 2026-06-10**: all runs green since WP-00; latest merge run 27297588422 = 13/13 jobs success (lint, typecheck, build, ts-u…ts-s, scans); `gh` CLI authed locally for per-WP verification. Staging half: **NOT provisioned, NOT done** — hard pre-pilot/WP-14 entry gate; region AWS me-south-1 interim; provisioning still needs cloud credentials |
+| ④ Staging + CI live | ✅ **for WP-01–13 per DEC-014 re-scope**. CI half: green since WP-00; now **14 jobs** incl. `docker-validate` (PR #2 merge `9a86ff4`, 2026-06-11). Staging half: **NOT provisioned, NOT done** — hard pre-pilot/WP-14 entry gate; **credential-blocked ONLY** as of 2026-06-11: region noted (me-south-1 interim), deploy blockers D1–D6 all fixed + CI-validated, executable checklist ready (`16_Deployment/staging_provisioning_checklist.md`) — the sole missing inputs are sponsor STG-1..6 (cloud account, managed PG, TLS endpoint, bootstrap values) |
 | ⑤ Workshop held / assumption-carry acceptance | ✅ **Assumption-carry recorded 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
 
 **Currently blocked: WP-14.** WP-01–13 are complete. WP-14 has a hard entry gate: staging must be provisioned, live, and smoke-tested per DEC-014/environment plan §3. This cannot be assumed away. WP-07+ unresolved business questions remain sponsor-review-required in `ASSUMPTION_REGISTER.md`.
@@ -35,7 +35,7 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 | WP-11 | Payments-lite | **DONE 2026-06-10** | `build/wp-11-payments-lite` → merge `f551a77` (feat `162ebe9`) | Local 128/128 full Vitest + lint/typecheck/build/scans; branch CI run 27295496661: **13/13 jobs green**; merge CI run 27295575948: **13/13 jobs green** | A12 | M07 payment records, manual link-sent capture, finance status-review queue, FI-only payment decisions via `transition_config`, HIGH audit/outbox, masked payment reads, legacy-unmapped queue port, and refund `not_enabled` stubs. Built under ASM-019..022, ASM-031..032, ASM-049; sponsor review still required. |
 | WP-12 | Notifications & reports | **DONE 2026-06-10** | `build/wp-12-notifications-reports` → merge `9768842` (feat `1136886`) | Local 138/138 full Vitest + lint/typecheck/build/scans; branch CI run 27296556204: **13/13 jobs green**; merge CI run 27296643148: **13/13 jobs green** | A13 | M11 internal/email-capable notification templates, configurable trigger map, append-only/deduped notification log, and router; M15 intake funnel/daily ops/kitchen day-list projections, audited JSON export, and replay-equality harness. Customer notification channels remain dormant under ASM-033; ASM-034..035 remain sponsor-review-required. |
 | WP-13 | Bridge & cutover tooling | **DONE 2026-06-10** | `build/wp-13-bridge-cutover` → merge `369266f` (feat `afb15e8`) | Local 147/147 full Vitest + lint/typecheck/build/scans; branch CI run 27297504061: **13/13 jobs green**; merge CI run 27297588422: **13/13 jobs green** | A14 | M18 reconciliation records/diffs/alerts and cutover flag audit; M19 active-plan importer, synthetic dry-run/apply/rollback, API surface, owner-module import/rollback ports, unknown payment status finance queue, unverified off-days/address markers. Real legacy apply still needs access/export; ASM-036..038 and ASM-050 remain sponsor-review-required. |
-| WP-14 | Pilot hardening & gate | **BLOCKED** | — | — | — | **Hard entry gate per DEC-014 not met:** staging is not provisioned/live/smoke-tested; cloud credentials/details required. Workshop fully applied/no NC-carry remains a WP-14 requirement. |
+| WP-14 | Pilot hardening & gate | **BLOCKED** | — | — | — | **Hard entry gate per DEC-014 not met:** staging not provisioned/live/smoke-tested — **credential-blocked only since 2026-06-11** (deploy blockers D1–D6 fixed + CI-validated; checklist + smoke runbook executable end-to-end once sponsor supplies STG-1..6; readiness matrix in `wp14_blocker_report.md`). Workshop fully applied/no NC-carry remains a WP-14 requirement. |
 
 Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC — name it) · DONE (merged, suites green, pushed).
 
