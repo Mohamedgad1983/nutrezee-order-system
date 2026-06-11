@@ -89,3 +89,33 @@ describe('TS-U unit — auth/session (server-side sessions, GAP-SEC-04 lesson)',
       .rejects.toMatchObject({ code: 'invalid_credentials' });
   });
 });
+
+describe('TS-U unit — session cookie Secure flag (D2 deploy readiness)', () => {
+  // D2: production posture demands TLS (Secure cookie); COOKIE_SECURE is an
+  // explicit, never-implicit escape hatch for a pre-TLS internal staging smoke.
+  it('follows NODE_ENV by default and honors the explicit COOKIE_SECURE override', async () => {
+    const { cookieSecure } = await import('../../apps/api/src/platform/auth/auth.controller');
+    const savedEnv = process.env.NODE_ENV;
+    const savedOverride = process.env.COOKIE_SECURE;
+    try {
+      delete process.env.COOKIE_SECURE;
+      process.env.NODE_ENV = 'production';
+      expect(cookieSecure()).toBe(true);
+      process.env.NODE_ENV = 'test';
+      expect(cookieSecure()).toBe(false);
+
+      process.env.NODE_ENV = 'production';
+      process.env.COOKIE_SECURE = 'false'; // pre-TLS smoke escape hatch
+      expect(cookieSecure()).toBe(false);
+      process.env.COOKIE_SECURE = 'true';
+      process.env.NODE_ENV = 'test';
+      expect(cookieSecure()).toBe(true);
+      process.env.COOKIE_SECURE = 'banana'; // unknown values never weaken the default
+      process.env.NODE_ENV = 'production';
+      expect(cookieSecure()).toBe(true);
+    } finally {
+      if (savedEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = savedEnv;
+      if (savedOverride === undefined) delete process.env.COOKIE_SECURE; else process.env.COOKIE_SECURE = savedOverride;
+    }
+  });
+});
