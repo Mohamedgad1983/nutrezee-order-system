@@ -1,7 +1,11 @@
-# Nutrezee Order System — local/staging composition (WP-00)
-# Local verification note 2026-06-10: authored on a machine without Docker installed;
-# `docker compose config` validation pending first machine with Docker (recorded in
-# build_progress_register.md WP-00 row).
+# Nutrezee Order System — local/staging composition (WP-00; D1-D6 fixes 2026-06-11)
+# Validation: `docker compose -f docker/compose.yml config` + image builds now run in
+# CI (docker-validate job) — the 2026-06-10 "no Docker locally" note is superseded
+# for syntax/build validation; a full `up` smoke still needs a Docker-equipped host.
+#
+# TLS (D2): terminate HTTPS in front of admin:8080 (platform LB / TLS proxy). The
+# api image bakes NODE_ENV=production -> Secure session cookie; browser login fails
+# over plain HTTP unless COOKIE_SECURE=false is explicitly set (pre-TLS smoke only).
 name: nutrezee
 services:
   postgres:
@@ -41,6 +45,24 @@ services:
       - "8080:80"
     depends_on:
       - api
+
+  # D3: gated pre-rollout migration step (environment_plan §4) — run explicitly,
+  # never at api boot:  docker compose --profile tools run --rm migrate
+  # One-time admin bootstrap (BOOTSTRAP_* from the secret store / shell env):
+  #   docker compose --profile tools run --rm --entrypoint node \
+  #     -e BOOTSTRAP_EMAIL -e BOOTSTRAP_PASSWORD -e BOOTSTRAP_NAME \
+  #     migrate scripts/bootstrap-admin.mjs
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://nutrezee:nutrezee@postgres:5432/nutrezee # local default; staging injects its own
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

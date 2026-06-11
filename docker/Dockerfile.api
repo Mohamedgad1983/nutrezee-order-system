@@ -9,6 +9,16 @@ RUN cd app && npm ci --workspaces --include-workspace-root
 COPY app/ app/
 RUN cd app && npm run build -w apps/api
 
+# D3: migration/ops stage — the runtime image deliberately ships only dist/, so
+# the gated pre-rollout migration step (environment_plan §4) runs from this
+# stage instead of an ad-hoc checkout:
+#   docker compose --profile tools run --rm migrate                      # migrations
+#   docker compose --profile tools run --rm --entrypoint node migrate \
+#     scripts/bootstrap-admin.mjs                                        # first admin
+FROM build AS migrate
+WORKDIR /repo/app
+ENTRYPOINT ["node", "db/migrate.mjs"]
+
 FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /srv
