@@ -151,6 +151,31 @@ describe('TS-U unit — kitchen ticket generation and board (WP-10)', () => {
     expect(actor.rows[0].actor).toMatchObject({ device_session: 'tablet-42', name_tap: 'Chef A' });
   });
 
+  // review fix: the rollup read the day via the pool (outside the transaction) and
+  // the all-tickets-prepared check was write-skew prone — two concurrent `prepared`
+  // transitions could each see the other ticket as unprepared and BOTH skip the
+  // rollup, stranding a fully-prepared day in in_preparation.
+  it('rolls a day to ready_to_pack when the last two tickets are prepared concurrently', async () => {
+    const productA = await catalog.createProduct(agent, { nameEn: 'Race A', nameAr: 'Race A' }, 'import');
+    const productB = await catalog.createProduct(agent, { nameEn: 'Race B', nameAr: 'Race B' }, 'import');
+    await catalog.addRoutingRule(ops, { scope: 'product', targetRef: productA, sectionId: 'seed-section-hot' });
+    await catalog.addRoutingRule(ops, { scope: 'product', targetRef: productB, sectionId: 'seed-section-cold' });
+    const { day } = await approvedOrderWithItems('0555001004', [productA, productB]);
+    await kitchen.generateTickets('system', day.date, 'batch-race');
+    const tickets = (await kitchen.board({ date: day.date })).filter((t) => t.fulfillment_day_id === day.id);
+    expect(tickets).toHaveLength(2);
+
+    for (const ticket of tickets) {
+      await kitchen.transitionTicket(chef, ticket.id, 'in_progress', { deviceSession: 'tablet-9' });
+    }
+    expect((await orders.dayForKitchen(day.id)).status).toBe('in_preparation');
+
+    await Promise.all(tickets.map((ticket) =>
+      kitchen.transitionTicket(chef, ticket.id, 'prepared', { deviceSession: 'tablet-9' }),
+    ));
+    expect((await orders.dayForKitchen(day.id)).status).toBe('ready_to_pack');
+  });
+
   it('rechecks proposed substitutes against customer allergies before raising an escalation', async () => {
     const allergenId = newId();
     await pool.query(`INSERT INTO allergen (id, name_en, name_ar) VALUES ($1,'Sesame','Sesame')`, [allergenId]);

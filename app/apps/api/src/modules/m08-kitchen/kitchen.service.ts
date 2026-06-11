@@ -150,6 +150,9 @@ export class KitchenService {
     if (!['in_progress', 'prepared', 'blocked'].includes(to)) throw new KitchenError('validation_failed', { field: 'to' });
     await withTransaction(this.pool, async (client) => {
       const ticket = await this.loadTicketInTx(client, ticketId, true);
+      // Lock the parent day: rollup decisions (all-tickets-prepared) are write-skew
+      // prone without per-day serialization of concurrent ticket transitions.
+      const day = await this.orders.dayForKitchenInTx(client, ticket.fulfillment_day_id, true);
       const reasonId = to === 'blocked' ? await this.reasonCodeId('ticket_block', reason?.code) : null;
       await this.transitions.transitionInTx({
         machine: 'ticket',
@@ -174,7 +177,7 @@ export class KitchenService {
           );
         },
       }, client);
-      await this.rollupDayInTx(client, actor, ticket.fulfillment_day_id, to);
+      await this.rollupDayInTx(client, actor, day, to);
     });
   }
 
@@ -311,14 +314,13 @@ export class KitchenService {
     });
   }
 
-  private async rollupDayInTx(client: PoolClient, actor: StaffContext, dayId: string, ticketTo: TicketStatus): Promise<void> {
-    const day = await this.orders.dayForKitchen(dayId);
+  private async rollupDayInTx(client: PoolClient, actor: StaffContext, day: FulfillmentDayForKitchen, ticketTo: TicketStatus): Promise<void> {
     if (ticketTo === 'in_progress' && day.status === 'kitchen_queued') {
-      await this.orders.transitionDayInTx(client, actor, dayId, 'in_preparation');
+      await this.orders.transitionDayInTx(client, actor, day.id, 'in_preparation');
       return;
     }
-    if (ticketTo === 'prepared' && day.status === 'in_preparation' && await this.allTicketsPreparedInTx(client, dayId)) {
-      await this.orders.transitionDayInTx(client, actor, dayId, 'ready_to_pack');
+    if (ticketTo === 'prepared' && day.status === 'in_preparation' && await this.allTicketsPreparedInTx(client, day.id)) {
+      await this.orders.transitionDayInTx(client, actor, day.id, 'ready_to_pack');
     }
   }
 

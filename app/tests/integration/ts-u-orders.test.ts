@@ -179,4 +179,44 @@ describe('TS-U unit — order factory and lifecycle (WP-09)', () => {
     const auditRows = await pool.query(`SELECT 1 FROM audit_event WHERE event_type = 'order.change_applied' AND entity_id = $1`, [created.id]);
     expect(auditRows.rowCount).toBe(1);
   });
+
+  // review fix: an end-date reduction used to leave days already in kitchen
+  // production alive beyond the new end date (silently inconsistent state)
+  it('rejects an end-date reduction while days beyond the new end are in kitchen production', async () => {
+    const { draftId } = await approvedPackageDraft('0554001004', 3);
+    const created = await orders.createFromApprovedDraft(ops, draftId);
+    await orders.transitionOrder('system', created.id, 'active');
+
+    const days = await orders.listDays(created.id);
+    const lastDay = days[days.length - 1];
+    await orders.transitionDay('system', lastDay.id, 'kitchen_queued');
+
+    const order = await orders.getOrder(created.id);
+    const requestId = await orders.createChangeRequest(ops, created.id, { end_date: order.start_date });
+    await expect(orders.decideChangeRequest(ops, requestId, true)).rejects.toMatchObject({
+      code: 'validation_failed',
+      detail: expect.objectContaining({ rule: 'kitchen_activity_beyond_new_end' }),
+    });
+    // atomic: nothing applied — request still pending, days untouched, end date kept
+    const state = await pool.query(`SELECT state FROM change_request WHERE id = $1`, [requestId]);
+    expect(state.rows[0].state).toBe('pending');
+    expect((await orders.getOrder(created.id)).end_date).toBe(order.end_date);
+    expect((await orders.listDays(created.id)).find((d) => d.id === lastDay.id)?.status).toBe('kitchen_queued');
+  });
+
+  it('applies an end-date reduction by cancelling scheduled days beyond the new end', async () => {
+    const { draftId } = await approvedPackageDraft('0554001005', 3);
+    const created = await orders.createFromApprovedDraft(ops, draftId);
+    await orders.transitionOrder('system', created.id, 'active');
+
+    const order = await orders.getOrder(created.id);
+    const newEnd = addDays(order.end_date, -1);
+    const requestId = await orders.createChangeRequest(ops, created.id, { end_date: newEnd });
+    await orders.decideChangeRequest(ops, requestId, true);
+
+    expect((await orders.getOrder(created.id)).end_date).toBe(newEnd);
+    const days = await orders.listDays(created.id);
+    expect(days.filter((d) => d.status === 'cancelled_day')).toHaveLength(1);
+    expect(days.filter((d) => d.status === 'scheduled')).toHaveLength(2);
+  });
 });
