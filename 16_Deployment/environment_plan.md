@@ -15,15 +15,18 @@ Stack per signed DEC-011. Secrets standard responds to GAP-SEC-05.
 
 - No secret ever committed: `.env` is gitignored; `app/.env.example` documents names only.
 - Local: developer-managed `.env`. CI: GitHub Actions environment secrets. Staging/prod: host platform secret store, injected as env vars.
-- Rotation duty and per-environment `SESSION_SECRET` uniqueness owned by Tech Lead; gateway/WhatsApp credentials arrive only with their integration WPs.
+- Rotation duty owned by Tech Lead; gateway/WhatsApp credentials arrive only with their integration WPs.
+- *(D4, 2026-06-11)* `SESSION_SECRET` struck: no code ever read it — sessions are server-side rows keyed by an opaque random cookie id (DEC-011: no JWTs); nothing to sign. Reintroduce only together with code that consumes it.
 
 ## 3. Staging provisioning checklist (execute once region resolved)
+
+> **2026-06-11:** the region note exists (me-south-1 interim) — the executable, expanded checklist now lives in `staging_provisioning_checklist.md` (exact sponsor inputs STG-1…7, verified env-var surface, pre-deploy defects D1–D6 incl. the admin-SPA proxy gap and the dead `SESSION_SECRET`, deploy sequence, and the 10-step smoke runbook). The steps below remain the summary of record.
 
 The PG **region is pending the data-residency check [NC — DEC-011]** — KSA/Gulf customer PII+health data may require an in-region host (e.g., AWS `me-south-1`). A one-line sponsor note in `20_Decisions/` (interim or final region) unblocks this checklist; until then staging is deferred per the WP-00 carve-out (amendment A5).
 1. Sponsor region note recorded → choose platform + region.
 2. Provision managed PostgreSQL 16 (PITR on, nightly dump schedule, restore drill documented here).
-3. Provision container host; set secrets (DATABASE_URL, SESSION_SECRET).
-4. Deploy `docker/` images; verify `GET /health` and admin shell.
+3. Provision container host; set secret `DATABASE_URL` (+ one-time `BOOTSTRAP_*` values for the first-admin run).
+4. Deploy `docker/` images **behind TLS** (D2); run the gated migration step `docker compose --profile tools run --rm migrate` (D3); verify `GET /health` and the admin shell (admin image proxies API paths same-origin — D1).
 5. Record staging URL here; flip gate ④ to ✅ in `build_progress_register.md`.
 
 ## 4. Deploy / rollback / backup runbook (skeleton — content hardens in WP-01+)

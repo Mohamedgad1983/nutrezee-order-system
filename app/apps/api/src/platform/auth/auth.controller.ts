@@ -8,6 +8,17 @@ import { maskFields } from '../masking/masking';
 
 const COOKIE = 'nz_session';
 
+/** D2: Secure cookie flag. Default = production posture (TLS REQUIRED in front of
+ *  the API — browser logins silently fail over plain HTTP otherwise). The explicit
+ *  COOKIE_SECURE=false escape hatch exists ONLY for a pre-TLS internal staging
+ *  smoke; never run a pilot with it set. */
+export function cookieSecure(): boolean {
+  const override = process.env.COOKIE_SECURE;
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+  return process.env.NODE_ENV === 'production';
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -28,7 +39,7 @@ export class AuthController {
         surface: 'api', ip: req.ip ?? null,
       });
       res.cookie(COOKIE, ctx.sessionId, {
-        httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',
+        httpOnly: true, sameSite: 'lax', secure: cookieSecure(),
       });
       return { staff_id: ctx.staffId, name: ctx.name, roles: ctx.roles, locale: ctx.locale };
     } catch (e) {
