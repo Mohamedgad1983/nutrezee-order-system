@@ -40,6 +40,20 @@ async function insertEvent(eventType: string, payload: Record<string, unknown>, 
 }
 
 describe('TS-U unit — notifications router (WP-12)', () => {
+  // review fix (migration 0013): security-family events are audit-only and never on
+  // the outbox (event_catalog rule), so a trigger-map rule referencing them can never
+  // fire — the seeded dormant_role_granted rule was structurally dead config.
+  it('keeps the seeded trigger map free of security-family (auth./rbac./staff.) events', async () => {
+    const { rows } = await pool.query(`SELECT value FROM setting WHERE key = 'notification_trigger_map'`);
+    const map = rows[0].value as Record<string, { event_type: string }>;
+    expect(Object.keys(map).length).toBeGreaterThan(0);
+    for (const [trigger, rule] of Object.entries(map)) {
+      expect(rule.event_type, `trigger ${trigger} routes a security event`).not.toMatch(/^(auth|rbac|staff)\./);
+    }
+    const deadTemplate = await pool.query(`SELECT active FROM notification_template WHERE code = 'dormant_role_granted'`);
+    expect(deadTemplate.rows[0].active).toBe(false);
+  });
+
   it('routes configured internal alerts from outbox events and dedupes replays', async () => {
     const sourceEvent = await insertEvent(
       'kitchen.ticket_generated',
