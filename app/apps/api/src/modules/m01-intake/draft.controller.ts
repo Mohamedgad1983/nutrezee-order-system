@@ -3,13 +3,14 @@ import {
   NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { DraftError, DraftService, type DraftChannel, type DraftInput, type DraftState, type DraftUpdateInput } from './draft.service';
+import { DraftError, DraftService, type DraftChannel, type DraftInput, type DraftRecord, type DraftState, type DraftUpdateInput } from './draft.service';
 import { MessageRefError, type MessageRefInput } from '../m17-whatsapp/message-ref.service';
 import { AuthError, SessionService, type StaffContext } from '../../platform/auth/session.service';
-import { AccessService } from '../../platform/rbac/access.service';
+import { AccessService, type VisibilityClass } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { TransitionError } from '../../platform/transition/transition-engine';
 import { IdempotencyConflictError } from '../../platform/idempotency/idempotency.service';
+import { MASK_SENTINEL, maskFields } from '../../platform/masking/masking';
 
 const COOKIE = 'nz_session';
 
@@ -42,14 +43,18 @@ export class DraftController {
   ) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'draft.read');
-    return { items: await this.drafts.listDrafts({ state, channel }), page: { limit: 100 } };
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    const items = (await this.drafts.listDrafts({ state, channel })).map((d) => this.maskDraft(d, grants));
+    return { items, page: { limit: 100 } };
   }
 
   @Get('queues/incomplete')
   async incomplete(@Req() req: Request) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'draft.incomplete.read');
-    return { items: await this.drafts.incompleteQueue(), page: { limit: 100 } };
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    const items = (await this.drafts.incompleteQueue()).map((d) => this.maskDraft(d, grants));
+    return { items, page: { limit: 100 } };
   }
 
   @Post('aging-alerts')
@@ -64,7 +69,8 @@ export class DraftController {
   async get(@Req() req: Request, @Param('id') id: string) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'draft.read');
-    return this.wrap(() => this.drafts.getDraft(id));
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    return this.wrap(async () => this.maskDraft(await this.drafts.getDraft(id), grants));
   }
 
   @Patch(':id')
@@ -109,6 +115,27 @@ export class DraftController {
       await this.drafts.cancelDraft(ctx, id, body.reason_code as string, body.note);
       return { ok: true };
     });
+  }
+
+  // api_standards rule 4: PII/HEALTH/PAYMENT response-shaping per visibility grants.
+  // Allergy warning detail inside the completeness snapshot is HEALTH data too.
+  private maskDraft(record: DraftRecord, grants: Set<VisibilityClass>): DraftRecord & { masked: boolean } {
+    const { data, masked } = maskFields(
+      record as unknown as Record<string, unknown>,
+      { address_inline: 'pii', allergy_conflicts: 'health', price_estimate: 'payment' },
+      grants,
+    );
+    let anyMasked = masked;
+    const completeness = data.completeness as DraftRecord['completeness'] | undefined;
+    if (!grants.has('health') && completeness?.warnings?.length) {
+      const warnings = completeness.warnings.map((w) => {
+        if (w.field !== 'allergy_conflicts' || w.detail === undefined) return w;
+        anyMasked = true;
+        return { ...w, detail: MASK_SENTINEL };
+      });
+      data.completeness = { ...completeness, warnings };
+    }
+    return { ...(data as unknown as DraftRecord), masked: anyMasked };
   }
 
   private async ctx(req: Request): Promise<StaffContext> {

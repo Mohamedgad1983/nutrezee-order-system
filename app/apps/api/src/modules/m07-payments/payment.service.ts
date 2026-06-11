@@ -3,6 +3,7 @@ import { withTransaction } from '../../platform/db/tx';
 import { AuditService } from '../../platform/audit/audit.service';
 import { OutboxService } from '../../platform/outbox/outbox.service';
 import { TransitionEngine } from '../../platform/transition/transition-engine';
+import { MASK_SENTINEL } from '../../platform/masking/masking';
 import type { StaffContext } from '../../platform/auth/session.service';
 import { newId } from '../../platform/ids';
 import { OrderService, type OrderForPayment } from '../m03-orders/order.service';
@@ -35,7 +36,7 @@ export interface PaymentState {
   status: PaymentStatus;
   masked: boolean;
   method?: string | null;
-  amount?: number;
+  amount?: number | string;
   currency?: string;
   transaction_ref?: string | null;
   link_ref?: string | null;
@@ -430,13 +431,9 @@ export class PaymentService {
   }
 
   private async activeTransitionExists(from: PaymentStatus, to: PaymentStatus): Promise<boolean> {
-    const { rows } = await this.pool.query(
-      `SELECT 1 FROM transition_config
-       WHERE machine = 'payment' AND from_status = $1 AND to_status = $2 AND active
-       LIMIT 1`,
-      [from, to],
-    );
-    return rows.length > 0;
+    // config read via the engine API (M16 owns transition_config — ADR-010)
+    const rules = await this.transitions.rulesFor('payment');
+    return rules.some((r) => r.from === from && r.to === to);
   }
 
   private parseRequestedStatus(value?: string): PaymentStatus {
@@ -486,11 +483,18 @@ export class PaymentService {
 
   private toPaymentState(row: PaymentRow, exposeSensitive: boolean): PaymentState {
     if (!exposeSensitive) {
+      // api_standards rule 4: masked fields render the sentinel, never silent omission
       return {
         id: row.id,
         order_id: row.order_id,
         status: row.status,
         masked: true,
+        method: MASK_SENTINEL,
+        amount: MASK_SENTINEL,
+        currency: MASK_SENTINEL,
+        transaction_ref: MASK_SENTINEL,
+        link_ref: MASK_SENTINEL,
+        evidence_note: MASK_SENTINEL,
       };
     }
     return {

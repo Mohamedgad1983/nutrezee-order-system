@@ -15,6 +15,7 @@ function controllerWith(orders: Partial<OrderService>) {
   const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
   const access = {
     decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+    visibilityGrants: vi.fn().mockResolvedValue(new Set(['pii', 'health', 'payment'])),
   } as unknown as AccessService;
   return new OrderController(sessions, access, orders as OrderService);
 }
@@ -36,7 +37,7 @@ describe('TS-C API contract — orders controller (WP-09)', () => {
     const listOrders = vi.fn().mockResolvedValue([{ id: 'order-1' }]);
     const listDays = vi.fn().mockResolvedValue([{ id: 'day-1' }]);
     const c = controllerWith({ listOrders, listDays });
-    await expect(c.list(req, 'approved')).resolves.toEqual({ items: [{ id: 'order-1' }], page: { limit: 100 } });
+    await expect(c.list(req, 'approved')).resolves.toEqual({ items: [{ id: 'order-1', masked: false }], page: { limit: 100 } });
     await expect(c.listDays(req, 'order-1')).resolves.toEqual({ items: [{ id: 'day-1' }], page: { limit: 100 } });
     expect(listOrders).toHaveBeenCalledWith({ status: 'approved' });
     expect(listDays).toHaveBeenCalledWith('order-1');
