@@ -198,10 +198,14 @@ export const POOL = 'POOL';
     {
       provide: BatchRunner,
       useFactory: (
-        pool: Pool, audit: AuditService, sync: SyncRecordService,
+        pool: Pool, audit: AuditService, outbox: OutboxService, sync: SyncRecordService,
         orders: OrderService, payments: PaymentService,
-      ) => new BatchRunner(pool, audit, sync, orders, payments),
-      inject: [POOL, AuditService, SyncRecordService, OrderService, PaymentService],
+        customers: CustomerService, catalog: CatalogService,
+      ) => new BatchRunner(pool, audit, outbox, sync, { orders, payments, customers, catalog }),
+      inject: [
+        POOL, AuditService, OutboxService, SyncRecordService,
+        OrderService, PaymentService, CustomerService, CatalogService,
+      ],
     },
     {
       provide: MigrationService,

@@ -83,3 +83,4 @@ Risk scale:
 | 2026-06-10 | Added WP-10 assumptions ASM-047 and ASM-048 for product-level routing scope and packed confirmation override handling. |
 | 2026-06-10 | Added WP-11 assumption ASM-049 for payment record creation timing and non-mutating payment reads. |
 | 2026-06-10 | Added WP-13 assumption ASM-050 for active-plan address/slot import gaps and reviewable unverified fulfillment-day data. |
+| 2026-06-11 | ASM-034 clarification (independent review, amendment A15): the "dormant-role grant" entry cannot be a notification trigger — security-family events are audit-only and never reach the outbox (event_catalog rule), so the seeded trigger could never fire. The alert remains the HIGH audit event written by M13 on dormant grants (WP-02). Trigger-map seed corrected in migration 0013; the rest of ASM-034's trigger list is unchanged and now fully wired (the queue-SLA emitter was added in the same review). |

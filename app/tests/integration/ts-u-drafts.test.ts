@@ -165,6 +165,49 @@ describe('TS-U unit — allergy conflict computation (WP-07)', () => {
   });
 });
 
+describe('TS-U unit — draft date handling (review fixes)', () => {
+  // review fix: M01 serialized pg `date` values via toISOString(), shifting the
+  // calendar day by -1 on machines east of UTC (M03 was fixed under A10; M01 was not).
+  it('round-trips start/end dates exactly as stored regardless of host timezone', async () => {
+    const created = await drafts.createDraft(agent, {
+      channel: 'phone',
+      unverifiedCustomer: true,
+      unverifiedReason: 'date round-trip check',
+      startDate: '2099-07-01',
+      endDate: '2099-07-05',
+    });
+    const draft = await drafts.getDraft(created.id);
+    expect(draft.start_date).toBe('2099-07-01');
+    expect(draft.end_date).toBe('2099-07-05');
+  });
+
+  // review fix: ASM-015 — backdated start is an OM override; the OM_BACKDATE_OVERRIDE
+  // marker previously worked for ANY role.
+  it('rejects the backdate override marker from non-OM roles and accepts it from OM', async () => {
+    const localDate = (offsetDays: number) => {
+      const d = new Date(Date.now() + offsetDays * 86_400_000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const om: StaffContext = {
+      staffId: 'om-1', name: 'Ops', email: 'om@t', locale: 'en', roles: ['ops_manager'], sessionId: 's-om',
+    };
+    await expect(drafts.createDraft(agent, {
+      channel: 'phone',
+      unverifiedCustomer: true,
+      unverifiedReason: 'OM_BACKDATE_OVERRIDE',
+      startDate: localDate(-2),
+    })).rejects.toMatchObject({ code: 'validation_failed', detail: { rule: 'backdate_override_requires_om' } });
+
+    const allowed = await drafts.createDraft(om, {
+      channel: 'phone',
+      unverifiedCustomer: true,
+      unverifiedReason: 'OM_BACKDATE_OVERRIDE',
+      startDate: localDate(-2),
+    });
+    expect((await drafts.getDraft(allowed.id)).start_date).toBe(localDate(-2));
+  });
+});
+
 describe('TS-U unit — draft aging alerts (WP-07)', () => {
   it('fires one outbox alert per aged open draft', async () => {
     const created = await drafts.createDraft(agent, {

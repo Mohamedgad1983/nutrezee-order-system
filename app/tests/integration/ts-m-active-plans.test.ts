@@ -63,7 +63,7 @@ beforeAll(async () => {
     {} as DraftService, {} as ReviewService, customers, catalog,
   );
   const payments = new PaymentService(pool, audit, outbox, engine, orders);
-  runner = new BatchRunner(pool, audit, sync, orders, payments);
+  runner = new BatchRunner(pool, audit, outbox, sync, { orders, payments, customers, catalog });
   importCustomers = customerImporter(customers, sync, '+966');
   importCatalog = catalogImporter(catalog, sync);
   importActivePlans = activePlanImporter(customers, catalog, orders, payments, sync, '+966');
@@ -129,5 +129,31 @@ describe('TS-M migration — active-plan batch 3 (WP-13)', () => {
     expect(dry.counts.error).toBe(1);
     await expect(runner.run(sa, 'active_plans', broken, importActivePlans, { apply: true }))
       .rejects.toBeInstanceOf(ImportGateError);
+  });
+
+  // review: the phone-fallback resolution path had no coverage (fixtures always
+  // supplied customer_legacy_id) — cover both hit and miss explicitly
+  it('resolves the plan customer by normalized phone when no legacy customer id maps', async () => {
+    const byPhone = [{
+      legacy_id: 'plan-ap-2',
+      order_number: 'LEG-AP-1002',
+      customer_phone: '050 222 0001', // raw legacy formatting of cust-ap-1's phone
+      package_name: 'Legacy Active Plan',
+      start_date: '2099-08-01',
+      end_date: '2099-08-02',
+    }];
+    const dry = await runner.run(sa, 'active_plans', byPhone, importActivePlans);
+    expect(dry.counts).toMatchObject({ created: 1, error: 0 });
+
+    const unknownPhone = [{
+      legacy_id: 'plan-ap-3',
+      order_number: 'LEG-AP-1003',
+      customer_phone: '0509998887', // no such customer -> error row, not a false match
+      package_name: 'Legacy Active Plan',
+      start_date: '2099-08-01',
+      end_date: '2099-08-02',
+    }];
+    const miss = await runner.run(sa, 'active_plans', unknownPhone, importActivePlans);
+    expect(miss.counts).toMatchObject({ error: 1 });
   });
 });

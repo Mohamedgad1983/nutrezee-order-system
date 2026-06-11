@@ -168,3 +168,34 @@ describe('TS-U unit — review queue and decisions (WP-08)', () => {
     expect((await review.listQueue(ops, { state: 'waiting' })).map((q) => q.draft_id)).not.toContain(draftId);
   });
 });
+
+describe('TS-U unit — review queue SLA alerts (review fix)', () => {
+  // review fix: the WP-12 trigger map routes `review.sla_alert` ("queue SLA",
+  // ASM-034) but WP-08 never emitted it — the configured alert could not fire.
+  it('fires one audited outbox alert per late queue item, deduped on re-run', async () => {
+    const { draftId } = await submittedDraft('0552009001');
+    await review.syncSubmittedDrafts(ops);
+    const { rows } = await pool.query(
+      `SELECT id FROM review_queue_item WHERE draft_id = $1 AND queue_state != 'decided'`,
+      [draftId],
+    );
+    const queueId = rows[0].id as string;
+    await pool.query(`UPDATE review_queue_item SET sla_due_at = now() - interval '1 hour' WHERE id = $1`, [queueId]);
+
+    const first = await review.fireSlaAlerts();
+    const second = await review.fireSlaAlerts();
+    expect(first).toContain(queueId);
+    expect(second).not.toContain(queueId);
+
+    const evt = await pool.query(
+      `SELECT 1 FROM outbox_event WHERE event_type = 'review.sla_alert' AND refs->>'review_queue_item' = $1`,
+      [queueId],
+    );
+    expect(evt.rowCount).toBe(1);
+    const auditRow = await pool.query(
+      `SELECT severity FROM audit_event WHERE event_type = 'review.sla_alert' AND entity_id = $1`,
+      [queueId],
+    );
+    expect(auditRow.rows[0].severity).toBe('warn');
+  });
+});

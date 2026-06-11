@@ -106,11 +106,10 @@ export function catalogImporter(catalog: CatalogService, sync: SyncRecordService
     if (kind === 'package') {
       let parentId: string | undefined;
       if (row['parent_name']) {
-        const parent = await client.query(
-          'SELECT id FROM package WHERE lower(name_en) = lower($1)', [String(row['parent_name'])],
-        );
-        if (parent.rowCount === 0) return { rowNo, action: 'error', messages: [`parent package not found: ${String(row['parent_name'])}`] };
-        parentId = parent.rows[0].id;
+        // package lookup via the M05 owning-module API, not a raw table read (ADR-010)
+        const parent = await catalog.packageByNameInTx(client, String(row['parent_name']));
+        if (!parent) return { rowNo, action: 'error', messages: [`parent package not found: ${String(row['parent_name'])}`] };
+        parentId = parent.id;
       }
       const id = await catalog.createPackage(IMPORT_ACTOR, {
         nameEn: String(row['name']), nameAr: String(row['name_ar'] ?? row['name']),
@@ -227,7 +226,8 @@ async function resolveCustomer(
   const phone = stringField(row['customer_phone']);
   if (!phone) return null;
   try {
-    return customers.findActiveByPhone(client, normalizePhone(phone, defaultCountryCode));
+    // `return await` so an async rejection is caught here (unparseable phone -> null)
+    return await customers.findActiveByPhone(client, normalizePhone(phone, defaultCountryCode));
   } catch {
     return null;
   }

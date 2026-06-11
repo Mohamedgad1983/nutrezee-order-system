@@ -1,11 +1,23 @@
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { AuditService } from '../../platform/audit/audit.service';
+import { OutboxService } from '../../platform/outbox/outbox.service';
+import { withTransaction } from '../../platform/db/tx';
 import type { StaffContext } from '../../platform/auth/session.service';
 import { SyncRecordService } from '../m18-bridge/sync-record.service';
 import { newId } from '../../platform/ids';
 import type { OrderService } from '../m03-orders/order.service';
 import type { PaymentService } from '../m07-payments/payment.service';
+import type { CustomerService } from '../m04-customers/customer.service';
+import type { CatalogService } from '../m05-catalog/catalog.service';
+
+/** Owner-module rollback ports (ADR-010: even rollback deletes go through owners). */
+export interface OwnerPorts {
+  customers?: CustomerService;
+  catalog?: CatalogService;
+  orders?: OrderService;
+  payments?: PaymentService;
+}
 
 export type BatchType = 'customer' | 'catalog' | 'active_plans';
 export type RowAction = 'created' | 'matched' | 'merge_review' | 'skipped' | 'error';
@@ -53,9 +65,9 @@ export class BatchRunner {
   constructor(
     private readonly pool: Pool,
     private readonly audit: AuditService,
+    private readonly outbox: OutboxService,
     private readonly sync: SyncRecordService,
-    private readonly orders?: OrderService,
-    private readonly payments?: PaymentService,
+    private readonly ports: OwnerPorts = {},
   ) {}
 
   hashSource(rows: Array<Record<string, unknown>>): string {
@@ -117,6 +129,13 @@ export class BatchRunner {
           entityType: 'import_batch', entityId: batchId, severity: 'high',
           after: { type, counts, source_hash: sourceHash, applied: true },
         });
+        // module spec M19 "events out: bridge.import_run" — same transaction
+        await this.outbox.writeInTx(client, {
+          eventType: 'bridge.import_run',
+          actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+          refs: { import_batch_id: batchId },
+          payload: { type, counts, source_hash: sourceHash, applied: true },
+        });
         await client.query('COMMIT');
       }
     } catch (e) {
@@ -128,21 +147,22 @@ export class BatchRunner {
 
     const counts = this.count(results);
     if (dryRun) {
-      // persist the reviewable report (batch + row results) in its own transaction
-      await this.pool.query('BEGIN');
-      try {
-        await this.pool.query(
+      // persist the reviewable report (batch + row results) in its own REAL transaction —
+      // pool.query('BEGIN') spans random pool connections and is not transactional
+      await withTransaction(this.pool, async (client) => {
+        await client.query(
           `INSERT INTO import_batch (id, type, source_note, dry_run, state, counts, created_by)
            VALUES ($1,$2,$3,true,'dry_run',$4,$5)`,
           [batchId, type, sourceHash, JSON.stringify(counts), actor.staffId],
         );
-        const c2 = { query: this.pool.query.bind(this.pool) } as unknown as PoolClient;
-        await this.writeRowResults(c2, batchId, results);
-        await this.pool.query('COMMIT');
-      } catch (e) {
-        await this.pool.query('ROLLBACK');
-        throw e;
-      }
+        await this.writeRowResults(client, batchId, results);
+        await this.audit.writeInTx(client, {
+          eventType: 'bridge.import_run',
+          actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+          entityType: 'import_batch', entityId: batchId, severity: 'info',
+          after: { type, counts, source_hash: sourceHash, dry_run: true },
+        });
+      });
     }
     return { batchId, dryRun, sourceHash, counts, rows: results };
   }
@@ -156,43 +176,28 @@ export class BatchRunner {
       const { rows } = await client.query('SELECT type, state FROM import_batch WHERE id = $1 FOR UPDATE', [batchId]);
       if (rows.length === 0) throw new ImportError('not_found');
       if (rows[0].state !== 'applied') throw new ImportError('not_applied', rows[0].state);
+      const type = rows[0].type as BatchType;
       try {
-        if (rows[0].type === 'active_plans') {
-          if (!this.orders || !this.payments) throw new ImportError('rollback_blocked', 'active-plan owner rollback ports not configured');
-          const paymentRefs = await this.payments.rollbackImportedBatchInTx(client, batchId);
+        // ALL rollback deletes go through owner-module ports (ADR-010) — the raw
+        // cross-module DELETEs this replaces evaded the write scan via interpolated
+        // table names. Errors must propagate: a swallowed error aborts the PG
+        // transaction and poisons later statements.
+        if (type === 'active_plans') {
+          if (!this.ports.orders || !this.ports.payments) {
+            throw new ImportError('rollback_blocked', 'active-plan owner rollback ports not configured');
+          }
+          const paymentRefs = await this.ports.payments.rollbackImportedBatchInTx(client, batchId);
           await this.sync.clearByNewRefs(client, paymentRefs);
-          const orderRefs = await this.orders.rollbackImportedBatchInTx(client, batchId);
+          const orderRefs = await this.ports.orders.rollbackImportedBatchInTx(client, batchId);
           await this.sync.clearByNewRefs(client, orderRefs);
-          await client.query(`UPDATE import_batch SET state = 'rolled_back', updated_at = now() WHERE id = $1`, [batchId]);
-          await this.audit.writeInTx(client, {
-            eventType: 'bridge.import_run',
-            actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
-            entityType: 'import_batch', entityId: batchId, severity: 'high',
-            after: { rolled_back: true, type: 'active_plans' },
-          });
-          await client.query('COMMIT');
-          return;
-        }
-        // child-first deletion, explicit per child shape (errors must propagate —
-        // a swallowed error aborts the PG transaction and poisons later statements)
-        for (const table of ['customer_phone', 'address']) {
-          await client.query(`DELETE FROM ${table} WHERE import_batch_id = $1`, [batchId]);
-        }
-        for (const table of ['customer_allergy', 'preference']) {
-          await client.query(
-            `DELETE FROM ${table} WHERE customer_id IN (SELECT id FROM customer WHERE import_batch_id = $1)`,
-            [batchId],
-          );
-        }
-        for (const table of ['nutrition_facts', 'product_allergen', 'product_ingredient', 'product_component']) {
-          await client.query(
-            `DELETE FROM ${table} WHERE product_id IN (SELECT id FROM product WHERE import_batch_id = $1)`,
-            [batchId],
-          );
-        }
-        for (const table of ['customer', 'package', 'product', 'meal_type', 'diet_status', 'tag', 'package_for_type', 'ingredient', 'allergen', 'delivery_slot', 'delivery_method']) {
-          const del = await client.query(`DELETE FROM ${table} WHERE import_batch_id = $1 RETURNING id`, [batchId]);
-          await this.sync.clearByNewRefs(client, del.rows.map((r) => r.id)); // M18 API (ADR-010)
+        } else {
+          if (!this.ports.customers || !this.ports.catalog) {
+            throw new ImportError('rollback_blocked', 'customer/catalog owner rollback ports not configured');
+          }
+          const customerRefs = await this.ports.customers.rollbackImportedBatchInTx(client, batchId);
+          await this.sync.clearByNewRefs(client, customerRefs); // M18 API (ADR-010)
+          const catalogRefs = await this.ports.catalog.rollbackImportedBatchInTx(client, batchId);
+          await this.sync.clearByNewRefs(client, catalogRefs);
         }
       } catch (e) {
         throw new ImportError('rollback_blocked', (e as Error).message);
@@ -202,7 +207,13 @@ export class BatchRunner {
         eventType: 'bridge.import_run',
         actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
         entityType: 'import_batch', entityId: batchId, severity: 'high',
-        after: { rolled_back: true },
+        after: { rolled_back: true, type },
+      });
+      await this.outbox.writeInTx(client, {
+        eventType: 'bridge.import_run',
+        actor: { id: actor.staffId, role: actor.roles[0] ?? 'none' },
+        refs: { import_batch_id: batchId },
+        payload: { type, rolled_back: true },
       });
       await client.query('COMMIT');
     } catch (e) {

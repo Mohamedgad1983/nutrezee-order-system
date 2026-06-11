@@ -2,6 +2,11 @@ import type { PoolClient } from 'pg';
 import type { StaffContext } from '../../platform/auth/session.service';
 import { newId } from '../../platform/ids';
 
+/** Pool or transaction client — read APIs accept either. */
+interface Queryable {
+  query(text: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
 export class MessageRefError extends Error {
   constructor(readonly code: 'validation_failed' | 'already_attached') {
     super(code);
@@ -40,7 +45,7 @@ export class MessageRefService {
     return id;
   }
 
-  async hasRefInTx(client: PoolClient, draftId: string): Promise<boolean> {
+  async hasRefInTx(client: Queryable, draftId: string): Promise<boolean> {
     const { rows } = await client.query(
       'SELECT 1 FROM whatsapp_message_ref WHERE draft_id = $1',
       [draftId],

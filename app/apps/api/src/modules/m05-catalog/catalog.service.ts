@@ -286,6 +286,23 @@ export class CatalogService {
     return { id, matched: false };
   }
 
+  /** M19 rollback port (ADR-010): deletes THIS module's rows for an import batch —
+   *  product/package children first, then parents and bilingual masters. */
+  async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {
+    for (const table of ['nutrition_facts', 'product_allergen', 'product_ingredient', 'product_component']) {
+      await client.query(
+        `DELETE FROM ${table} WHERE product_id IN (SELECT id FROM product WHERE import_batch_id = $1)`,
+        [batchId],
+      );
+    }
+    const refs: string[] = [];
+    for (const table of ['package', 'product', 'meal_type', 'diet_status', 'tag', 'package_for_type', 'ingredient', 'allergen']) {
+      const del = await client.query(`DELETE FROM ${table} WHERE import_batch_id = $1 RETURNING id`, [batchId]);
+      refs.push(...del.rows.map((r) => r.id as string));
+    }
+    return refs;
+  }
+
   /** Routing-rule admin (ADR-006: rules are data; kitchen.routing_changed audit). */
   async addRoutingRule(
     actor: StaffContext,

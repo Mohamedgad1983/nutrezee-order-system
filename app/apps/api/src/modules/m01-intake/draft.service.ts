@@ -162,7 +162,7 @@ export class DraftService {
     input: DraftInput,
     idempotencyKey?: string,
   ): Promise<{ id: string; replay: boolean }> {
-    this.validateDraftInput(input);
+    this.validateDraftInput(input, actor.roles);
     await this.assertReferencedRecords(input);
     const requestHash = this.idempotency.hashRequest(input);
     return withTransaction(this.pool, async (client) => {
@@ -223,7 +223,7 @@ export class DraftService {
       if (!EDITABLE_STATES.has(existing.state)) throw new DraftError('immutable_state', { state: existing.state });
 
       const merged = this.mergeInput(existing, await this.itemsForDraftInTx(client, draftId), patch);
-      this.validateDraftInput(merged, true);
+      this.validateDraftInput(merged, actor.roles, true);
       await this.assertReferencedRecords(merged);
 
       const fields: Array<[string, unknown]> = [
@@ -501,7 +501,7 @@ export class DraftService {
     );
   }
 
-  private validateDraftInput(input: DraftInput, patch = false): void {
+  private validateDraftInput(input: DraftInput, actorRoles: string[], patch = false): void {
     if (!patch && !input.channel) throw new DraftError('validation_failed', { field: 'channel' });
     if (input.channel && !CHANNELS.has(input.channel)) throw new DraftError('validation_failed', { field: 'channel' });
     if (input.customerId && input.unverifiedCustomer) {
@@ -515,8 +515,14 @@ export class DraftService {
     if (input.startDate && input.endDate && input.startDate > input.endDate) {
       throw new DraftError('validation_failed', { field: 'date_range' });
     }
-    if (input.startDate && input.startDate < this.today() && input.unverifiedReason !== 'OM_BACKDATE_OVERRIDE') {
-      throw new DraftError('validation_failed', { field: 'start_date', rule: 'no_backdate_without_om_override' });
+    if (input.startDate && input.startDate < this.today()) {
+      if (input.unverifiedReason !== 'OM_BACKDATE_OVERRIDE') {
+        throw new DraftError('validation_failed', { field: 'start_date', rule: 'no_backdate_without_om_override' });
+      }
+      // ASM-015: backdated start is an OM override — the marker alone is not enough
+      if (!actorRoles.some((r) => r === 'ops_manager' || r === 'super_admin')) {
+        throw new DraftError('validation_failed', { field: 'start_date', rule: 'backdate_override_requires_om' });
+      }
     }
     if (input.addressInline) {
       if (!input.addressInline.addressText?.trim()) throw new DraftError('validation_failed', { field: 'address_inline.addressText' });
@@ -702,8 +708,7 @@ export class DraftService {
   }
 
   private async hasWhatsappRef(draftId: string): Promise<boolean> {
-    const { rows } = await this.pool.query('SELECT 1 FROM whatsapp_message_ref WHERE draft_id = $1', [draftId]);
-    return rows.length > 0;
+    return this.messageRefs.hasRefInTx(this.pool, draftId); // M17 read API (ADR-010)
   }
 
   private toRecord(
@@ -803,9 +808,16 @@ export class DraftService {
     };
   }
 
+  // node-postgres returns `date` columns as LOCAL-midnight Date objects; UTC getters
+  // shift the calendar day east of UTC (A10 fixed M03 the same way).
   private dateString(value: unknown): string | null {
     if (!value) return null;
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (value instanceof Date) {
+      const y = value.getFullYear();
+      const m = String(value.getMonth() + 1).padStart(2, '0');
+      const d = String(value.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
     return String(value).slice(0, 10);
   }
 
@@ -814,7 +826,11 @@ export class DraftService {
   }
 
   private today(): string {
-    return new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 }
 

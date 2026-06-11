@@ -4,10 +4,11 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthError, SessionService, type StaffContext } from '../../platform/auth/session.service';
-import { AccessService } from '../../platform/rbac/access.service';
+import { AccessService, type VisibilityClass } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { TransitionError } from '../../platform/transition/transition-engine';
-import { OrderError, OrderService, type OrderStatus, type FulfillmentStatus } from './order.service';
+import { maskFields } from '../../platform/masking/masking';
+import { OrderError, OrderService, type OrderRecord, type OrderStatus, type FulfillmentStatus } from './order.service';
 
 const COOKIE = 'nz_session';
 
@@ -32,7 +33,9 @@ export class OrderController {
   async list(@Req() req: Request, @Query('status') status?: OrderStatus) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'order.read');
-    return { items: await this.orders.listOrders({ status }), page: { limit: 100 } };
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    const items = (await this.orders.listOrders({ status })).map((o) => this.maskOrder(o, grants));
+    return { items, page: { limit: 100 } };
   }
 
   @Get(':id/fulfillment-days')
@@ -46,7 +49,18 @@ export class OrderController {
   async get(@Req() req: Request, @Param('id') id: string) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'order.read');
-    return this.wrap(() => this.orders.getOrder(id));
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    return this.wrap(async () => this.maskOrder(await this.orders.getOrder(id), grants));
+  }
+
+  // api_standards rule 4: money fields are PAYMENT-class at serialization.
+  private maskOrder(order: OrderRecord, grants: Set<VisibilityClass>): OrderRecord & { masked: boolean } {
+    const { data, masked } = maskFields(
+      order as unknown as Record<string, unknown>,
+      { total: 'payment' },
+      grants,
+    );
+    return { ...(data as unknown as OrderRecord), masked };
   }
 
   @Post(':id/transitions')

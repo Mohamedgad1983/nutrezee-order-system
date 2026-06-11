@@ -3,11 +3,12 @@ import {
   NotFoundException, Param, Post, Query, Req, UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ReviewError, ReviewService, type ReviewDecision, type ReviewQueueState } from './review.service';
+import { ReviewError, ReviewService, type ReviewDecision, type ReviewQueueRecord, type ReviewQueueState } from './review.service';
 import { AuthError, SessionService, type StaffContext } from '../../platform/auth/session.service';
-import { AccessService } from '../../platform/rbac/access.service';
+import { AccessService, type VisibilityClass } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { TransitionError } from '../../platform/transition/transition-engine';
+import { MASK_SENTINEL } from '../../platform/masking/masking';
 
 const COOKIE = 'nz_session';
 
@@ -27,7 +28,22 @@ export class ReviewController {
   ) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'review.queue.read');
-    return { items: await this.review.listQueue(ctx, { state, onlyLate: late === 'true' }), page: { limit: 100 } };
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    const items = (await this.review.listQueue(ctx, { state, onlyLate: late === 'true' }))
+      .map((item) => this.maskQueueRecord(item, grants));
+    return { items, page: { limit: 100 } };
+  }
+
+  // api_standards rule 4: allergy-conflict warning detail is HEALTH data.
+  private maskQueueRecord(item: ReviewQueueRecord, grants: Set<VisibilityClass>): ReviewQueueRecord & { masked: boolean } {
+    if (grants.has('health')) return { ...item, masked: false };
+    let masked = false;
+    const warnings = item.warnings.map((w) => {
+      if (w.field !== 'allergy_conflicts' || w.detail === undefined) return w;
+      masked = true;
+      return { ...w, detail: MASK_SENTINEL };
+    });
+    return { ...item, warnings, masked };
   }
 
   @Post('review-queue/:draftId/claim')
@@ -47,6 +63,14 @@ export class ReviewController {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'review.claim');
     return { queued: await this.review.syncSubmittedDrafts(ctx) };
+  }
+
+  @Post('review-queue/sla-alerts')
+  @HttpCode(200)
+  async fireSlaAlerts(@Req() req: Request) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'review.queue.read');
+    return { alerted: await this.review.fireSlaAlerts(ctx) };
   }
 
   @Post('drafts/:id/decisions')

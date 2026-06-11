@@ -284,6 +284,25 @@ export class OrderService {
     };
   }
 
+  /** In-transaction day read for M08; lock=true serializes per-day kitchen activity
+   *  (rollup decisions must see the in-tx state, not a stale pool read). */
+  async dayForKitchenInTx(client: PoolClient, dayId: string, lock = false): Promise<FulfillmentDayForKitchen> {
+    const { rows } = await client.query(
+      `SELECT fd.id, fd.order_id, fd.date, fd.status, co.customer_id
+       FROM fulfillment_day fd JOIN customer_order co ON co.id = fd.order_id
+       WHERE fd.id = $1${lock ? ' FOR UPDATE OF fd' : ''}`,
+      [dayId],
+    );
+    if (rows.length === 0) throw new OrderError('not_found');
+    return {
+      id: rows[0].id as string,
+      orderId: rows[0].order_id as string,
+      date: this.dateString(rows[0].date),
+      status: rows[0].status as FulfillmentStatus,
+      customerId: rows[0].customer_id as string,
+    };
+  }
+
   async orderItemsForKitchen(dayId: string): Promise<OrderItemForKitchen[]> {
     const { rows } = await this.pool.query(
       `SELECT oi.id, oi.product_id, oi.name_frozen_en, oi.name_frozen_ar, oi.qty, oi.allergens_frozen
@@ -305,20 +324,23 @@ export class OrderService {
 
   async orderForPayment(orderId: string): Promise<OrderForPayment> {
     const { rows } = await this.pool.query(
-      `SELECT co.id, co.status, co.customer_id, co.total, co.currency, d.expected_payment_method
-       FROM customer_order co
-       LEFT JOIN draft_order d ON d.id = co.source_draft_id
-       WHERE co.id = $1`,
+      `SELECT id, status, customer_id, total, currency, source_draft_id
+       FROM customer_order WHERE id = $1`,
       [orderId],
     );
     if (rows.length === 0) throw new OrderError('not_found');
+    // draft data via the M01 owning-module API, not a cross-module join (ADR-010)
+    let expectedPaymentMethod: string | null = null;
+    if (rows[0].source_draft_id) {
+      expectedPaymentMethod = (await this.drafts.getDraft(rows[0].source_draft_id as string)).expected_payment_method;
+    }
     return {
       id: rows[0].id as string,
       status: rows[0].status as OrderStatus,
       customerId: rows[0].customer_id as string,
       total: Number(rows[0].total),
       currency: rows[0].currency as string,
-      expectedPaymentMethod: rows[0].expected_payment_method as string | null,
+      expectedPaymentMethod,
     };
   }
 
@@ -421,6 +443,7 @@ export class OrderService {
           entityId: changeRequestId,
           severity: 'info',
           relatedRefs: { order_id: rows[0].order_id as string },
+          before: { state: 'pending' },
           after: { state: 'rejected' },
         });
         return;
@@ -667,6 +690,23 @@ export class OrderService {
         next.setUTCDate(next.getUTCDate() + 1);
         await this.generateDaysInTx(client, actor.staffId, orderId, next.toISOString().slice(0, 10), diff.end_date, address.rows[0]?.slot_id ?? null, address.rows[0]?.address_frozen ?? {});
       } else if (diff.end_date < oldEnd) {
+        // Days already in kitchen production (status model: cancel after KITCHEN_QUEUED
+        // needs an explicit OM per-day decision + reason) must not be silently orphaned
+        // or auto-cancelled by an end-date reduction — reject and require per-day
+        // cancellation through the fulfillment transition API first.
+        const active = await client.query(
+          `SELECT id, status FROM fulfillment_day
+           WHERE order_id = $1 AND date > $2
+             AND status NOT IN ('scheduled','cancelled_day','skipped','delivered')`,
+          [orderId, diff.end_date],
+        );
+        if (active.rows.length > 0) {
+          throw new OrderError('validation_failed', {
+            field: 'end_date',
+            rule: 'kitchen_activity_beyond_new_end',
+            days: active.rows.map((r) => ({ id: r.id as string, status: r.status as string })),
+          });
+        }
         const { rows } = await client.query(
           `SELECT id, status FROM fulfillment_day WHERE order_id = $1 AND date > $2 AND status = 'scheduled' FOR UPDATE`,
           [orderId, diff.end_date],
