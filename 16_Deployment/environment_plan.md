@@ -19,6 +19,8 @@ Stack per signed DEC-011. Secrets standard responds to GAP-SEC-05.
 
 ## 3. Staging provisioning checklist (execute once region resolved)
 
+> **2026-06-11:** the region note exists (me-south-1 interim) — the executable, expanded checklist now lives in `staging_provisioning_checklist.md` (exact sponsor inputs STG-1…7, verified env-var surface, pre-deploy defects D1–D6 incl. the admin-SPA proxy gap and the dead `SESSION_SECRET`, deploy sequence, and the 10-step smoke runbook). The steps below remain the summary of record.
+
 The PG **region is pending the data-residency check [NC — DEC-011]** — KSA/Gulf customer PII+health data may require an in-region host (e.g., AWS `me-south-1`). A one-line sponsor note in `20_Decisions/` (interim or final region) unblocks this checklist; until then staging is deferred per the WP-00 carve-out (amendment A5).
 1. Sponsor region note recorded → choose platform + region.
 2. Provision managed PostgreSQL 16 (PITR on, nightly dump schedule, restore drill documented here).

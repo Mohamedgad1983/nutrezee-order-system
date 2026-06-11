@@ -51,4 +51,4 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-Provision staging per `16_Deployment/environment_plan.md` §3, supply required cloud credentials/details, deploy the current `main`, and record a live smoke test. That is the single next unblock action for WP-14; unresolved sponsor assumptions remain review-required but are not the current technical blocker.
+**Sponsor supplies the staging inputs STG-1…STG-6 of `16_Deployment/staging_provisioning_checklist.md` §1** (cloud account access, managed PG 16 in me-south-1, TLS endpoint, first-admin bootstrap values). Everything else is ready: the checklist is executable end-to-end (provision → fix pre-deploy defects D1/D2 → deploy current `main` `bd51afe` → 10-step smoke → flip gate ④). Verified 2026-06-11: no cloud credentials exist anywhere (repo sweep + local env), Docker still absent locally, so nothing could be provisioned or rehearsed — WP-14 stays BLOCKED per DEC-014; full status in `19_Roadmap/wp14_blocker_report.md`. The workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix) and assumption-register sign-off can proceed in parallel and are also on WP-14's critical path.
