@@ -48,9 +48,11 @@ Validator semantics for the four no-op validators (review L1: `same_day_ack`, `p
 ### 📝 Sponsor-blocked
 Cloud credentials + platform inputs STG-1…STG-7 (checklist §1) · assumption-register review/sign-off (ASM-001..050 — sponsor package already exists in 22_Meeting_Notes/).
 
-## 3. New findings from this session (deploy-blocking defects, discovered by inspection)
+## 3. Deploy-blocking defects D1–D6 — found 2026-06-11, **FIXED same day** (checklist §3 has the resolution table)
 
-D1–D6 in checklist §3 — most importantly: **the admin SPA cannot reach the API in the deployed topology** (relative fetches, stock nginx, no proxy/CORS/SPA-fallback), **TLS is mandatory** (Secure-only cookie baked into the image), **the API image cannot run migrations** (run from checkout), and `SESSION_SECRET` is dead config. None block the *provisioning start*; D1/D2 must be fixed during deploy or the smoke's admin-shell step and all browser logins fail.
+As found: the admin SPA could not reach the API in the deployed topology (relative fetches, stock nginx, no proxy/CORS/SPA-fallback); TLS mandatory but undeclared (Secure-only cookie baked into the image); the API image could not run migrations; `SESSION_SECRET` was dead config; no deploy workflow; compose/Dockerfiles never validated.
+
+Fixed in this PR: nginx SPA-fallback + same-origin API proxy baked into the admin image (D1); explicit TLS posture + `trust proxy` + unit-tested `COOKIE_SECURE` override (D2); `migrate` image stage + compose `tools` service for the gated migration/bootstrap steps (D3); `SESSION_SECRET` struck with rationale (D4); gated `deploy-staging` workflow publishing images to GHCR on the built-in token, deploy job skipped until sponsor vars/secrets exist and loud-failing until a platform is chosen (D5); CI `docker-validate` job — compose config, nginx `-t`, and full image builds on every push/PR (D6). **The deployment path is now exercised end-to-end except the parts that genuinely require credentials.**
 
 ## 4. Exact unblock sequence
 

@@ -21,46 +21,60 @@ Expands `environment_plan.md` §3 (region note satisfied: AWS **me-south-1** int
 |---|---|---|---|
 | `DATABASE_URL` | `platform/config/database.ts:11`, `db/migrate.mjs`, `scripts/bootstrap-admin.mjs`, `scripts/export-rbac-matrix.mjs` | **yes (secret)** | pg gets `connectionString` only — TLS must ride the URL (`?sslmode=require`); pool connects lazily, so a wrong URL still boots (see smoke §6 step 5) |
 | `PORT` | `main.ts:23` | optional (default 3000) | compose maps api 3000, admin 8080→80 |
-| `NODE_ENV` | `auth.controller.ts:31` | baked `production` in `Dockerfile.api` | sole effect: `Secure` flag on `nz_session` → forces STG-5 |
+| `NODE_ENV` | `auth.controller.ts` (`cookieSecure()`) | baked `production` in `Dockerfile.api` | default for the `Secure` flag on `nz_session` → forces STG-5 |
+| `COOKIE_SECURE` | `auth.controller.ts` (`cookieSecure()`) | optional | explicit override of the Secure flag; `false` ONLY for a pre-TLS internal smoke — never for the pilot; unknown values fail secure |
 | `OUTBOX_DISPATCHER` | `main.ts:14` | leave **unset** | `off` disables the 2s outbox/audit sweeps (tests only) |
 | `BOOTSTRAP_EMAIL/PASSWORD/NAME` | `scripts/bootstrap-admin.mjs:8` | one-time run | NAME optional (default "Super Admin"); idempotent by email only — it never updates an existing user |
-| `SESSION_SECRET` | **nowhere — dead config (D4)** | n/a | documented in `.env.example`/plan §2 but no code reads it: sessions are server-side rows with an opaque unsigned cookie id. Either wire it in later or strike it from §3 step 3; do not block on it |
+| `SESSION_SECRET` | ~~dead config~~ **removed (D4 ✅)** | n/a | struck from `.env.example` + plan §2/§3 — server-side sessions, opaque cookie id, nothing to sign |
 | `DATABASE_URL_TEST` | tests only (`tests/helpers/db.ts`) | **never on staging** | `freshDb()` runs `DROP SCHEMA public CASCADE` — pointing it at staging destroys the DB |
 
 CI currently uses **zero** GitHub secrets (service-container creds are inline) — nothing to rotate before provisioning.
 
-## 3. Pre-deploy defects to fix at deploy time (found by code inspection 2026-06-11; all small, none fixable-verifiable without Docker/staging)
+## 3. Pre-deploy defects — **ALL FIXED 2026-06-11** (same PR; CI `docker-validate` job proves the builds)
 
-| # | Defect | Prescription |
+| # | Defect (as found) | Resolution |
 |---|---|---|
-| **D1** | **Admin SPA cannot reach the API in the compose topology.** `App.tsx` fetches relative paths (`/kitchen/board`, `/tickets/:id/transitions`, `/auth/*`) with `credentials:'include'`; `Dockerfile.admin` ships stock nginx with no proxy and no SPA fallback → every SPA API call 404s, deep-link `/kitchen` 404s | Add an nginx config to `Dockerfile.admin`: `try_files $uri /index.html` fallback, plus `proxy_pass http://api:3000` for the API prefixes: `auth, health, drafts, review-queue, orders, payment-reviews, payment-refunds, kitchen/, tickets, notifications, templates, reports, exports, bridge, imports, settings, staff, rbac`. **Caution:** proxy `location /kitchen/ { … }` (trailing slash) — the bare `/kitchen` path is the SPA board page and must fall through to `index.html`, while `/kitchen/board` etc. are API routes. Validate with `docker compose config` + `nginx -t` |
-| **D2** | **No TLS anywhere, but the cookie is `Secure`-only** (`NODE_ENV=production` baked into the image) — browser login silently fails on plain HTTP | Terminate TLS at the platform LB or an added proxy (STG-5). curl-based smoke passes regardless (it sends the Cookie header manually) |
-| **D3** | **The API image cannot run migrations** — final stage copies only `dist/` + `node_modules`; `db/migrate.mjs` + `db/migrations/` are absent, and the plan §4 requires migrations as an explicit gated pre-rollout step | Run migrations from a repo checkout with network reach to staging PG (command in §5). Longer-term: add a migrate stage/job image |
-| **D4** | `SESSION_SECRET` is dead config (see §2) | Decide: wire (signed cookies) or strike from plan §3. Not blocking |
-| **D5** | No deploy workflow exists (`ci.yml` has no deploy job despite plan §4 "deploy to staging (auto)") | Manual deploy per §5 is acceptable for staging v1; automate later |
-| **D6** | `docker/compose.yml` + both Dockerfiles have **never been validated** (authored on a Docker-less machine — WP-00 register note; still no Docker on this machine 2026-06-11) | First step on any Docker-equipped machine: `docker compose config` + full build; expect first-run build issues |
+| **D1** | Admin SPA could not reach the API in the compose topology (relative fetches + stock nginx: no proxy, no CORS, no SPA fallback; deep-link `/kitchen` 404) | ✅ `docker/nginx.admin.conf` baked into `Dockerfile.admin`: SPA `try_files` fallback + same-origin `proxy_pass http://api:3000` for all 18 API prefixes; bare `/kitchen` stays the SPA board page while `/kitchen/<sub>` proxies (trailing-slash location). Syntax validated in CI (`nginx -t`, api host faked for config-load DNS) |
+| **D2** | No TLS anywhere while the session cookie is `Secure`-only (`NODE_ENV=production` baked in) — browser login silently fails on plain HTTP | ✅ Requirement now explicit in compose/nginx/.env.example headers; `app.set('trust proxy', 1)` so `req.ip` login-audit fidelity survives the proxy; explicit `COOKIE_SECURE` override (default unchanged — production = Secure; `false` = pre-TLS smoke escape hatch ONLY; unknown values fail secure — unit-tested). TLS termination itself remains sponsor input STG-5 |
+| **D3** | API image could not run migrations (ships `dist/` only; plan §4 mandates a gated pre-rollout step) | ✅ New `migrate` build stage in `Dockerfile.api` + compose `migrate` service (`profiles: ["tools"]`): `docker compose --profile tools run --rm migrate`. Bootstrap-admin runs from the same stage (`--entrypoint node … scripts/bootstrap-admin.mjs`). Checkout-based path (§5) remains as fallback |
+| **D4** | `SESSION_SECRET` was dead config | ✅ Struck from `.env.example` + plan §2/§3 with rationale (server-side opaque sessions — nothing to sign); reintroduce only with consuming code |
+| **D5** | No deploy workflow | ✅ `.github/workflows/deploy-staging.yml`: manual dispatch, confirm-input guard; builds + publishes `api`/`api-migrate`/`admin` images to GHCR with the built-in `GITHUB_TOKEN` (no cloud credentials). The `deploy` job is **skipped** until `STAGING_DEPLOY_ENABLED=true`, and then fails loudly until implemented for the chosen STG-1 platform — it can never silently no-op |
+| **D6** | compose + Dockerfiles never validated (authored Docker-less) | ✅ New CI job `docker-validate`: `docker compose config`, nginx `-t`, full builds of migrate/api/admin images on every push/PR. A live `compose up` smoke still happens on the staging host (§6) |
 
 ## 4. Provisioning steps (= environment_plan §3, expanded)
 
 1. ~~Region note~~ ✅ me-south-1 interim (`NOTE_pg_staging_region_interim.md`).
 2. Provision managed PostgreSQL 16 in me-south-1 (STG-2/3): PITR on, nightly dump schedule; **document the restore drill here** (drill itself is a WP-14 entry item, environment_plan §4).
 3. Provision the container host (STG-1); store secrets `DATABASE_URL` (+ bootstrap values for the one-time run) in the host secret store.
-4. Fix D1 (+ optionally D4/D5), validate D6, build images from `main`, deploy behind TLS (STG-5/D2).
+4. ~~Fix D1/D4/D5, validate D6~~ ✅ all fixed + CI-validated 2026-06-11 (§3). Build or pull images (the `deploy-staging` workflow publishes them to GHCR on dispatch), deploy behind TLS (STG-5/D2).
 5. Run §5 deploy sequence + §6 smoke. Record the staging URL in `environment_plan.md` §3; flip gate ④ staging-half to ✅ in `build_progress_register.md`.
 
-## 5. Deploy sequence for current `main` (`bd51afe`)
+## 5. Deploy sequence for current `main`
+
+**Preferred (image-based, D3/D5 fixed):**
 
 ```bash
-# from a checkout at main, Node >= 22, network reach to staging PG
-cd app && npm ci --workspaces --include-workspace-root
+# images: dispatch the deploy-staging workflow (publishes ghcr.io/<repo>/{api,api-migrate,admin})
+# or build locally: docker compose -f docker/compose.yml build
+
+# 1. gated migration step (forward-only; idempotent re-run prints "up to date")
+docker compose -f docker/compose.yml --profile tools run --rm \
+  -e DATABASE_URL='postgres://<user>:<password>@<host>:<port>/<db>?sslmode=require' migrate
+
+# 2. start api + admin per STG-1 platform (DATABASE_URL from the secret store; TLS in front — D2)
+
+# 3. one-time admin bootstrap (idempotent by email; staff_user + super_admin grant + HIGH audit)
+docker compose -f docker/compose.yml --profile tools run --rm --entrypoint node \
+  -e DATABASE_URL='postgres://…' -e BOOTSTRAP_EMAIL='<email>' -e BOOTSTRAP_PASSWORD='<password>' \
+  -e BOOTSTRAP_NAME='Staging Admin' migrate scripts/bootstrap-admin.mjs
+```
+
+**Fallback (checkout-based, no Docker needed for steps 1/3):**
+
+```bash
+cd app && npm ci --workspaces --include-workspace-root   # Node >= 22, network reach to staging PG
 export STAGING_DATABASE_URL='postgres://<user>:<password>@<host>:<port>/<db>?sslmode=require'
-
-# 1. gated migration step (forward-only; 13 files 0001..0013; idempotent re-run prints "up to date")
 DATABASE_URL="$STAGING_DATABASE_URL" node db/migrate.mjs
-
-# 2. deploy containers (api + admin) per STG-1 platform, env DATABASE_URL from the secret store
-
-# 3. one-time admin bootstrap (idempotent by email; creates staff_user + super_admin grant + HIGH audit)
 BOOTSTRAP_EMAIL='<email>' BOOTSTRAP_PASSWORD='<password>' BOOTSTRAP_NAME='Staging Admin' \
   DATABASE_URL="$STAGING_DATABASE_URL" node scripts/bootstrap-admin.mjs
 ```
