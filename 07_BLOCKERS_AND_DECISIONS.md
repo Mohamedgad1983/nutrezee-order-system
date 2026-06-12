@@ -25,10 +25,10 @@
 
 WP-01 entry = global gate ①–⑤ of `phase_5_master_prompt.md`. Now: ① ✅ ② ✅ ③ ✅ ④ ✅-for-WP-01–13 (DEC-014: local + CI verification; CI mandatory and unweakened) ⑤ ✅ (assumption-carry, WP-07+ active).
 
-**→ WP-01–13: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-13 merge `369266f`, 147 local tests, CI run 27297588422 13/13). WP-14 is BLOCKED on the hard staging-live/smoke-tested entry gate.**
+**→ WP-01–13: ALL DONE (built 2026-06-10, Sprint Build Mode — latest WP-13 merge `369266f`, 147 local tests, CI run 27297588422 13/13). The staging-live/smoke-tested WP-14 entry gate was SATISFIED 2026-06-12.**
 
 Still standing, clearly scoped:
-1. **Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate** (DEC-014). NOT provisioned, never to be marked done until it is. **Cloud credentials remain the blocker for provisioning** (not for WP-01–13 build). Region: AWS me-south-1 interim.
+1. ~~Staging live + smoke-tested — hard WP-14 / pre-pilot entry gate (DEC-014)~~ ✅ **RESOLVED 2026-06-12**: sponsor provided a VPS (supersedes me-south-1 for staging — `20_Decisions/NOTE_vps_staging_host.md`); deployed `main` `d69a107` + D7 fix, **10/10 smoke passed** at `https://13-140-159-201.sslip.io`; gate ④ flipped in the register. Residual item from this gate: the **restore drill** (nightly dumps running, drill not yet exercised — WP-14 entry per environment_plan §4).
 2. **WP-07+ business decisions** — intake field set, DEC-005 finals, DEC-006 sections, and related OPEN decisions are now carried as explicit assumptions in `ASSUMPTION_REGISTER.md`. They do not block build by themselves, but they remain sponsor-review-required and reversible.
 3. ~~Practical session duty: CI verification tooling~~ **Resolved 2026-06-10**: `gh` CLI installed + authed; all CI runs to date verified green (latest WP-13 merge run 27297588422 = 13/13 jobs). Sessions verify per-WP runs with `gh run list` / `gh run view`.
 
@@ -51,4 +51,6 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-**Sponsor supplies the staging inputs STG-1…STG-6 of `16_Deployment/staging_provisioning_checklist.md` §1** (cloud account access, managed PG 16 in me-south-1, TLS endpoint, first-admin bootstrap values). Everything else is ready: the checklist is executable end-to-end (provision → fix pre-deploy defects D1/D2 → deploy current `main` `bd51afe` → 10-step smoke → flip gate ④). Verified 2026-06-11: no cloud credentials exist anywhere (repo sweep + local env), Docker still absent locally, so nothing could be provisioned or rehearsed — WP-14 stays BLOCKED per DEC-014; full status in `19_Roadmap/wp14_blocker_report.md`. The workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix) and assumption-register sign-off can proceed in parallel and are also on WP-14's critical path.
+> **2026-06-12 — superseded: staging inputs were supplied and executed.** Sponsor provided a VPS in place of STG-1/2; STG-3/4 satisfied by on-host PG 16 container + nightly dumps (deviation note `20_Decisions/NOTE_vps_staging_host.md`); STG-5 by Caddy/Let's Encrypt at `13-140-159-201.sslip.io`; STG-6 supplied in-session. Deployed → migrated → bootstrapped → **smoke 10/10** → gate ④ flipped. One live defect (D7, bare `/kitchen` 301) found and fixed during smoke — checklist §3.
+
+**WP-14's remaining critical path** is now the non-infrastructure items per `19_Roadmap/wp14_blocker_report.md` §4: the workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix), assumption-register sign-off, and the staging **restore drill** (environment_plan §4). UAT/pilot can now exercise the live staging URL.

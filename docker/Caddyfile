@@ -1,0 +1,10 @@
+# Staging TLS termination (D2) — Caddy auto-provisions Let's Encrypt for the
+# sslip.io hostname (resolves to the VPS IP, no DNS setup). Proxies to the admin
+# container, whose nginx serves the SPA and proxies API prefixes same-origin (D1).
+{
+	email mohamedgad8092@gmail.com
+}
+
+13-140-159-201.sslip.io {
+	reverse_proxy admin:80
+}

@@ -1,6 +1,6 @@
 # Staging Provisioning Checklist — WP-14 Entry Gate
 
-**Date:** 2026-06-11 · **Status:** Ready to execute — **blocked only on sponsor inputs §1** · **Owner:** Tech Lead
+**Date:** 2026-06-11 · **Status:** ✅ **EXECUTED 2026-06-12 — staging live, 10/10 smoke passed** (see §6 evidence; host details in `20_Decisions/NOTE_vps_staging_host.md`; one new defect D7 found live + fixed, §3) · **Owner:** Tech Lead
 Expands `environment_plan.md` §3 (region note satisfied: AWS **me-south-1** interim, `20_Decisions/NOTE_pg_staging_region_interim.md`). Deploy target: current `main` = `bd51afe` (163 tests, 13/13 CI green, post-review). **No value below is invented — every `<placeholder>` must be supplied by the sponsor/operator.**
 
 ## 1. Required sponsor inputs (the ONLY missing pieces)
@@ -40,6 +40,7 @@ CI currently uses **zero** GitHub secrets (service-container creds are inline) �
 | **D4** | `SESSION_SECRET` was dead config | ✅ Struck from `.env.example` + plan §2/§3 with rationale (server-side opaque sessions — nothing to sign); reintroduce only with consuming code |
 | **D5** | No deploy workflow | ✅ `.github/workflows/deploy-staging.yml`: manual dispatch, confirm-input guard; builds + publishes `api`/`api-migrate`/`admin` images to GHCR with the built-in `GITHUB_TOKEN` (no cloud credentials). The `deploy` job is **skipped** until `STAGING_DEPLOY_ENABLED=true`, and then fails loudly until implemented for the chosen STG-1 platform — it can never silently no-op |
 | **D6** | compose + Dockerfiles never validated (authored Docker-less) | ✅ New CI job `docker-validate`: `docker compose config`, nginx `-t`, full builds of migrate/api/admin images on every push/PR. A live `compose up` smoke still happens on the staging host (§6) |
+| **D7** | **Found live 2026-06-12 (smoke §6 step 9):** bare `/kitchen` returned 301→`/kitchen/`→API 404 instead of the SPA board page — nginx's implicit trailing-slash redirect on the `location /kitchen/` proxy block defeats the SPA fallback. `nginx -t` (D6 CI job) cannot catch behavioral issues | ✅ `location = /kitchen { try_files /index.html =404; }` exact-match added to `docker/nginx.admin.conf` (exact beats prefix); rebuilt + retested live: `/kitchen` 200 SPA, `/kitchen/board` still proxies (401 unauth), `/` 200 |
 
 ## 4. Provisioning steps (= environment_plan §3, expanded)
 
@@ -80,6 +81,9 @@ BOOTSTRAP_EMAIL='<email>' BOOTSTRAP_PASSWORD='<password>' BOOTSTRAP_NAME='Stagin
 ```
 
 ## 6. Smoke-test runbook (record results in the register; gate ④ flips only when ALL pass)
+
+> **✅ Executed 2026-06-12 against `API=ADMIN=https://13-140-159-201.sslip.io` — 10/10 PASS.**
+> 1 ✅ `up to date` · 2 ✅ 200 `{"status":"ok","service":"nutrezee-api"}` over HTTP/2+TLS · 3 ✅ 401 `no_session` · 4 ✅ 200 roles `["super_admin"]`, cookie `nz_session=…; Path=/; HttpOnly; Secure; SameSite=Lax` (0 bad-credential probes used) · 5 ✅ 200 `masked:false`, email clear · 6 ✅ 200 `{"items":[],"page":{"limit":100}}` · 7 ✅ 200 `{"ok":true}` · 8 ✅ 401 with old SID (server-side revocation) · 9 ✅ `/` 200 `<title>Nutrezee Admin</title>`; `/kitchen` 200 SPA **after D7 fix** (first run: 301→404, §3); `/kitchen/board` 401 (proxies correctly) · 10 ✅ outbox `undispatched=0` (fresh DB), api log clean.
 
 `API=https://<staging-host-api>` `ADMIN=https://<staging-host-admin>` — paths verified against controllers 2026-06-11.
 

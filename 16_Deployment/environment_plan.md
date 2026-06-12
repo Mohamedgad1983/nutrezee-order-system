@@ -8,7 +8,7 @@ Stack per signed DEC-011. Secrets standard responds to GAP-SEC-05.
 | Env | Purpose | Host | Database | State |
 |---|---|---|---|---|
 | local | Development | `docker/compose.yml` (postgres + api + admin) or bare `npm run` | postgres:16 container | ✅ defined (compose validation pending a Docker-equipped machine) |
-| staging | Pre-prod verification; UAT/pilot home | Managed container platform or small VM + compose [Proposed — finalize at provisioning] | Managed PostgreSQL 16 | ⏸ **Deferred — blocked on PG-region residency note** (§3) |
+| staging | Pre-prod verification; UAT/pilot home | Sponsor VPS + docker compose (`13.140.159.201`, Ubuntu 24.04) behind Caddy TLS | PG 16 container on-host, nightly dumps (`NOTE_vps_staging_host.md`) | ✅ **LIVE 2026-06-12** — `https://13-140-159-201.sslip.io`, 10/10 smoke (§3) |
 | production | Live operation | Same pattern as staging, separate instance + DB | Managed PostgreSQL 16, PITR + nightly dump | Not before WP-14 gate |
 
 ## 2. Secrets standard (GAP-SEC-05)
@@ -19,6 +19,10 @@ Stack per signed DEC-011. Secrets standard responds to GAP-SEC-05.
 - *(D4, 2026-06-11)* `SESSION_SECRET` struck: no code ever read it — sessions are server-side rows keyed by an opaque random cookie id (DEC-011: no JWTs); nothing to sign. Reintroduce only together with code that consumes it.
 
 ## 3. Staging provisioning checklist (execute once region resolved)
+
+> **2026-06-12 — STAGING IS LIVE.** Sponsor provided a VPS (see `20_Decisions/NOTE_vps_staging_host.md` — supersedes the me-south-1 plan for staging). Deployed `main` `d69a107` + the D7 nginx fix; all 13 migrations applied; super admin bootstrapped; **10/10 smoke steps passed 2026-06-12** (evidence in `staging_provisioning_checklist.md` §6).
+>
+> **Staging URL:** `https://13-140-159-201.sslip.io` (Caddy TLS / Let's Encrypt). PG 16 runs as a container on the host with nightly dumps (PITR deviation recorded in the decision note). Restore drill still pending (WP-14 entry item, §4).
 
 > **2026-06-11:** the region note exists (me-south-1 interim) — the executable, expanded checklist now lives in `staging_provisioning_checklist.md` (exact sponsor inputs STG-1…7, verified env-var surface, pre-deploy defects D1–D6 incl. the admin-SPA proxy gap and the dead `SESSION_SECRET`, deploy sequence, and the 10-step smoke runbook). The steps below remain the summary of record.
 

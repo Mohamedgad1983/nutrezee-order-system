@@ -1,0 +1,55 @@
+# Staging overrides (VPS deploy, 2026-06-12) — use with:
+#   docker compose -f docker/compose.yml -f docker/compose.staging.yml ...
+#
+# Why this file exists:
+#  - Docker published ports bypass ufw: the base file's "5432:5432"/"3000:3000"/
+#    "8080:80" would be internet-reachable on a public VPS. All internal ports are
+#    re-bound to 127.0.0.1 here (!override replaces, not merges). Only caddy
+#    publishes 80/443.
+#  - POSTGRES_PASSWORD comes from /opt/nutrezee/.env (host secret store, mode 600);
+#    no sslmode on the URL — postgres runs on the same docker network, unreachable
+#    from outside the host (deviation from environment_plan §3 managed-PG posture,
+#    recorded in 20_Decisions).
+#  - caddy terminates TLS (D2) in front of admin; nginx in the admin image already
+#    proxies the API prefixes same-origin (D1).
+name: nutrezee
+services:
+  postgres:
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /opt/nutrezee/.env}
+    ports: !override
+      - "127.0.0.1:5432:5432"
+
+  api:
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://nutrezee:${POSTGRES_PASSWORD}@postgres:5432/nutrezee
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+  admin:
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:8080:80"
+
+  migrate:
+    environment:
+      DATABASE_URL: postgres://nutrezee:${POSTGRES_PASSWORD}@postgres:5432/nutrezee
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - admin
+
+volumes:
+  caddy_data:
+  caddy_config:
