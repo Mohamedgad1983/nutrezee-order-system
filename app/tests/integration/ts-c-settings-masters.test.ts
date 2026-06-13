@@ -70,4 +70,19 @@ describe('TS-C API contract — settings masters & reason codes (WP-API-01)', ()
     await expect(c.addReasonCode(req, { domain: 'bogus', code: 'x', label_en: 'X' }))
       .rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('lists a whitelisted ops-master kind (intake needs area/slot/method)', async () => {
+    const listMasters = vi.fn().mockResolvedValue([{ id: 's-1', label_en: 'Morning 8-10' }]);
+    const c = controllerWith({ listMasters });
+    await expect(c.listMasters(req, 'delivery_slot', 'true'))
+      .resolves.toEqual({ items: [{ id: 's-1', label_en: 'Morning 8-10' }] });
+    expect(listMasters).toHaveBeenCalledWith('delivery_slot', { activeOnly: true });
+  });
+
+  it('rejects an unknown kind on the read route without querying', async () => {
+    const listMasters = vi.fn();
+    const c = controllerWith({ listMasters });
+    await expect(c.listMasters(req, 'setting', undefined)).rejects.toBeInstanceOf(BadRequestException);
+    expect(listMasters).not.toHaveBeenCalled();
+  });
 });

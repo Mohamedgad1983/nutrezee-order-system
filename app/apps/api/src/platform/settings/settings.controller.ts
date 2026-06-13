@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req,
+  BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -60,6 +60,19 @@ export class SettingsController {
     if (typeof body?.on !== 'boolean') throw new BadRequestException({ error_code: 'validation_failed' });
     await this.wrap(() => this.settings.setFlag(ctx, key, body.on as boolean));
     return { ok: true };
+  }
+
+  // WP-API-01b: read ops-masters for the intake form (area/slot/method) + the settings
+  // admin screen. settings.read is granted to order_agent et al., so intake can load them.
+  @Get('masters/:kind')
+  async listMasters(@Req() req: Request, @Param('kind') kind: string, @Query('active') active?: string) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'settings.read');
+    if (!MASTER_KINDS.includes(kind as MasterKind)) {
+      throw new BadRequestException({ error_code: 'validation_failed', field: 'kind' });
+    }
+    const items = await this.settings.listMasters(kind as MasterKind, { activeOnly: active === 'true' });
+    return { items };
   }
 
   // WP-API-01: ops-master + reason-code admin. addMaster/addReasonCode exist on the
