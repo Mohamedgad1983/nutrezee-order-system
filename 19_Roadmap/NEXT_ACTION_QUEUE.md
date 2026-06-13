@@ -45,9 +45,9 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 ### ▶ 3. WP-UI-03 — Admin parity screens · **IN PROGRESS** (sub-units; FRONTIER)
 - ✅ **03a customers — DONE** (PR #10): search / guided-create (dup block+warn) / profile (masked) / edit. FULL end-to-end Playwright (no seed data needed). `/app/customers`.
 - ✅ **03b catalog browse — DONE** (PR #11 `955c9f4`): read-only products / packages / masters over `GET /catalog/*` (tabs, active filter, product detail w/ nutrition + allergens). Deployed; visible Playwright 1/1 against the seeded catalog. `/app/catalog`. Read-only by design (mirror mode).
+- ✅ **03b reports — DONE** (PR #13 `4dd5a3b` + fix PR #14 `1408f60`): read-only intake-funnel / daily-ops / kitchen-day-list over `GET /reports/:name` + JSON export (`POST /exports`). Deployed; visible Playwright 1/1 (`wpui-reports.spec.ts`) — caught + fixed a tab-switch white-screen (mismatched-data cast). `/app/reports` (sidebar now live).
 - ▶ **03c — NEXT**: settings + masters admin (view/add area/slot/method/reason-codes via the existing `POST /settings/masters/:kind` + `/settings/reason-codes`); exceptions view; staff/RBAC admin + restricted audit query; dashboard stat cards. Pick the smallest demonstrable sub-unit first (settings/masters admin — fully wired API + now seed-visible).
-- (parallel option) **reports**: 3 MVP reports + export (`GET /reports/:name`, `POST /exports`) — fully-wired API; can slot in as a 03 sub-unit.
-- **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports/dashboard now show real seeded rows where applicable.)
+- **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports now show real seeded rows: intake-funnel 4 drafts / 1 approved.)
 
 ### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
 Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
