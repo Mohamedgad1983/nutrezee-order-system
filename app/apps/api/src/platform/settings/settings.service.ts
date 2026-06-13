@@ -180,6 +180,18 @@ export class SettingsService {
     return rows;
   }
 
+  // WP-UI-02b: read active reason codes (optionally one domain) for the review
+  // reject/return pickers and any other reason-coded action. `domain` is a bound
+  // parameter, not interpolated.
+  async listReasonCodes(domain?: string): Promise<Record<string, unknown>[]> {
+    const { rows } = await this.pool.query(
+      `SELECT id, domain, code, label_en, label_ar, active FROM reason_code
+       WHERE active AND ($1::text IS NULL OR domain = $1) ORDER BY domain, code`,
+      [domain ?? null],
+    );
+    return rows;
+  }
+
   private async load(key: string): Promise<{ value: unknown; value_type: string }> {
     const { rows } = await this.pool.query('SELECT value, value_type FROM setting WHERE key = $1', [key]);
     if (rows.length === 0) throw new SettingsError('unknown_key');
