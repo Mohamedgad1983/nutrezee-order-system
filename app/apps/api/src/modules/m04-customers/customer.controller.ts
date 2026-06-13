@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CustomerError, CustomerService } from './customer.service';
+import { MergeError, MergeService } from './merge.service';
 import { AccessService } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { maskFields } from '../../platform/masking/masking';
@@ -13,14 +14,16 @@ import { AuthError, SessionService, type StaffContext } from '../../platform/aut
 // surface consolidates at WP-07" that WP-07 left undelivered. Read endpoints are
 // PII/health masked at serialization (api_standards rule 4); health is gated by the
 // caller's 'health' visibility grant, never by a client flag. Mutations are POST/
-// PATCH only (guardrail 1). Merge/undo are deferred to their own unit — MergeService
-// has no app-level provider and its FK re-link steps are unwired (see register).
+// PATCH only (guardrail 1). Merge/undo (WP-API-02) re-parent child rows + re-link
+// draft_order/customer_order FKs via MergeService's registered steps, deactivate the
+// loser, and restore on undo within merge_undo_days (customer.merge, ops-only).
 @Controller('customers')
 export class CustomerController {
   constructor(
     private readonly sessions: SessionService,
     private readonly customers: CustomerService,
     private readonly access: AccessService,
+    private readonly merges: MergeService,
   ) {}
 
   @Get()
@@ -97,6 +100,30 @@ export class CustomerController {
       }),
     );
     return { id };
+  }
+
+  // WP-API-02 merge/undo. Static literal routes, declared before the @Patch(':id') and
+  // @Post(':id/...') param routes (NestJS matches in order; the settings reason-codes
+  // shadow bug was exactly this). ops-only via customer.merge (super_admin/ops_manager).
+  @Post('merge')
+  @HttpCode(201)
+  async merge(@Req() req: Request, @Body() body: { winner_id?: string; loser_id?: string }) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'customer.merge');
+    if (!body?.winner_id || !body?.loser_id) {
+      throw new BadRequestException({ error_code: 'validation_failed', field_errors: [{ field: 'winner_id|loser_id', rule: 'required' }] });
+    }
+    const id = await this.wrap(() => this.merges.merge(ctx, body.winner_id as string, body.loser_id as string));
+    return { id };
+  }
+
+  @Post('merge/:id/undo')
+  @HttpCode(200)
+  async undoMerge(@Req() req: Request, @Param('id') id: string) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'customer.merge');
+    await this.wrap(() => this.merges.undo(ctx, id));
+    return { ok: true };
   }
 
   @Patch(':id')
@@ -179,6 +206,11 @@ export class CustomerController {
           throw new ConflictException({ error_code: e.code, detail: e.detail });
         }
         throw new BadRequestException({ error_code: e.code, detail: e.detail });
+      }
+      if (e instanceof MergeError) {
+        if (e.code === 'not_found') throw new NotFoundException({ error_code: e.code });
+        if (e.code === 'already_undone') throw new ConflictException({ error_code: e.code });
+        throw new BadRequestException({ error_code: e.code }); // self_merge | undo_expired
       }
       throw e;
     }
