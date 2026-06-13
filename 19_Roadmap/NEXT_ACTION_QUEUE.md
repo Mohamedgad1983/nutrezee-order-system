@@ -20,6 +20,7 @@
 - Phases 1–5 complete. **WP-00 … WP-13 DONE & merged** (all CI-green; see register rows).
 - **WP-UI-01 DONE & merged** — PR #3, merge `b06d646`: login + app shell + sidebar nav (10 sections) + kitchen board + read-only drafts/review-queue/orders lists.
 - **WP-API-01 DONE & merged** — PR #4, merge `f9dcae6` (+ D8 nginx-proxy fix `0c3af5a`): M04 customers controller, M05 catalog-read controller, settings masters/reason-code routes. Deployed + verified on staging. (merge/undo deferred → item 5 below.)
+- **WP-API-01b DONE & merged** — PR #5, merge `22bdcff`: `GET /settings/masters/:kind` (area/slot/method/section read) — the last API the intake form needed. Deployed + verified. WP-UI-02 now has zero API blockers.
 - **Staging LIVE** at `https://13-140-159-201.sslip.io` (VPS + Caddy TLS); gate ④ both halves ✅; 10/10 smoke; **D1–D7 fixed**. Controlled via the `nutrezee-vps` MCP server (`tools/vps-mcp/`).
 - Legacy core coverage: Orders **B**, Customers/Packages/Products/Reports/Settings **C**, Subscribers **D**. **No module is class A** (browser-operable end-to-end) yet. Detail: `Legacy_Core_Coverage_Matrix.md`.
 
@@ -32,7 +33,7 @@ Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters
 
 ### ▶ 2. WP-UI-02 — Daily order action screens · **size M · blocked_by: none (WP-API-01 done) · ELIGIBLE NOW**
 The screens staff live in all day. Each flow ships with a visible Playwright e2e (`tools/e2e-staging`).
-- Intake draft form: customer search (needs A1), package/items, dates, address, slot/method, payment method, completeness feedback, WhatsApp ref panel — replaces legacy `/orders/create`.
+- Intake draft form: customer search (`GET /customers`), package/items (`GET /catalog/*`), dates, address (area via `GET /settings/masters/area`), slot/method (`GET /settings/masters/delivery_slot|delivery_method`), payment method, completeness feedback, WhatsApp ref panel (`POST /drafts/:id/whatsapp-ref`) — replaces legacy `/orders/create`. **All backing APIs now live (WP-API-01 + 01b).** Best built as sub-units: 02a intake → 02b review actions → 02c order detail → 02d payment queue, each its own branch + Playwright proof.
 - Review queue actions: claim + approve/return/reject with warning overrides.
 - Order detail: timeline, fulfillment days, transitions, cancellation request/ack, change request w/ impact.
 - Payment review queue (Finance) + per-order payment panel.
