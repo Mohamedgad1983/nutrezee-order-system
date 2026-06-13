@@ -85,4 +85,12 @@ describe('TS-C API contract — settings masters & reason codes (WP-API-01)', ()
     await expect(c.listMasters(req, 'setting', undefined)).rejects.toBeInstanceOf(BadRequestException);
     expect(listMasters).not.toHaveBeenCalled();
   });
+
+  it('lists reason codes, passing the domain filter through', async () => {
+    const listReasonCodes = vi.fn().mockResolvedValue([{ id: 'rc-1', domain: 'rejection', code: 'spam', label_en: 'Spam' }]);
+    const c = controllerWith({ listReasonCodes });
+    await expect(c.listReasonCodes(req, 'rejection'))
+      .resolves.toEqual({ items: [{ id: 'rc-1', domain: 'rejection', code: 'spam', label_en: 'Spam' }] });
+    expect(listReasonCodes).toHaveBeenCalledWith('rejection');
+  });
 });

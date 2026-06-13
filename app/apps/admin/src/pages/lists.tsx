@@ -5,7 +5,6 @@ import {
   type DraftListItem,
   type ListResponse,
   type OrderListItem,
-  type ReviewQueueListItem,
 } from '../api';
 
 // Read-only list screens (WP-UI-01). Detail/action screens arrive in WP-UI-02.
@@ -127,55 +126,6 @@ export function DraftsPage(): React.JSX.Element {
   );
 }
 
-export function ReviewQueuePage(): React.JSX.Element {
-  const [state, setState] = useState('');
-  const list = useList<ReviewQueueListItem>(() => (state ? `/review-queue?state=${state}` : '/review-queue'));
-  return (
-    <ListChrome
-      busy={list.busy}
-      error={list.error}
-      count={list.items.length}
-      emptyText="Review queue is empty — submitted drafts appear here for approval."
-      onReload={list.reload}
-      filter={
-        <label>
-          <span>State</span>
-          <select value={state} onChange={(e) => setState(e.target.value)}>
-            <option value="">all</option>
-            {['waiting', 'in_review', 'decided'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-      }
-    >
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Draft</th><th>Queue state</th><th>Channel</th><th>Entered</th>
-            <th>SLA due</th><th>Reviewer</th><th>Warnings</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.items.map((r) => (
-            <tr key={r.id}>
-              <td className="mono">{shortId(r.draft_id)}</td>
-              <td><span className={`badge st-${r.queue_state}`}>{r.queue_state.replaceAll('_', ' ')}</span></td>
-              <td>{r.channel}</td>
-              <td>{fmtTs(r.entered_at)}</td>
-              <td>
-                {fmtTs(r.sla_due_at)}
-                {r.sla_late ? <span className="badge late">late</span> : null}
-              </td>
-              <td>{r.reviewer_id ? shortId(r.reviewer_id) : '—'}</td>
-              <td>{r.warnings.length === 0 ? '—' : r.warnings.length}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </ListChrome>
-  );
-}
 
 export function OrdersPage(): React.JSX.Element {
   const [status, setStatus] = useState('');

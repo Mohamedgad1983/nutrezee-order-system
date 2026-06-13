@@ -75,6 +75,15 @@ export class SettingsController {
     return { items };
   }
 
+  // WP-UI-02b: read reason codes for the review reject/return pickers (and other
+  // reason-coded actions). settings.read is broad enough for the acting roles.
+  @Get('reason-codes')
+  async listReasonCodes(@Req() req: Request, @Query('domain') domain?: string) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'settings.read');
+    return { items: await this.settings.listReasonCodes(domain) };
+  }
+
   // WP-API-01: ops-master + reason-code admin. addMaster/addReasonCode exist on the
   // service since WP-03 but had no route. Ordinary (non-gate) mutations → settings.update.ops.
   @Post('masters/:kind')

@@ -5,7 +5,8 @@ import { Redirect, usePath } from './router';
 import { LoginPage } from './pages/Login';
 import { KitchenBoardPage } from './pages/Kitchen';
 import { IntakePage } from './pages/Intake';
-import { DraftsPage, OrdersPage, ReviewQueuePage } from './pages/lists';
+import { ReviewPage } from './pages/Review';
+import { DraftsPage, OrdersPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
 export function App(): React.JSX.Element {
@@ -54,7 +55,7 @@ function Routed(): React.JSX.Element | null {
       page = <IntakePage />;
       break;
     case '/app/review-queue':
-      page = <ReviewQueuePage />;
+      page = <ReviewPage />;
       break;
     case '/app/orders':
       page = <OrdersPage />;
