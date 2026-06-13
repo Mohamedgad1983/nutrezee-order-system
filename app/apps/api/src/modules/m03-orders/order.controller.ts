@@ -8,7 +8,7 @@ import { AccessService, type VisibilityClass } from '../../platform/rbac/access.
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { TransitionError } from '../../platform/transition/transition-engine';
 import { maskFields } from '../../platform/masking/masking';
-import { OrderError, OrderService, type OrderRecord, type OrderStatus, type FulfillmentStatus } from './order.service';
+import { OrderError, OrderService, type OrderRecord, type OrderStatus, type FulfillmentStatus, type ExceptionRow } from './order.service';
 
 const COOKIE = 'nz_session';
 
@@ -35,6 +35,22 @@ export class OrderController {
     await requirePermission(this.access, ctx, 'order.read');
     const grants = await this.access.visibilityGrants(ctx.roles);
     const items = (await this.orders.listOrders({ status })).map((o) => this.maskOrder(o, grants));
+    return { items, page: { limit: 100 } };
+  }
+
+  // WP-UI-03c exceptions view. MUST precede @Get(':id') — a static 'exceptions' route
+  // declared after the :id param route would be shadowed (NestJS matches in order).
+  // Gated by order.read (exceptions are order operational data; avoids expanding the
+  // RBAC matrix pending workshop sign-off). `notes` is PII-masked per the caller's grants.
+  @Get('exceptions')
+  async listExceptions(@Req() req: Request, @Query('state') state?: string) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'order.read');
+    const grants = await this.access.visibilityGrants(ctx.roles);
+    const items = (await this.orders.listExceptions({ state })).map((e) => {
+      const { data, masked } = maskFields(e as unknown as Record<string, unknown>, { notes: 'pii' }, grants);
+      return { ...(data as unknown as ExceptionRow), masked };
+    });
     return { items, page: { limit: 100 } };
   }
 
