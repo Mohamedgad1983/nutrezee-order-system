@@ -31,7 +31,7 @@ interface KitchenDayList { by_date: Record<string, KitchenDay> }
 function Metrics({ rows }: { rows: Array<[string, number]> }): React.JSX.Element {
   return (
     <dl className="kv">
-      {rows.map(([label, val]) => <div key={label}><dt>{label}</dt><dd>{val.toLocaleString()}</dd></div>)}
+      {rows.map(([label, val]) => <div key={label}><dt>{label}</dt><dd>{typeof val === 'number' ? val.toLocaleString() : '—'}</dd></div>)}
     </dl>
   );
 }
@@ -44,7 +44,7 @@ function Breakdown({ title, record }: { title: string; record: Record<string, nu
       {entries.length === 0 ? <p className="emptyLine">none yet — demo-data gap, not a failure.</p> : (
         <table className="table">
           <thead><tr><th>{title}</th><th>Count</th></tr></thead>
-          <tbody>{entries.map(([k, v]) => <tr key={k}><td>{k.replaceAll('_', ' ')}</td><td>{v.toLocaleString()}</td></tr>)}</tbody>
+          <tbody>{entries.map(([k, v]) => <tr key={k}><td>{k.replaceAll('_', ' ')}</td><td>{typeof v === 'number' ? v.toLocaleString() : '—'}</td></tr>)}</tbody>
         </table>
       )}
     </>
@@ -54,25 +54,32 @@ function Breakdown({ title, record }: { title: string; record: Record<string, nu
 export function ReportsPage(): React.JSX.Element {
   const [report, setReport] = useState<ReportKey>('intake-funnel');
   const [date, setDate] = useState('');
-  const [data, setData] = useState<unknown>(null);
+  const [loaded, setLoaded] = useState<{ key: string; data: unknown } | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const seq = useRef(0);
 
   const query = report === 'kitchen-day-list' && date ? `?date=${date}` : '';
+  const key = `${report}${query}`;
 
   const reload = useCallback(() => {
     const mine = ++seq.current;
     setBusy(true);
     setError(null);
     api<{ report: string; data: unknown }>(`/reports/${report}${query}`)
-      .then((d) => { if (seq.current === mine) setData(d.data); })
+      .then((d) => { if (seq.current === mine) setLoaded({ key, data: d.data }); })
       .catch((e: unknown) => { if (seq.current === mine) setError(humanMessage(e)); })
       .finally(() => { if (seq.current === mine) setBusy(false); });
-  }, [report, query]);
+  }, [report, query, key]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Render the body only when the loaded data belongs to the CURRENT report+query.
+  // On a tab switch React briefly re-renders with the new `report` while the previous
+  // report's `data` is still in state; casting that mismatched shape crashes on a
+  // missing numeric field. Keying loaded data to its request prevents that. (caught by e2e)
+  const data = loaded && loaded.key === key ? loaded.data : null;
 
   async function doExport(): Promise<void> {
     setExporting(true);
@@ -119,7 +126,7 @@ export function ReportsPage(): React.JSX.Element {
       </section>
 
       {error ? <p className="error">{error}</p> : null}
-      {!busy && !error && data ? <ReportBody report={report} date={date} data={data} /> : null}
+      {!error && data ? <ReportBody report={report} date={date} data={data} /> : null}
     </section>
   );
 }
