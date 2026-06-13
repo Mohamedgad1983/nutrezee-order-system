@@ -32,7 +32,6 @@
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.
 
 ### ✅ 2. WP-UI-02 — Daily order action screens · **DONE 2026-06-13** (02a/b/c/d, PRs #6–#9)
-### ▶ 3. WP-UI-03 — Admin parity screens · **NEXT FRONTIER** (was item 3 below)
 The screens staff live in all day. Each sub-unit = its own branch + visible Playwright e2e (`tools/e2e-staging`). All backing APIs live (WP-API-01 + 01b).
 - ✅ **02a intake draft form — DONE** (PR #6): customer find/create/unverified, package/items, dates, area/slot/method, payment, WhatsApp ref → create → completeness → submit. Playwright 4/4 on staging. `/app/intake`.
 - ✅ **02b review-queue actions — DONE** (PR #7): claim → approve (per-warning overrides) / return / reject with reason codes (`GET /settings/reason-codes` added). Playwright 3/3. `/app/review-queue`.
@@ -43,8 +42,11 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 - **DoD per sub-unit:** admin typecheck/lint/build green in CI; deployed to staging; Playwright green; register run-log entry. **Covers UAT:** WF-01..06, 12, 13, 15.
 - **Staging data gap (cross-cutting):** full happy-path demos (submit a complete draft, approve→order→kitchen) need catalog + ops-master + customer seed data. Catalog is mirror-mode (API writes blocked); area/slot/method are zero-row until the workshop. Resolve via either the pending "seed demo data" approval (SQL/import) or a deliberate `cutover_catalog` flip on staging. Tracked here so UI sub-units don't silently look "empty".
 
-### 3. WP-UI-03 — Admin parity screens · **size M · blocked_by: WP-API-01, WP-UI-02**
-Customers (list/search, profile PII-gated, guided create, merge review) · catalog read screens · reports (3 MVP reports + export) · settings + masters admin · exceptions capture · staff/RBAC + restricted audit query view · dashboard stat cards. **Covers UAT:** WF-14, 16. Closes the daily-admin parity gap for the order-ops slice.
+### ▶ 3. WP-UI-03 — Admin parity screens · **IN PROGRESS** (sub-units; FRONTIER)
+- ✅ **03a customers — DONE** (PR #10): search / guided-create (dup block+warn) / profile (masked) / edit. FULL end-to-end Playwright (no seed data needed). `/app/customers`.
+- ▶ **03b — NEXT**: catalog read screens (products/packages/masters browse — `GET /catalog/*`) and/or reports (3 MVP reports + export — `GET /reports/:name`, `POST /exports`). Both fully-wired APIs.
+- 03c: settings + masters admin (view/add area/slot/method/reason-codes); exceptions view; staff/RBAC admin + restricted audit query; dashboard stat cards.
+- **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports/dashboard show zeros, catalog/settings show seeds only, until data exists — same gap.)
 
 ### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
 Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
