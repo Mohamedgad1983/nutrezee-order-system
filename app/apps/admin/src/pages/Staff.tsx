@@ -101,7 +101,9 @@ function ManageStaff({ staff, roleCodes, onChanged, onClose }: {
   async function run(fn: () => Promise<unknown>): Promise<void> {
     setBusy(true);
     setError(null);
-    try { await fn(); onChanged(); } catch (e) { setError(humanMessage(e)); setBusy(false); }
+    // The panel stays open across grant/revoke, so busy MUST reset on success too —
+    // otherwise every button stays disabled after the first action. (caught by e2e)
+    try { await fn(); onChanged(); } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
   }
 
   return (
