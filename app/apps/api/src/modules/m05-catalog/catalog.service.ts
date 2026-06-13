@@ -38,6 +38,36 @@ export interface RoutingSectionForKitchen {
   sectionNameEn: string;
 }
 
+// WP-API-01 read-API shapes (read-only browse over the catalog tables).
+export interface ProductRow {
+  id: string; code: string | null; nameEn: string; nameAr: string;
+  mealTypeId: string | null; price: number | null; currency: string;
+  active: boolean; origin: 'new' | 'legacy';
+}
+export interface PackageRow {
+  id: string; nameEn: string; nameAr: string; parentPackageId: string | null;
+  durationDays: number | null; mealsPerDay: number | null; price: number | null;
+  currency: string; packageForId: string | null; active: boolean; origin: 'new' | 'legacy';
+}
+export interface MasterRow {
+  id: string; nameEn: string; nameAr: string; active: boolean; origin: 'new' | 'legacy';
+}
+export interface AllergenRow extends MasterRow {
+  defaultSeverity: 'note' | 'avoid' | 'severe' | null;
+}
+export interface NutritionRow {
+  productId: string; calories: number | null;
+  proteinG: number | null; carbsG: number | null; fatG: number | null;
+  notesEn: string | null; notesAr: string | null;
+}
+
+// SQL-injection guard: master reads interpolate the table name, so the kind must be
+// validated against this exact allow-list before any query (mirrors addMaster).
+export const CATALOG_MASTER_KINDS = [
+  'meal_type', 'diet_status', 'tag', 'package_for_type', 'ingredient', 'allergen',
+] as const;
+export type CatalogMasterKind = (typeof CATALOG_MASTER_KINDS)[number];
+
 // M05 catalog. MIRROR MODE until catalog cutover (ADR-010 / legacy_transition §4):
 // while cutover_catalog is OFF, core product/package creation is allowed only via
 // the import path (M19); ENRICHMENT (nutrition, allergens, routing) is always open —
@@ -228,6 +258,123 @@ export class CatalogService {
       nameAr: rows[0].name_ar as string | null,
       durationDays: rows[0].duration_days === null ? null : Number(rows[0].duration_days),
       price: rows[0].price === null ? null : Number(rows[0].price),
+    };
+  }
+
+  // --- WP-API-01 read-only browse API (catalog.read) ---------------------------
+  // Reads are always allowed (mirror mode only gates writes — assertWritable).
+
+  // Exposed so the controller can echo the effective limit in the page contract.
+  static page(opts?: { limit?: number; offset?: number }): { limit: number; offset: number } {
+    const rawLimit = Number(opts?.limit);
+    const rawOffset = Number(opts?.offset);
+    const limit = Math.min(Math.max(Math.trunc(Number.isFinite(rawLimit) ? rawLimit : 100), 1), 200);
+    const offset = Math.max(Math.trunc(Number.isFinite(rawOffset) ? rawOffset : 0), 0);
+    return { limit, offset };
+  }
+
+  async listProducts(opts?: { activeOnly?: boolean; limit?: number; offset?: number }): Promise<ProductRow[]> {
+    const { limit, offset } = CatalogService.page(opts);
+    const { rows } = await this.pool.query(
+      `SELECT id, code, name_en, name_ar, meal_type_id, price, currency, active, origin
+       FROM product ${opts?.activeOnly ? 'WHERE active' : ''}
+       ORDER BY name_en LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+    return rows.map((r) => CatalogService.toProductRow(r));
+  }
+
+  async getProduct(productId: string): Promise<ProductRow | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, code, name_en, name_ar, meal_type_id, price, currency, active, origin
+       FROM product WHERE id = $1`,
+      [productId],
+    );
+    return rows.length === 0 ? null : CatalogService.toProductRow(rows[0]);
+  }
+
+  async listPackages(opts?: { activeOnly?: boolean; limit?: number; offset?: number }): Promise<PackageRow[]> {
+    const { limit, offset } = CatalogService.page(opts);
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, parent_package_id, duration_days, meals_per_day,
+              price, currency, package_for_id, active, origin
+       FROM package ${opts?.activeOnly ? 'WHERE active' : ''}
+       ORDER BY name_en LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+    return rows.map((r) => CatalogService.toPackageRow(r));
+  }
+
+  async getPackage(packageId: string): Promise<PackageRow | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, parent_package_id, duration_days, meals_per_day,
+              price, currency, package_for_id, active, origin
+       FROM package WHERE id = $1`,
+      [packageId],
+    );
+    return rows.length === 0 ? null : CatalogService.toPackageRow(rows[0]);
+  }
+
+  async listMasters(kind: CatalogMasterKind): Promise<MasterRow[]> {
+    if (!CATALOG_MASTER_KINDS.includes(kind)) throw new CatalogError('validation_failed');
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, active, origin FROM ${kind} ORDER BY name_en`,
+    );
+    return rows.map((r) => ({
+      id: r.id as string, nameEn: r.name_en as string, nameAr: r.name_ar as string,
+      active: r.active as boolean, origin: r.origin as 'new' | 'legacy',
+    }));
+  }
+
+  async listAllergens(): Promise<AllergenRow[]> {
+    const { rows } = await this.pool.query(
+      `SELECT id, name_en, name_ar, default_severity, active, origin FROM allergen ORDER BY name_en`,
+    );
+    return rows.map((r) => ({
+      id: r.id as string, nameEn: r.name_en as string, nameAr: r.name_ar as string,
+      defaultSeverity: r.default_severity as AllergenRow['defaultSeverity'],
+      active: r.active as boolean, origin: r.origin as 'new' | 'legacy',
+    }));
+  }
+
+  async getNutrition(productId: string): Promise<NutritionRow | null> {
+    const { rows } = await this.pool.query(
+      `SELECT product_id, calories, protein_g, carbs_g, fat_g, notes_en, notes_ar
+       FROM nutrition_facts WHERE product_id = $1`,
+      [productId],
+    );
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      productId: r.product_id as string,
+      calories: r.calories === null ? null : Number(r.calories),
+      proteinG: r.protein_g === null ? null : Number(r.protein_g),
+      carbsG: r.carbs_g === null ? null : Number(r.carbs_g),
+      fatG: r.fat_g === null ? null : Number(r.fat_g),
+      notesEn: r.notes_en as string | null, notesAr: r.notes_ar as string | null,
+    };
+  }
+
+  private static toProductRow(r: Record<string, unknown>): ProductRow {
+    return {
+      id: r.id as string, code: r.code as string | null,
+      nameEn: r.name_en as string, nameAr: r.name_ar as string,
+      mealTypeId: r.meal_type_id as string | null,
+      price: r.price === null ? null : Number(r.price),
+      currency: r.currency as string, active: r.active as boolean,
+      origin: r.origin as 'new' | 'legacy',
+    };
+  }
+
+  private static toPackageRow(r: Record<string, unknown>): PackageRow {
+    return {
+      id: r.id as string, nameEn: r.name_en as string, nameAr: r.name_ar as string,
+      parentPackageId: r.parent_package_id as string | null,
+      durationDays: r.duration_days === null ? null : Number(r.duration_days),
+      mealsPerDay: r.meals_per_day === null ? null : Number(r.meals_per_day),
+      price: r.price === null ? null : Number(r.price),
+      currency: r.currency as string, packageForId: r.package_for_id as string | null,
+      active: r.active as boolean, origin: r.origin as 'new' | 'legacy',
     };
   }
 
