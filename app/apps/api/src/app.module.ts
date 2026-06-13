@@ -5,6 +5,8 @@ import { AuthController } from './platform/auth/auth.controller';
 import { StaffController } from './platform/staff/staff.controller';
 import { getPool } from './platform/config/database';
 import { AuditReadQueue, AuditService } from './platform/audit/audit.service';
+import { AuditQueryService } from './platform/audit/audit-query.service';
+import { AuditController } from './platform/audit/audit.controller';
 import { OutboxDispatcher, OutboxService } from './platform/outbox/outbox.service';
 import { IdempotencyService } from './platform/idempotency/idempotency.service';
 import { SettingsReader } from './platform/settings/settings-reader';
@@ -49,7 +51,7 @@ export const POOL = 'POOL';
 
 @Module({
   controllers: [
-    HealthController, AuthController, StaffController, SettingsController,
+    HealthController, AuthController, StaffController, AuditController, SettingsController,
     CustomerController, CatalogController,
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
@@ -64,6 +66,7 @@ export const POOL = 'POOL';
       useFactory: (pool: Pool, audit: AuditService) => new AuditReadQueue(pool, audit),
       inject: [POOL, AuditService],
     },
+    { provide: AuditQueryService, useFactory: (pool: Pool) => new AuditQueryService(pool), inject: [POOL] },
     OutboxService,
     { provide: OutboxDispatcher, useFactory: (pool: Pool) => new OutboxDispatcher(pool), inject: [POOL] },
     IdempotencyService,
