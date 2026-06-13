@@ -22,7 +22,7 @@ export const NAV: NavItem[] = [
   { path: '/app/exceptions', label: 'Exceptions', live: false },
   { path: '/app/reports', label: 'Reports', live: true },
   { path: '/app/staff', label: 'Staff & roles', live: false },
-  { path: '/app/settings', label: 'Settings', live: false },
+  { path: '/app/settings', label: 'Settings', live: true },
   { path: '/app/audit', label: 'Audit log', live: false },
 ];
 
