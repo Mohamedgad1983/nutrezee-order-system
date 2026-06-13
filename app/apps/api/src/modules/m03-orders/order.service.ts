@@ -85,6 +85,20 @@ export interface ImportedActivePlanInput {
   slotId?: string;
 }
 
+export interface ExceptionRow {
+  id: string;
+  type_code: string;
+  order_id: string | null;
+  refs: Record<string, string>;
+  severity: 'info' | 'warn' | 'high';
+  state: 'open' | 'in_progress' | 'resolved';
+  owner_id: string | null;
+  resolution_code: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 export class OrderService {
   constructor(
     private readonly pool: Pool,
@@ -461,6 +475,45 @@ export class OrderService {
         refs: { order_id: rows[0].order_id as string },
         payload: { change_request_id: changeRequestId, diff, impact: rows[0].impact },
       });
+    });
+  }
+
+  // WP-UI-03c exceptions view (read path; create/resolve already exist). Resolves the
+  // type/resolution reason_code rows to their codes and lifts order_id out of refs for
+  // the list. `notes` is PII-masked at the controller per the caller's grants.
+  async listExceptions(filter: { state?: string } = {}): Promise<ExceptionRow[]> {
+    const params: unknown[] = [];
+    let where = '';
+    if (filter.state) {
+      params.push(filter.state);
+      where = `WHERE ec.state = $${params.length}`;
+    }
+    const { rows } = await this.pool.query(
+      `SELECT ec.id, tc.code AS type_code, ec.refs, ec.severity, ec.state, ec.owner_id,
+              rc.code AS resolution_code, ec.notes, ec.created_at, ec.updated_at
+         FROM exception_case ec
+         JOIN reason_code tc ON tc.id = ec.type_code_id
+         LEFT JOIN reason_code rc ON rc.id = ec.resolution_code_id
+         ${where}
+        ORDER BY ec.created_at DESC
+        LIMIT 100`,
+      params,
+    );
+    return rows.map((r) => {
+      const refs = (r.refs ?? {}) as Record<string, string>;
+      return {
+        id: r.id as string,
+        type_code: r.type_code as string,
+        order_id: refs.order_id ?? null,
+        refs,
+        severity: r.severity as ExceptionRow['severity'],
+        state: r.state as ExceptionRow['state'],
+        owner_id: (r.owner_id as string | null) ?? null,
+        resolution_code: (r.resolution_code as string | null) ?? null,
+        notes: (r.notes as string | null) ?? null,
+        created_at: r.created_at as string,
+        updated_at: (r.updated_at as string | null) ?? null,
+      };
     });
   }
 

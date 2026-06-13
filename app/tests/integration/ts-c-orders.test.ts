@@ -43,6 +43,32 @@ describe('TS-C API contract — orders controller (WP-09)', () => {
     expect(listDays).toHaveBeenCalledWith('order-1');
   });
 
+  it('lists exceptions with the state filter and returns the read contract', async () => {
+    const listExceptions = vi.fn().mockResolvedValue([
+      { id: 'ex-1', type_code: 'other', order_id: 'order-1', refs: { order_id: 'order-1' }, severity: 'high', state: 'open', owner_id: 'ops-1', resolution_code: null, notes: 'note', created_at: 't', updated_at: null },
+    ]);
+    const c = controllerWith({ listExceptions });
+    const res = await c.listExceptions(req, 'open');
+    expect(listExceptions).toHaveBeenCalledWith({ state: 'open' });
+    expect(res.page).toEqual({ limit: 100 });
+    expect(res.items[0]).toMatchObject({ id: 'ex-1', notes: 'note', masked: false });
+  });
+
+  it('PII-masks exception notes when the caller lacks the pii grant', async () => {
+    const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
+    const access = {
+      decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+      visibilityGrants: vi.fn().mockResolvedValue(new Set<string>()),
+    } as unknown as AccessService;
+    const listExceptions = vi.fn().mockResolvedValue([
+      { id: 'ex-1', type_code: 'other', order_id: null, refs: {}, severity: 'warn', state: 'open', owner_id: null, resolution_code: null, notes: 'secret', created_at: 't', updated_at: null },
+    ]);
+    const c = new OrderController(sessions, access, { listExceptions } as unknown as OrderService);
+    const res = await c.listExceptions(req, undefined);
+    expect(res.items[0].notes).not.toBe('secret');
+    expect(res.items[0].masked).toBe(true);
+  });
+
   it('maps order and fulfillment transitions to config-engine service calls', async () => {
     const transitionOrder = vi.fn().mockResolvedValue(undefined);
     const transitionDay = vi.fn().mockResolvedValue(undefined);
