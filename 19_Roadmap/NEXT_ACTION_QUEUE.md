@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-13 · **Frontier:** **WP-UI-03 COMPLETE** ✅ (admin parity — all 14 sidebar sections live). **Next frontier → WP-API-02** (merge/undo wiring + catalog casing — size S, no blockers), then WP-UI-04 (catalog enrichment, now unblocked). · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-06-13 · **Frontier:** WP-UI-03 ✅ + WP-API-02 ✅ (merge/undo wired). **Next frontier → WP-UI-04** (catalog enrichment editors — nutrition/allergens buildable now even in mirror mode; routing rules wait on workshop DEC-006). Then WP-DATA-01/WP-14 are sponsor-gated. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -53,10 +53,11 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 - ✅ **03c audit — DONE** (PR #24 `c7087d8`): `GET /audit` (`audit.read`; before/after masked unless full pii∧health∧payment visibility) + read-only audit log screen (severity/entity/event filters + expandable detail). `/app/audit` (sidebar live). Also added `audit` to the nginx allow-list. **→ WP-UI-03c & WP-UI-03 COMPLETE.**
 - **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports now show real seeded rows: intake-funnel 4 drafts / 1 approved.)
 
-### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
-Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
+### ▶ 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **NEXT FRONTIER · size M · blocked_by: workshop pack (routing only)**
+Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. **WP-UI-03 dependency cleared.** Nutrition + allergen enrichment are buildable now — enrichment bypasses mirror mode (`catalog.service` enrichment paths call no `assertWritable`), so editors work even with `cutover_catalog=false`. Routing-rule editing is still gated on the workshop pack (routing rules need DEC-006 sections content) — build nutrition/allergens first, leave routing as a zero-row-ready follow-up. Likely needs small API additions first (enrichment write endpoints `setNutrition`/`linkIngredient`/`product_allergen` may lack HTTP routes — API-before-UI check, like exceptions/audit).
 
-### ▶ 5. WP-API-02 — Merge/undo wiring + catalog casing · **NEXT FRONTIER · size S · blocked_by: none**
+### ✅ 5. WP-API-02 — Merge/undo wiring + catalog casing · **DONE 2026-06-13** (PR #26 `57fc41b`)
+Merge/undo wired (static owning-module re-link steps for draft_order/customer_order, registered on MergeService; `POST /customers/merge` + `/merge/:id/undo`, ops-only; live smoke ✅). **Catalog casing deferred** — the catalog UI already consumes camelCase; reconciling would churn a live screen for no gain (low-priority cleanup, not blocking). Original scope:
 Surfaced by WP-API-01:
 - **Merge/undo HTTP**: register `MergeService` as an app provider + wire its FK re-link steps (`draft_order.customer_id`, and audit which other tables reference `customer`) — currently only the test wires them, so a live merge would not re-link draft/order FKs. Then expose `POST /customers/merge` + `POST /customers/merge/:id/undo` (permission `customer.merge`).
 - **Catalog response casing**: catalog read endpoints return camelCase while orders/drafts/kitchen return snake_case — reconcile to one convention before WP-UI-03 consumes catalog (cheap if done first).
