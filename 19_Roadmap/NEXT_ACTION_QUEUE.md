@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-13 · **Frontier:** WP-UI-03 (admin parity) — WP-UI-02 complete · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Recommended before more screens: seed demo data so the intake→review→order→payment chain is clickable for UAT (catalog can't be API-seeded — mirror mode).**
+**Last updated:** 2026-06-13 · **Frontier:** WP-UI-03 (admin parity) — 03a + 03b done, **03c next** · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -44,9 +44,10 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 
 ### ▶ 3. WP-UI-03 — Admin parity screens · **IN PROGRESS** (sub-units; FRONTIER)
 - ✅ **03a customers — DONE** (PR #10): search / guided-create (dup block+warn) / profile (masked) / edit. FULL end-to-end Playwright (no seed data needed). `/app/customers`.
-- ▶ **03b — NEXT**: catalog read screens (products/packages/masters browse — `GET /catalog/*`) and/or reports (3 MVP reports + export — `GET /reports/:name`, `POST /exports`). Both fully-wired APIs.
-- 03c: settings + masters admin (view/add area/slot/method/reason-codes); exceptions view; staff/RBAC admin + restricted audit query; dashboard stat cards.
-- **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports/dashboard show zeros, catalog/settings show seeds only, until data exists — same gap.)
+- ✅ **03b catalog browse — DONE** (PR #11 `955c9f4`): read-only products / packages / masters over `GET /catalog/*` (tabs, active filter, product detail w/ nutrition + allergens). Deployed; visible Playwright 1/1 against the seeded catalog. `/app/catalog`. Read-only by design (mirror mode).
+- ▶ **03c — NEXT**: settings + masters admin (view/add area/slot/method/reason-codes via the existing `POST /settings/masters/:kind` + `/settings/reason-codes`); exceptions view; staff/RBAC admin + restricted audit query; dashboard stat cards. Pick the smallest demonstrable sub-unit first (settings/masters admin — fully wired API + now seed-visible).
+- (parallel option) **reports**: 3 MVP reports + export (`GET /reports/:name`, `POST /exports`) — fully-wired API; can slot in as a 03 sub-unit.
+- **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports/dashboard now show real seeded rows where applicable.)
 
 ### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
 Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
