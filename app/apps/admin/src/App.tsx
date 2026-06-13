@@ -4,6 +4,7 @@ import { NAV, Shell } from './Shell';
 import { Redirect, usePath } from './router';
 import { LoginPage } from './pages/Login';
 import { KitchenBoardPage } from './pages/Kitchen';
+import { IntakePage } from './pages/Intake';
 import { DraftsPage, OrdersPage, ReviewQueuePage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
@@ -48,6 +49,9 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/drafts':
       page = <DraftsPage />;
+      break;
+    case '/app/intake':
+      page = <IntakePage />;
       break;
     case '/app/review-queue':
       page = <ReviewQueuePage />;
