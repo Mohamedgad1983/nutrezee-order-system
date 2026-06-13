@@ -39,13 +39,15 @@ test('staff & roles — list, grant/revoke role, RBAC matrix', async ({ page }) 
   const granted = page.waitForResponse((r) => r.url().endsWith('/rbac/grants') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Grant', exact: true }).click();
   expect((await granted).status()).toBe(200);
-  await expect(panel.getByText('report_viewer', { exact: true })).toBeVisible();
+  // Scope to the roles list (.hits) — after a revoke the role returns to the grant
+  // dropdown as an <option>, which a panel-wide getByText would also match.
+  await expect(panel.locator('.hits').getByText('report_viewer', { exact: true })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/02-role-granted.png`, fullPage: true });
 
   const revoked = page.waitForResponse((r) => r.url().endsWith('/rbac/revoke') && r.request().method() === 'POST');
-  await panel.locator('li', { hasText: 'report_viewer' }).getByRole('button', { name: 'revoke' }).click();
+  await panel.locator('.hits li', { hasText: 'report_viewer' }).getByRole('button', { name: 'revoke' }).click();
   expect((await revoked).status()).toBe(200);
-  await expect(panel.getByText('report_viewer', { exact: true })).toHaveCount(0);
+  await expect(panel.locator('.hits').getByText('report_viewer', { exact: true })).toHaveCount(0);
 
   // RBAC matrix tab
   await page.getByRole('button', { name: 'Roles (RBAC matrix)' }).click();
