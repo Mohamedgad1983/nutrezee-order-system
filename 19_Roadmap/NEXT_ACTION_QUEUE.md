@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-13 · **Frontier:** WP-UI-03 (admin parity) — 03a + 03b done; 03c nearly complete (settings/masters + dashboard + staff/RBAC + exceptions done) — **audit query is the LAST 03c screen** (needs `GET /audit` added first) · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-06-13 · **Frontier:** **WP-UI-03 COMPLETE** ✅ (admin parity — all 14 sidebar sections live). **Next frontier → WP-API-02** (merge/undo wiring + catalog casing — size S, no blockers), then WP-UI-04 (catalog enrichment, now unblocked). · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -42,7 +42,7 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 - **DoD per sub-unit:** admin typecheck/lint/build green in CI; deployed to staging; Playwright green; register run-log entry. **Covers UAT:** WF-01..06, 12, 13, 15.
 - **Staging data gap (cross-cutting):** full happy-path demos (submit a complete draft, approve→order→kitchen) need catalog + ops-master + customer seed data. Catalog is mirror-mode (API writes blocked); area/slot/method are zero-row until the workshop. Resolve via either the pending "seed demo data" approval (SQL/import) or a deliberate `cutover_catalog` flip on staging. Tracked here so UI sub-units don't silently look "empty".
 
-### ▶ 3. WP-UI-03 — Admin parity screens · **IN PROGRESS** (sub-units; FRONTIER)
+### ✅ 3. WP-UI-03 — Admin parity screens · **DONE 2026-06-13** (all sub-units shipped; all 14 sidebar sections live)
 - ✅ **03a customers — DONE** (PR #10): search / guided-create (dup block+warn) / profile (masked) / edit. FULL end-to-end Playwright (no seed data needed). `/app/customers`.
 - ✅ **03b catalog browse — DONE** (PR #11 `955c9f4`): read-only products / packages / masters over `GET /catalog/*` (tabs, active filter, product detail w/ nutrition + allergens). Deployed; visible Playwright 1/1 against the seeded catalog. `/app/catalog`. Read-only by design (mirror mode).
 - ✅ **03b reports — DONE** (PR #13 `4dd5a3b` + fix PR #14 `1408f60`): read-only intake-funnel / daily-ops / kitchen-day-list over `GET /reports/:name` + JSON export (`POST /exports`). Deployed; visible Playwright 1/1 (`wpui-reports.spec.ts`) — caught + fixed a tab-switch white-screen (mismatched-data cast). `/app/reports` (sidebar now live).
@@ -50,13 +50,13 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 - ✅ **03c dashboard — DONE** (PR #18 `933060a`): overview stat cards aggregating the M15 report projections + live queue counts (review/payment/orders); new first sidebar entry. `/app/dashboard`. Visible Playwright 1/1.
 - ✅ **03c staff/RBAC — DONE** (PR #20 `df95d1a`): staff list + grant/revoke roles + deactivate + new-staff + read-only RBAC matrix, over existing `GET /staff` / `GET /rbac/matrix` / `POST /staff|/rbac/grants|/rbac/revoke|/staff/:id/deactivate`. `/app/staff` (sidebar live). Visible Playwright 1/1 (live grant→revoke round-trip). Caught + fixed a stuck-busy panel bug.
 - ✅ **03c exceptions — DONE** (PR #22 `5fcf21f`): added `GET /orders/exceptions` (gated `order.read`, notes PII-masked, route before `:id`) + the view (state filter + resolve with escalation reason code). `/app/exceptions` (sidebar live). Visible Playwright 1/1 (self-seed → list → resolve).
-- ▶ **03c — FINAL (needs API-before-UI step)**: **Audit query** — there is **no audit read route**. Add a paginated/filterable `GET /audit` (perm `audit.read`, which super_admin/admin already hold; server-side masking on `before`/`after`/refs like /staff; filters: entity_type, severity, actor, date) first, then the read-only audit log screen (`/app/audit` — flip live). `audit_event` already has lots of real rows. This closes WP-UI-03c → admin parity for the order-ops slice.
+- ✅ **03c audit — DONE** (PR #24 `c7087d8`): `GET /audit` (`audit.read`; before/after masked unless full pii∧health∧payment visibility) + read-only audit log screen (severity/entity/event filters + expandable detail). `/app/audit` (sidebar live). Also added `audit` to the nginx allow-list. **→ WP-UI-03c & WP-UI-03 COMPLETE.**
 - **Covers UAT:** WF-14, 16. Closes daily-admin parity for the order-ops slice. (reports now show real seeded rows: intake-funnel 4 drafts / 1 approved.)
 
 ### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
 Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
 
-### 5. WP-API-02 — Merge/undo wiring + catalog casing · **size S · blocked_by: none · eligible (do before/with WP-UI-03 merge-review screen)**
+### ▶ 5. WP-API-02 — Merge/undo wiring + catalog casing · **NEXT FRONTIER · size S · blocked_by: none**
 Surfaced by WP-API-01:
 - **Merge/undo HTTP**: register `MergeService` as an app provider + wire its FK re-link steps (`draft_order.customer_id`, and audit which other tables reference `customer`) — currently only the test wires them, so a live merge would not re-link draft/order FKs. Then expose `POST /customers/merge` + `POST /customers/merge/:id/undo` (permission `customer.merge`).
 - **Catalog response casing**: catalog read endpoints return camelCase while orders/drafts/kitchen return snake_case — reconcile to one convention before WP-UI-03 consumes catalog (cheap if done first).
