@@ -7,6 +7,7 @@ import { KitchenBoardPage } from './pages/Kitchen';
 import { IntakePage } from './pages/Intake';
 import { ReviewPage } from './pages/Review';
 import { OrdersPage } from './pages/Orders';
+import { PaymentsPage } from './pages/Payments';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
@@ -60,6 +61,9 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/orders':
       page = <OrdersPage />;
+      break;
+    case '/app/payments':
+      page = <PaymentsPage />;
       break;
     default:
       page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
