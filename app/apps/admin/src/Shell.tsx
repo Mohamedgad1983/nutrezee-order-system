@@ -15,7 +15,7 @@ export const NAV: NavItem[] = [
   { path: '/app/drafts', label: 'Intake drafts', live: true },
   { path: '/app/review-queue', label: 'Review queue', live: true },
   { path: '/app/orders', label: 'Orders', live: true },
-  { path: '/app/payments', label: 'Payments', live: false },
+  { path: '/app/payments', label: 'Payments', live: true },
   { path: '/app/kitchen', label: 'Kitchen board', live: true },
   { path: '/app/exceptions', label: 'Exceptions', live: false },
   { path: '/app/reports', label: 'Reports', live: false },
