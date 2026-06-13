@@ -38,6 +38,27 @@ export class SettingsController {
     return this.wrap(() => this.settings.preview(key, body?.value ?? null));
   }
 
+  // Static POST routes MUST precede the generic @Post(':key') update route — Nest
+  // matches in declaration order, so a `reason-codes` route placed after :key would be
+  // shadowed (POST /settings/reason-codes → update(key='reason-codes') → 404). (caught by e2e)
+  @Post('reason-codes')
+  @HttpCode(201)
+  async addReasonCode(
+    @Req() req: Request,
+    @Body() body: { domain?: string; code?: string; label_en?: string; label_ar?: string },
+  ) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'settings.update.ops');
+    if (!body?.domain || !body?.code || !body?.label_en) {
+      throw new BadRequestException({
+        error_code: 'validation_failed',
+        field_errors: [{ field: 'domain|code|label_en', rule: 'required' }],
+      });
+    }
+    await this.wrap(() => this.settings.addReasonCode(ctx, body.domain as string, body.code as string, body.label_en as string, body.label_ar));
+    return { ok: true };
+  }
+
   @Post(':key')
   @HttpCode(200)
   async update(
@@ -113,24 +134,6 @@ export class SettingsController {
     }
     const id = await this.wrap(() => this.settings.addMaster(ctx, kind as MasterKind, columns as Record<string, unknown>));
     return { id };
-  }
-
-  @Post('reason-codes')
-  @HttpCode(201)
-  async addReasonCode(
-    @Req() req: Request,
-    @Body() body: { domain?: string; code?: string; label_en?: string; label_ar?: string },
-  ) {
-    const ctx = await this.ctx(req);
-    await requirePermission(this.access, ctx, 'settings.update.ops');
-    if (!body?.domain || !body?.code || !body?.label_en) {
-      throw new BadRequestException({
-        error_code: 'validation_failed',
-        field_errors: [{ field: 'domain|code|label_en', rule: 'required' }],
-      });
-    }
-    await this.wrap(() => this.settings.addReasonCode(ctx, body.domain as string, body.code as string, body.label_en as string, body.label_ar));
-    return { ok: true };
   }
 
   private async ctx(req: Request): Promise<StaffContext> {
