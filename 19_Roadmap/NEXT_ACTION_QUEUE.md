@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-13 · **Frontier:** WP-UI-02 (engineering critical path) · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`.
+**Last updated:** 2026-06-13 · **Frontier:** WP-UI-03 (admin parity) — WP-UI-02 complete · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Recommended before more screens: seed demo data so the intake→review→order→payment chain is clickable for UAT (catalog can't be API-seeded — mirror mode).**
 
 ---
 
@@ -31,12 +31,15 @@
 ### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.
 
-### ▶ 2. WP-UI-02 — Daily order action screens · **size M · in progress (02a done) · ELIGIBLE NOW**
+### ✅ 2. WP-UI-02 — Daily order action screens · **DONE 2026-06-13** (02a/b/c/d, PRs #6–#9)
+### ▶ 3. WP-UI-03 — Admin parity screens · **NEXT FRONTIER** (was item 3 below)
 The screens staff live in all day. Each sub-unit = its own branch + visible Playwright e2e (`tools/e2e-staging`). All backing APIs live (WP-API-01 + 01b).
 - ✅ **02a intake draft form — DONE** (PR #6): customer find/create/unverified, package/items, dates, area/slot/method, payment, WhatsApp ref → create → completeness → submit. Playwright 4/4 on staging. `/app/intake`.
 - ✅ **02b review-queue actions — DONE** (PR #7): claim → approve (per-warning overrides) / return / reject with reason codes (`GET /settings/reason-codes` added). Playwright 3/3. `/app/review-queue`.
 - ✅ **02c order detail — DONE** (PR #8): summary + fulfillment days + change-status (cancel w/ reason) + change request + raise exception. Playwright 3/3. `/app/orders`.
-- ▶ **02d payment review queue — NEXT (last 02 sub-unit)**: Finance screen — payment review queue + per-order payment panel, record link-sent, payment status decisions (M07 API: `GET /payment-reviews`, `POST /orders/:id/payments/*`). Then WP-UI-02 is complete (all four daily-ops roles have their screen).
+- ✅ **02d payment review queue — DONE** (PR #9): Finance confirm/reject via `/payment-reviews` (WF-13). Playwright 3/3. `/app/payments`.
+- ✅ **WP-UI-02 COMPLETE** — all four daily-ops roles have their screen.
+  - *Per-order payment actions* (record link-sent, request status change) deferred to WP-UI-03 order-detail enhancement — small follow-up on the existing order screen.
 - **DoD per sub-unit:** admin typecheck/lint/build green in CI; deployed to staging; Playwright green; register run-log entry. **Covers UAT:** WF-01..06, 12, 13, 15.
 - **Staging data gap (cross-cutting):** full happy-path demos (submit a complete draft, approve→order→kitchen) need catalog + ops-master + customer seed data. Catalog is mirror-mode (API writes blocked); area/slot/method are zero-row until the workshop. Resolve via either the pending "seed demo data" approval (SQL/import) or a deliberate `cutover_catalog` flip on staging. Tracked here so UI sub-units don't silently look "empty".
 
