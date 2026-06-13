@@ -135,6 +135,14 @@ export class SettingsService {
     table: 'section_master' | 'area' | 'delivery_slot' | 'delivery_method',
     columns: Record<string, unknown>,
   ): Promise<string> {
+    // Defense in depth: `table` and the column KEYS are interpolated as SQL
+    // identifiers below, so validate them here as well as at the controller.
+    if (!['section_master', 'area', 'delivery_slot', 'delivery_method'].includes(table)) {
+      throw new SettingsError('not_found');
+    }
+    for (const key of Object.keys(columns)) {
+      if (!/^[a-z][a-z0-9_]*$/.test(key)) throw new SettingsError('type_mismatch');
+    }
     const id = newId();
     const cols = ['id', ...Object.keys(columns), 'created_by'];
     const vals = [id, ...Object.values(columns), actor.staffId];

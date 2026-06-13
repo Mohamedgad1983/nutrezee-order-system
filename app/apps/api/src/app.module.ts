@@ -17,7 +17,9 @@ import { SettingsController } from './platform/settings/settings.controller';
 import { FeatureFlagService } from './platform/feature-flags/feature-flag.service';
 import { TransitionEngine } from './platform/transition/transition-engine';
 import { CustomerService } from './modules/m04-customers/customer.service';
+import { CustomerController } from './modules/m04-customers/customer.controller';
 import { CatalogService } from './modules/m05-catalog/catalog.service';
+import { CatalogController } from './modules/m05-catalog/catalog.controller';
 import { DraftController } from './modules/m01-intake/draft.controller';
 import { DraftService } from './modules/m01-intake/draft.service';
 import { ReviewController } from './modules/m02-review/review.controller';
@@ -48,6 +50,7 @@ export const POOL = 'POOL';
 @Module({
   controllers: [
     HealthController, AuthController, StaffController, SettingsController,
+    CustomerController, CatalogController,
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
