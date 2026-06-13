@@ -10,6 +10,7 @@ import { OrdersPage } from './pages/Orders';
 import { PaymentsPage } from './pages/Payments';
 import { CustomersPage } from './pages/Customers';
 import { CatalogPage } from './pages/Catalog';
+import { ReportsPage } from './pages/Reports';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
@@ -72,6 +73,9 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/catalog':
       page = <CatalogPage />;
+      break;
+    case '/app/reports':
+      page = <ReportsPage />;
       break;
     default:
       page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
