@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { CustomerController } from '../../apps/api/src/modules/m04-customers/customer.controller';
 import { CustomerError, type CustomerService } from '../../apps/api/src/modules/m04-customers/customer.service';
+import { MergeError, type MergeService } from '../../apps/api/src/modules/m04-customers/merge.service';
 import type { SessionService, StaffContext } from '../../apps/api/src/platform/auth/session.service';
 import type { AccessService, VisibilityClass } from '../../apps/api/src/platform/rbac/access.service';
 
@@ -14,13 +15,14 @@ const req = { cookies: { nz_session: 'session-1' } } as unknown as Request;
 function controllerWith(
   customers: Partial<CustomerService>,
   grants: VisibilityClass[] = ['pii', 'health', 'payment'],
+  merges: Partial<MergeService> = {},
 ) {
   const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
   const access = {
     decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
     visibilityGrants: vi.fn().mockResolvedValue(new Set<VisibilityClass>(grants)),
   } as unknown as AccessService;
-  return new CustomerController(sessions, customers as CustomerService, access);
+  return new CustomerController(sessions, customers as CustomerService, access, merges as MergeService);
 }
 
 describe('TS-C API contract — customers controller (WP-API-01)', () => {
@@ -129,5 +131,33 @@ describe('TS-C API contract — customers controller (WP-API-01)', () => {
     const c = controllerWith({ addAddress: vi.fn(), setAllergy: vi.fn() });
     await expect(c.addAddress(req, 'c-1', {})).rejects.toBeInstanceOf(BadRequestException);
     await expect(c.setAllergy(req, 'c-1', {})).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('merges two customers via POST /customers/merge (WP-API-02)', async () => {
+    const merge = vi.fn().mockResolvedValue('merge-1');
+    const c = controllerWith({}, ['pii'], { merge });
+    await expect(c.merge(req, { winner_id: 'w', loser_id: 'l' })).resolves.toEqual({ id: 'merge-1' });
+    expect(merge).toHaveBeenCalledWith(ctx, 'w', 'l');
+  });
+
+  it('requires winner_id and loser_id on merge', async () => {
+    const c = controllerWith({}, ['pii'], { merge: vi.fn() });
+    await expect(c.merge(req, { winner_id: 'w' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('maps MergeError: self_merge→400, not_found→404, already_undone→409', async () => {
+    const self = controllerWith({}, ['pii'], { merge: vi.fn().mockRejectedValue(new MergeError('self_merge')) });
+    await expect(self.merge(req, { winner_id: 'x', loser_id: 'x' })).rejects.toBeInstanceOf(BadRequestException);
+    const missing = controllerWith({}, ['pii'], { merge: vi.fn().mockRejectedValue(new MergeError('not_found')) });
+    await expect(missing.merge(req, { winner_id: 'w', loser_id: 'l' })).rejects.toBeInstanceOf(NotFoundException);
+    const undone = controllerWith({}, ['pii'], { undo: vi.fn().mockRejectedValue(new MergeError('already_undone')) });
+    await expect(undone.undoMerge(req, 'm')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('undoes a merge via POST /customers/merge/:id/undo', async () => {
+    const undo = vi.fn().mockResolvedValue(undefined);
+    const c = controllerWith({}, ['pii'], { undo });
+    await expect(c.undoMerge(req, 'merge-1')).resolves.toEqual({ ok: true });
+    expect(undo).toHaveBeenCalledWith(ctx, 'merge-1');
   });
 });

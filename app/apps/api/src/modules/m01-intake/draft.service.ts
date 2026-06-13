@@ -10,6 +10,7 @@ import { newId } from '../../platform/ids';
 import { CustomerService } from '../m04-customers/customer.service';
 import { CatalogService } from '../m05-catalog/catalog.service';
 import { MessageRefError, MessageRefService, type MessageRefInput } from '../m17-whatsapp/message-ref.service';
+import type { RelinkStep } from '../m04-customers/merge.service';
 
 export type DraftChannel = 'whatsapp' | 'phone' | 'walk_in' | 'staff' | 'other';
 export type DraftState = 'open' | 'submitted' | 'returned' | 'converted' | 'rejected' | 'cancelled' | 'expired';
@@ -155,6 +156,28 @@ export class DraftService {
       if (req.subjectType !== 'draft_order') return;
       await this.assertCompleteInTx(client, req.subjectId);
     });
+  }
+
+  // WP-API-02: the customer-merge re-link step for draft_order. Lives here because m01
+  // owns draft_order (single-write-path / ADR-010); MergeService registers it so a live
+  // merge re-points the loser's drafts to the winner (and back on undo).
+  static customerRelinkStep(): RelinkStep {
+    return {
+      name: 'draft_order',
+      merge: async (client, winnerId, loserId) => {
+        const { rows } = await client.query(
+          'UPDATE draft_order SET customer_id = $1, updated_at = now() WHERE customer_id = $2 RETURNING id',
+          [winnerId, loserId],
+        );
+        return rows.map((r) => r.id as string);
+      },
+      undo: async (client, _winnerId, loserId, moved) => {
+        const ids = (moved as string[]) ?? [];
+        if (ids.length > 0) {
+          await client.query('UPDATE draft_order SET customer_id = $1, updated_at = now() WHERE id = ANY($2)', [loserId, ids]);
+        }
+      },
+    };
   }
 
   async createDraft(

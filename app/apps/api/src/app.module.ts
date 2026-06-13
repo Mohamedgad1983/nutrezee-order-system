@@ -20,6 +20,7 @@ import { FeatureFlagService } from './platform/feature-flags/feature-flag.servic
 import { TransitionEngine } from './platform/transition/transition-engine';
 import { CustomerService } from './modules/m04-customers/customer.service';
 import { CustomerController } from './modules/m04-customers/customer.controller';
+import { MergeService } from './modules/m04-customers/merge.service';
 import { CatalogService } from './modules/m05-catalog/catalog.service';
 import { CatalogController } from './modules/m05-catalog/catalog.controller';
 import { DraftController } from './modules/m01-intake/draft.controller';
@@ -115,6 +116,19 @@ export const POOL = 'POOL';
         outbox: OutboxService, settings: SettingsReader,
       ) => new CustomerService(pool, audit, readQueue, outbox, settings),
       inject: [POOL, AuditService, AuditReadQueue, OutboxService, SettingsReader],
+    },
+    {
+      // WP-API-02: MergeService wired with the owning modules' re-link steps (static,
+      // so no DI on Draft/OrderService) — a live merge now re-points draft_order +
+      // customer_order FKs from loser → winner (the gap the boundary test left open).
+      provide: MergeService,
+      useFactory: (pool: Pool, audit: AuditService, outbox: OutboxService, settings: SettingsReader) => {
+        const merges = new MergeService(pool, audit, outbox, settings);
+        merges.registerRelinkStep(DraftService.customerRelinkStep());
+        merges.registerRelinkStep(OrderService.customerRelinkStep());
+        return merges;
+      },
+      inject: [POOL, AuditService, OutboxService, SettingsReader],
     },
     {
       provide: CatalogService,
