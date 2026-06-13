@@ -158,6 +158,28 @@ export class SettingsService {
     return id;
   }
 
+  // WP-API-01b: read ops-masters (sections/areas/slots/methods) for the intake form
+  // and the settings admin screen. Read-only; the column + order lists are a trusted
+  // per-kind map and `kind` is validated against it, so the interpolated table name is
+  // never user-controlled.
+  async listMasters(
+    kind: 'section_master' | 'area' | 'delivery_slot' | 'delivery_method',
+    opts?: { activeOnly?: boolean },
+  ): Promise<Record<string, unknown>[]> {
+    const spec: Record<string, { cols: string; order: string }> = {
+      section_master: { cols: 'id, code, name_en, name_ar, active', order: 'name_en' },
+      area: { cols: 'id, code, name_en, name_ar, active', order: 'name_en' },
+      delivery_slot: { cols: 'id, label_en, label_ar, start_time, end_time, capacity, active', order: 'start_time' },
+      delivery_method: { cols: 'id, name_en, name_ar, active', order: 'name_en' },
+    };
+    const s = spec[kind];
+    if (!s) throw new SettingsError('not_found');
+    const { rows } = await this.pool.query(
+      `SELECT ${s.cols} FROM ${kind} ${opts?.activeOnly ? 'WHERE active' : ''} ORDER BY ${s.order}`,
+    );
+    return rows;
+  }
+
   private async load(key: string): Promise<{ value: unknown; value_type: string }> {
     const { rows } = await this.pool.query('SELECT value, value_type FROM setting WHERE key = $1', [key]);
     if (rows.length === 0) throw new SettingsError('unknown_key');
