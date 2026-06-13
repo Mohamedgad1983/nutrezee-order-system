@@ -6,7 +6,8 @@ import { LoginPage } from './pages/Login';
 import { KitchenBoardPage } from './pages/Kitchen';
 import { IntakePage } from './pages/Intake';
 import { ReviewPage } from './pages/Review';
-import { DraftsPage, OrdersPage } from './pages/lists';
+import { OrdersPage } from './pages/Orders';
+import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
 export function App(): React.JSX.Element {
