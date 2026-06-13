@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-13 · **Frontier:** WP-API-01 (engineering critical path) · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`.
+**Last updated:** 2026-06-13 · **Frontier:** WP-UI-02 (engineering critical path) · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`.
 
 ---
 
@@ -19,6 +19,7 @@
 
 - Phases 1–5 complete. **WP-00 … WP-13 DONE & merged** (all CI-green; see register rows).
 - **WP-UI-01 DONE & merged** — PR #3, merge `b06d646`: login + app shell + sidebar nav (10 sections) + kitchen board + read-only drafts/review-queue/orders lists.
+- **WP-API-01 DONE & merged** — PR #4, merge `f9dcae6` (+ D8 nginx-proxy fix `0c3af5a`): M04 customers controller, M05 catalog-read controller, settings masters/reason-code routes. Deployed + verified on staging. (merge/undo deferred → item 5 below.)
 - **Staging LIVE** at `https://13-140-159-201.sslip.io` (VPS + Caddy TLS); gate ④ both halves ✅; 10/10 smoke; **D1–D7 fixed**. Controlled via the `nutrezee-vps` MCP server (`tools/vps-mcp/`).
 - Legacy core coverage: Orders **B**, Customers/Packages/Products/Reports/Settings **C**, Subscribers **D**. **No module is class A** (browser-operable end-to-end) yet. Detail: `Legacy_Core_Coverage_Matrix.md`.
 
@@ -26,14 +27,10 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ▶ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **size S · blocked_by: none · ELIGIBLE NOW**
-Three HTTP controllers over **already-built, already-tested** services. No schema change. Fulfils two recorded-but-unfilled scope promises (WP-04 "HTTP surface consolidates at WP-07"; WP-03 masters admin).
-- **A1 — M04 customers controller** (`app/apps/api/src/modules/m04-customers/`): `GET /customers?phone=` search, `GET /customers/:id` profile (PII/health masking already in service), `POST /customers` guided-create (dup block/warn), `PATCH /customers/:id`, address + allergy sub-routes, `POST /customers/:id/merge` + undo.
-- **A2 — M05 catalog read controller** (`app/apps/api/src/modules/m05-catalog/`): `GET /catalog/products`, `/catalog/packages`, `/catalog/masters/*` list + detail (read-only while mirror mode holds; no admin writes — `cutover_catalog` still false).
-- **A3 — Masters + reason-code routes** on settings (`app/apps/api/src/platform/settings/`): expose existing `addMaster` (sections/areas/slots/methods) and `addReasonCode` service methods.
-- **DoD:** integration tests (TS-C pattern) green in CI; `no-GET-mutation` + boundary scans pass; masking preserved; CI 14/14. **Unblocks:** WP-UI-02 customer search, WP-UI-03 customers/catalog/settings screens.
+### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
+Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.
 
-### 2. WP-UI-02 — Daily order action screens · **size M · blocked_by: WP-API-01 (customer search)**
+### ▶ 2. WP-UI-02 — Daily order action screens · **size M · blocked_by: none (WP-API-01 done) · ELIGIBLE NOW**
 The screens staff live in all day. Each flow ships with a visible Playwright e2e (`tools/e2e-staging`).
 - Intake draft form: customer search (needs A1), package/items, dates, address, slot/method, payment method, completeness feedback, WhatsApp ref panel — replaces legacy `/orders/create`.
 - Review queue actions: claim + approve/return/reject with warning overrides.
@@ -46,6 +43,11 @@ Customers (list/search, profile PII-gated, guided create, merge review) · catal
 
 ### 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **size M · blocked_by: WP-UI-03, workshop pack (partial)**
 Catalog enrichment editors (nutrition, allergens, routing rules), plus any screen gaps surfaced by UAT. Partly gated on the workshop pack (routing rules need DEC-006 sections content).
+
+### 5. WP-API-02 — Merge/undo wiring + catalog casing · **size S · blocked_by: none · eligible (do before/with WP-UI-03 merge-review screen)**
+Surfaced by WP-API-01:
+- **Merge/undo HTTP**: register `MergeService` as an app provider + wire its FK re-link steps (`draft_order.customer_id`, and audit which other tables reference `customer`) — currently only the test wires them, so a live merge would not re-link draft/order FKs. Then expose `POST /customers/merge` + `POST /customers/merge/:id/undo` (permission `customer.merge`).
+- **Catalog response casing**: catalog read endpoints return camelCase while orders/drafts/kitchen return snake_case — reconcile to one convention before WP-UI-03 consumes catalog (cheap if done first).
 
 ---
 
