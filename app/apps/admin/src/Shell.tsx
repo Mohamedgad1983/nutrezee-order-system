@@ -11,6 +11,7 @@ export interface NavItem {
 // Single source of truth for the sidebar; `live: false` sections render the
 // WP-UI-02 placeholder page until their screen ships.
 export const NAV: NavItem[] = [
+  { path: '/app/dashboard', label: 'Dashboard', live: true },
   { path: '/app/intake', label: 'New intake', live: true },
   { path: '/app/drafts', label: 'Intake drafts', live: true },
   { path: '/app/review-queue', label: 'Review queue', live: true },
