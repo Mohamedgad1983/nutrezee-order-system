@@ -4,7 +4,6 @@ import {
   humanMessage,
   type DraftListItem,
   type ListResponse,
-  type OrderListItem,
 } from '../api';
 
 // Read-only list screens (WP-UI-01). Detail/action screens arrive in WP-UI-02.
@@ -118,53 +117,6 @@ export function DraftsPage(): React.JSX.Element {
               <td>{d.items.length}</td>
               <td>{d.completeness.missing.length === 0 ? '—' : d.completeness.missing.join(', ')}</td>
               <td>{fmtTs(d.submitted_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </ListChrome>
-  );
-}
-
-
-export function OrdersPage(): React.JSX.Element {
-  const [status, setStatus] = useState('');
-  const list = useList<OrderListItem>(() => (status ? `/orders?status=${status}` : '/orders'));
-  return (
-    <ListChrome
-      busy={list.busy}
-      error={list.error}
-      count={list.items.length}
-      emptyText="No orders yet — approved drafts become orders."
-      onReload={list.reload}
-      filter={
-        <label>
-          <span>Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">all</option>
-            {['approved', 'active', 'paused', 'completed', 'expired', 'cancelled', 'rejected'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-      }
-    >
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Order</th><th>Status</th><th>Customer</th><th>Start</th><th>End</th><th>Total</th><th>Source draft</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.items.map((o) => (
-            <tr key={o.id}>
-              <td className="mono">{o.order_number}</td>
-              <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
-              <td className="mono">{shortId(o.customer_id)}</td>
-              <td>{o.start_date}</td>
-              <td>{o.end_date}</td>
-              <td>{typeof o.total === 'number' ? o.total.toLocaleString() : o.total}</td>
-              <td className="mono">{o.source_draft_id ? shortId(o.source_draft_id) : '—'}</td>
             </tr>
           ))}
         </tbody>
