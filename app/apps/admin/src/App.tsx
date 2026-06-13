@@ -12,6 +12,7 @@ import { CustomersPage } from './pages/Customers';
 import { CatalogPage } from './pages/Catalog';
 import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
+import { DashboardPage } from './pages/Dashboard';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
@@ -51,6 +52,9 @@ function Routed(): React.JSX.Element | null {
 
   let page: React.JSX.Element;
   switch (path) {
+    case '/app/dashboard':
+      page = <DashboardPage />;
+      break;
     case '/app/kitchen':
       page = <KitchenBoardPage />;
       break;
