@@ -15,6 +15,7 @@ import { SettingsPage } from './pages/Settings';
 import { DashboardPage } from './pages/Dashboard';
 import { StaffPage } from './pages/Staff';
 import { ExceptionsPage } from './pages/Exceptions';
+import { AuditPage } from './pages/Audit';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
 
@@ -92,6 +93,9 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/exceptions':
       page = <ExceptionsPage />;
+      break;
+    case '/app/audit':
+      page = <AuditPage />;
       break;
     default:
       page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;

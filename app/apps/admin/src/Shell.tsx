@@ -24,7 +24,7 @@ export const NAV: NavItem[] = [
   { path: '/app/reports', label: 'Reports', live: true },
   { path: '/app/staff', label: 'Staff & roles', live: true },
   { path: '/app/settings', label: 'Settings', live: true },
-  { path: '/app/audit', label: 'Audit log', live: false },
+  { path: '/app/audit', label: 'Audit log', live: true },
 ];
 
 export function sectionLabel(path: string): string {
