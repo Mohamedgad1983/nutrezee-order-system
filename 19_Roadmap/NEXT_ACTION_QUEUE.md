@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅ + WP-API-02 ✅; **WP-UI-04 in progress** (04a nutrition enrichment ✅ — PR #29). **Next → WP-UI-04b** (allergen declare editor; routing rules still wait on workshop DEC-006). Then WP-DATA-01/WP-14 are sponsor-gated. ⚠ **GitHub Actions billing-blocked** — code units are being admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). Routing-rule editor remains workshop-gated (DEC-006). **Next eligible engineering (pick one):** customer merge UI (surface WP-API-02), per-order payment actions (WP-UI-02 follow-up), or WP-14 restore drill — beyond these, WP-DATA-01/WP-14 are sponsor-gated. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -55,9 +55,14 @@ The screens staff live in all day. Each sub-unit = its own branch + visible Play
 
 ### ▶ 4. WP-UI-04 — Catalog enrichment + UAT-driven gaps · **IN PROGRESS · size M · blocked_by: workshop pack (routing only)**
 Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`), so editors work with `cutover_catalog=false`.
-- ✅ **04a nutrition — DONE** (PR #29 `7f911d7`): `POST /catalog/products/:id/nutrition` (`catalog.enrich`) + Edit form on the product detail. Visible Playwright 2/2.
-- ▶ **04b — NEXT**: allergen declare editor. `declareAllergen` service method exists but `POST /catalog/products/:id/allergens` has no route (add it, `catalog.enrich`). **Demo-data prerequisite:** the allergen catalog master is empty — seed 1–2 allergens via the M19 import (`{kind:'master', master_table:'allergen', …}`) so the declare dropdown (`GET /catalog/allergens`) is populated, then build the UI (select allergen → declare → resolved-allergens list refreshes).
-- (later) routing-rule editor — gated on workshop DEC-006 sections content; leave zero-row-ready.
+- ✅ **04a nutrition — DONE** (PR #29 `7f911d7`): `POST /catalog/products/:id/nutrition` + Edit form on the product detail. Visible Playwright 2/2.
+- ✅ **04b allergens — DONE** (PR #31 `ed18791`): `POST /catalog/products/:id/allergens` + AllergenDeclarer on the product detail (dropdown from `GET /catalog/allergens`, seeded Peanuts/Gluten/Dairy via M19 import). Visible Playwright 3/3. **→ WP-UI-04 enrichment editors complete.**
+- ⏸ **04c routing-rule editor — BLOCKED on workshop DEC-006** (sections content). Build the engine zero-row-ready when content lands.
+
+### ▶ Next eligible engineering (no sponsor/workshop block) — pick the smallest-demonstrable
+- **Customer merge UI** — surface the WP-API-02 merge/undo API on the customers screen (search two customers → pick winner/loser → merge → undo). Fully demonstrable (5 seeded customers); the only "deferred from WP-UI-03a" item.
+- **Per-order payment actions** — record link-sent + request status change on the order/payment screen (WP-UI-02 follow-up; APIs live: `POST /orders/:id/payments/link-sent`, `/status-requests`).
+- **WP-14 restore drill** — operational: restore a nightly `pg_dump` to a throwaway DB and verify integrity (the one WP-14 entry item that's pure engineering).
 
 ### ✅ 5. WP-API-02 — Merge/undo wiring + catalog casing · **DONE 2026-06-13** (PR #26 `57fc41b`)
 Merge/undo wired (static owning-module re-link steps for draft_order/customer_order, registered on MergeService; `POST /customers/merge` + `/merge/:id/undo`, ops-only; live smoke ✅). **Catalog casing deferred** — the catalog UI already consumes camelCase; reconciling would churn a live screen for no gain (low-priority cleanup, not blocking). Original scope:
