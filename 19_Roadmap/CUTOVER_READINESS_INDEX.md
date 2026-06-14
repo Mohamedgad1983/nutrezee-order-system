@@ -47,7 +47,7 @@ Legend: 🟢 ready/done · 🟡 ready, awaiting an external input to execute · 
 | Operations runbook | 🟢 ready | `16_Deployment/operations_runbook.md` |
 | Backup/restore | 🟢 drill proven 2026-06-14 | `operations_runbook.md §3` (MG-E1 closed) |
 | Monitoring/alerting | 🟡 manual now; wire before go-live | `operations_runbook.md §2` (MG-E7) |
-| Perf baseline | 🟡 to author | (MG-E3) |
+| Perf baseline | 🟡 app-tier done; DB/authed/load pending | `16_Deployment/perf_baseline.md` (MG-E3) |
 | Support/hypercare plan | 🟢 ready | `16_Deployment/support_hypercare_plan.md` |
 | Go-live checklist + DEC-013 pack | 🟢 template ready | `16_Deployment/go_live_checklist.md` |
 | Production environment | 🔴 needs S3 decision | `environment_plan.md §1` (MG-E6) |
@@ -69,7 +69,7 @@ Legend: 🟢 ready/done · 🟡 ready, awaiting an external input to execute · 
 | **A. Migration** | `10_Data_Model/`: `migration_gap_register.md`, `migration_entity_calibration_playbook.md`, `migration_execution_runbook.md`, `migration_execution_plan.md`, `migration_mapping.md` · `tools/legacy-migration/reports/extraction-validation-record.md` |
 | **B. UAT** | `15_Testing/`: `uat_pack.md`, `uat_execution_log.md`, `test_strategy.md` · `tools/e2e-staging/` |
 | **C. Pilot** | `16_Deployment/`: `cutover_checklist.md`, `rollback_checklist.md`, `pilot_plan.md` |
-| **D. Production** | `16_Deployment/`: `operations_runbook.md`, `support_hypercare_plan.md`, `go_live_checklist.md`, `environment_plan.md`, `staging_provisioning_checklist.md` |
+| **D. Production** | `16_Deployment/`: `operations_runbook.md`, `support_hypercare_plan.md`, `go_live_checklist.md`, `perf_baseline.md`, `environment_plan.md`, `staging_provisioning_checklist.md` |
 | **Sponsor** | `22_Meeting_Notes/`: `SPONSOR_DECISION_PACK.md`, `sponsor_review_package_unresolved_business_questions.md`, `verification_workshop_agenda.md` |
 | **Tie-back** | `19_Roadmap/`: this file, `Legacy_Core_Gap_To_Cutover.md`, `NEXT_ACTION_QUEUE.md`, `build_progress_register.md` |
 
