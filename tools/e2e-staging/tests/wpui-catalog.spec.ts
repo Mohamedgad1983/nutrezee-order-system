@@ -81,3 +81,33 @@ test('catalog — edit product nutrition (enrichment)', async ({ page }) => {
 
   expect(crashes, `client crashes: ${crashes.join(' | ')}`).toHaveLength(0);
 });
+
+// WP-UI-04b — declare an allergen on a product (POST /catalog/products/:id/allergens).
+// The allergen catalog master was seeded (Peanuts/Gluten/Dairy) so the dropdown is populated.
+test('catalog — declare a product allergen (enrichment)', async ({ page }) => {
+  const crashes: string[] = [];
+  page.on('pageerror', (e) => crashes.push(e.message));
+
+  await signIn(page);
+  await page.getByRole('link', { name: 'Catalog' }).click();
+  await page.getByRole('row', { name: /Grilled Chicken Kabsa/ }).getByRole('button', { name: 'Open' }).click();
+  const panel = page.locator('.reviewPanel');
+  await expect(panel.getByRole('heading', { name: 'Grilled Chicken Kabsa' })).toBeVisible();
+
+  // pick the first available (not-yet-declared) allergen — keeps the test repeatable
+  const select = panel.locator('select');
+  await expect(select).toBeVisible();
+  const firstOpt = ((await select.locator('option').nth(1).textContent()) ?? '').trim();
+  expect(firstOpt.length, 'allergen dropdown should be populated (master seeded)').toBeGreaterThan(0);
+
+  await select.selectOption({ index: 1 });
+  const declared = page.waitForResponse((r) => /\/catalog\/products\/.+\/allergens$/.test(r.url()) && r.request().method() === 'POST');
+  await panel.getByRole('button', { name: 'Declare' }).click();
+  expect((await declared).status()).toBe(200);
+
+  // the resolved-allergens list now shows it
+  await expect(panel.locator('.hits')).toContainText(firstOpt);
+  await page.screenshot({ path: `${SHOTS}/07-allergen-declared.png`, fullPage: true });
+
+  expect(crashes, `client crashes: ${crashes.join(' | ')}`).toHaveLength(0);
+});

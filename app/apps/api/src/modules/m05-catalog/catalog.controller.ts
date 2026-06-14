@@ -124,6 +124,19 @@ export class CatalogController {
     return { ok: true };
   }
 
+  // WP-UI-04b: declare an allergen on a product (enrichment, bypasses mirror mode).
+  // POST coexists with GET products/:id/allergens (different method). catalog.enrich.
+  @Post('products/:id/allergens')
+  @HttpCode(200)
+  async declareAllergen(@Req() req: Request, @Param('id') id: string, @Body() body: { allergen_id?: string }) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'catalog.enrich');
+    if (!body?.allergen_id) throw new BadRequestException({ error_code: 'validation_failed', field: 'allergen_id' });
+    if (!(await this.catalog.getProduct(id))) throw new NotFoundException({ error_code: 'not_found' });
+    await this.catalog.declareAllergen(ctx, id, body.allergen_id);
+    return { ok: true };
+  }
+
   private async authorize(req: Request): Promise<StaffContext> {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'catalog.read');

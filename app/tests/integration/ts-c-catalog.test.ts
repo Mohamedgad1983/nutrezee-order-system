@@ -80,4 +80,17 @@ describe('TS-C API contract — catalog read controller (WP-API-01)', () => {
     const missing = controllerWith({ getProduct: vi.fn().mockResolvedValue(null), setNutrition: vi.fn() });
     await expect(missing.setNutrition(req, 'nope', { calories: 1 })).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('declares an allergen (enrichment), 400 without allergen_id, 404 when product missing (WP-UI-04b)', async () => {
+    const declareAllergen = vi.fn().mockResolvedValue(undefined);
+    const c = controllerWith({ getProduct: vi.fn().mockResolvedValue({ id: 'p-1' }), declareAllergen });
+    await expect(c.declareAllergen(req, 'p-1', { allergen_id: 'a-1' })).resolves.toEqual({ ok: true });
+    expect(declareAllergen).toHaveBeenCalledWith(ctx, 'p-1', 'a-1');
+
+    const noId = controllerWith({ getProduct: vi.fn().mockResolvedValue({ id: 'p-1' }), declareAllergen: vi.fn() });
+    await expect(noId.declareAllergen(req, 'p-1', {})).rejects.toBeInstanceOf(BadRequestException);
+
+    const missing = controllerWith({ getProduct: vi.fn().mockResolvedValue(null), declareAllergen: vi.fn() });
+    await expect(missing.declareAllergen(req, 'nope', { allergen_id: 'a-1' })).rejects.toBeInstanceOf(NotFoundException);
+  });
 });

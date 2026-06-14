@@ -161,9 +161,49 @@ function ProductDetail({ id, onClose }: { id: string; onClose: () => void }): Re
             {data.allergens.map((a) => <li key={a.allergenId}><span>{a.nameEn} · {a.source === 'declared' ? 'declared' : 'from ingredient'}</span></li>)}
             {data.allergens.length === 0 ? <li><span>none resolved</span></li> : null}
           </ul>
+          <AllergenDeclarer productId={id} declared={new Set(data.allergens.map((a) => a.allergenId))} onDeclared={load} />
         </>
       ) : null}
     </section>
+  );
+}
+
+function AllergenDeclarer({ productId, declared, onDeclared }: {
+  productId: string; declared: Set<string>; onDeclared: () => void;
+}): React.JSX.Element {
+  const [options, setOptions] = useState<Array<{ id: string; nameEn: string }>>([]);
+  const [sel, setSel] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ items: Array<{ id: string; nameEn: string }> }>('/catalog/allergens')
+      .then((d) => setOptions(d.items))
+      .catch(() => setOptions([]));
+  }, []);
+
+  async function declare(): Promise<void> {
+    if (!sel) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/catalog/products/${productId}/allergens`, { method: 'POST', body: JSON.stringify({ allergen_id: sel }) });
+      setSel('');
+      onDeclared();
+    } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+
+  const avail = options.filter((o) => !declared.has(o.id));
+  return (
+    <div className="row" style={{ marginTop: 6, alignItems: 'center', gap: 8 }}>
+      <select value={sel} onChange={(e) => setSel(e.target.value)} disabled={busy}>
+        <option value="">— declare allergen —</option>
+        {avail.map((o) => <option key={o.id} value={o.id}>{o.nameEn}</option>)}
+      </select>
+      <button type="button" disabled={busy || !sel} onClick={() => void declare()}>Declare</button>
+      {options.length === 0 ? <span className="hintLine">No allergens in the catalog master yet (seed via import).</span> : null}
+      {error ? <span className="error">{error}</span> : null}
+    </div>
   );
 }
 
