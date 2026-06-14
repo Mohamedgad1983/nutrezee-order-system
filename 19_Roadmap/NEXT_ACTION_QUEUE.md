@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). + **WP-UI-05 merge UI ✅** (#33) + **WP-UI-06 per-order payment actions ✅** (#35). Routing-rule editor remains workshop-gated (DEC-006). **Last unblocked engineering item → WP-14 restore drill** (operational). After it, the frontier is fully sponsor/workshop-gated. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). + **WP-UI-05 merge UI ✅** (#33), **WP-UI-06 payment actions ✅** (#35), **WP-14 restore drill ✅** (2026-06-14, backups verified recoverable). **🛑 ENGINEERING FRONTIER EXHAUSTED** — no unblocked build/ops work remains. Everything left is **sponsor/workshop-gated** (see below). The OS should now HOLD and report this, not invent scope. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -61,8 +61,16 @@ Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`
 
 ### ▶ Next eligible engineering (no sponsor/workshop block) — last 1–2 units before the wall
 - ✅ **Customer merge UI — DONE** (PR #33 `0e3cd53`).
-- ✅ **Per-order payment actions — DONE** (PR #35 `5b5a0fb`): Payment tab on the order detail (record link-sent + request status change → Finance). Visible Playwright 1/1 + smoke.
-- ▶ **WP-14 restore drill — LAST unblocked unit**: restore a nightly `pg_dump` (`/opt/nutrezee/backups/`) into a throwaway DB on the VPS and verify integrity (row counts / a sample query), via the `nutrezee-vps` MCP. Closes the one pure-engineering WP-14 entry item.
+- ✅ **Per-order payment actions — DONE** (PR #35 `5b5a0fb`).
+- ✅ **WP-14 restore drill — DONE** (2026-06-14): latest nightly dump restored to a throwaway DB, schema 13/13 + 62/62 tables + data intact, dropped; live untouched. Backups proven recoverable.
+
+### 🛑 ENGINEERING FRONTIER EXHAUSTED — what the OS is now waiting on (sponsor/workshop)
+The OS has built every unit that does not require external inputs. To proceed, **the sponsor/workshop must supply** (see `Legacy_Core_Gap_To_Cutover.md` §3 and `wp14_blocker_report.md`):
+- **S1 — legacy export / DB access** → unblocks WP-DATA-01 (real Batch 1/2 migration), then cutover. The single biggest gate.
+- **S2 — workshop pack** → DEC-006 kitchen-routing content (→ routing-rule editor 04c), L1/L2 validator semantics, S8 RBAC matrix sign-off, UAT values, ASM-001..050 sign-off.
+- **WP-14 pilot** → restore drill done; remaining entry items are workshop/sponsor-owned + the UAT run itself.
+**Also operational (user, not engineering):** clear the GitHub Actions billing block so PRs get a real CI gate again.
+On the next `Continue Nutrezee OS Agent`, the correct OS behaviour is to **report this hold**, not fabricate work.
 
 > **After these two, the engineering frontier is exhausted** — all remaining work (WP-DATA-01 real migration, routing content, RBAC sign-off, the rest of WP-14 UAT/pilot) needs sponsor legacy-export access (S1) or the workshop pack (S2). See `Legacy_Core_Gap_To_Cutover.md` §3.
 
