@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). Routing-rule editor remains workshop-gated (DEC-006). **Next eligible engineering (pick one):** customer merge UI (surface WP-API-02), per-order payment actions (WP-UI-02 follow-up), or WP-14 restore drill — beyond these, WP-DATA-01/WP-14 are sponsor-gated. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). + **WP-UI-05 customer merge UI ✅** (PR #33). Routing-rule editor remains workshop-gated (DEC-006). **Next eligible engineering (pick one, then the frontier is sponsor/workshop-gated):** per-order payment actions (WP-UI-02 follow-up) or WP-14 restore drill. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -59,10 +59,12 @@ Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`
 - ✅ **04b allergens — DONE** (PR #31 `ed18791`): `POST /catalog/products/:id/allergens` + AllergenDeclarer on the product detail (dropdown from `GET /catalog/allergens`, seeded Peanuts/Gluten/Dairy via M19 import). Visible Playwright 3/3. **→ WP-UI-04 enrichment editors complete.**
 - ⏸ **04c routing-rule editor — BLOCKED on workshop DEC-006** (sections content). Build the engine zero-row-ready when content lands.
 
-### ▶ Next eligible engineering (no sponsor/workshop block) — pick the smallest-demonstrable
-- **Customer merge UI** — surface the WP-API-02 merge/undo API on the customers screen (search two customers → pick winner/loser → merge → undo). Fully demonstrable (5 seeded customers); the only "deferred from WP-UI-03a" item.
-- **Per-order payment actions** — record link-sent + request status change on the order/payment screen (WP-UI-02 follow-up; APIs live: `POST /orders/:id/payments/link-sent`, `/status-requests`).
-- **WP-14 restore drill** — operational: restore a nightly `pg_dump` to a throwaway DB and verify integrity (the one WP-14 entry item that's pure engineering).
+### ▶ Next eligible engineering (no sponsor/workshop block) — last 1–2 units before the wall
+- ✅ **Customer merge UI — DONE** (PR #33 `0e3cd53`): merge/undo over WP-API-02 on the customers screen. Visible Playwright 1/1.
+- **Per-order payment actions** — record link-sent + request status change on the order/payment screen (WP-UI-02 follow-up; APIs live: `POST /orders/:id/payments/link-sent`, `/status-requests`). UI-only.
+- **WP-14 restore drill** — operational: restore a nightly `pg_dump` to a throwaway DB and verify integrity (the one WP-14 entry item that's pure engineering; needs the `nutrezee-vps` MCP).
+
+> **After these two, the engineering frontier is exhausted** — all remaining work (WP-DATA-01 real migration, routing content, RBAC sign-off, the rest of WP-14 UAT/pilot) needs sponsor legacy-export access (S1) or the workshop pack (S2). See `Legacy_Core_Gap_To_Cutover.md` §3.
 
 ### ✅ 5. WP-API-02 — Merge/undo wiring + catalog casing · **DONE 2026-06-13** (PR #26 `57fc41b`)
 Merge/undo wired (static owning-module re-link steps for draft_order/customer_order, registered on MergeService; `POST /customers/merge` + `/merge/:id/undo`, ops-only; live smoke ✅). **Catalog casing deferred** — the catalog UI already consumes camelCase; reconciling would churn a live screen for no gain (low-priority cleanup, not blocking). Original scope:
