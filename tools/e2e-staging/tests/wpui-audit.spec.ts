@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const EMAIL = 'mohamedgad8092@gmail.com';
-const PASSWORD = '07sYXr0UDIWuyuOfjeXY';
+const EMAIL = process.env.E2E_EMAIL ?? '';
+const PASSWORD = process.env.E2E_PASSWORD ?? '';
 const SHOTS = 'shots-audit';
 
 test.describe.configure({ mode: 'serial' });

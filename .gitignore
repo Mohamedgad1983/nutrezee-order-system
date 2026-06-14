@@ -12,3 +12,17 @@ nutrezee-step-1-discovery/
 
 # Node (root stray-run protection; app/ has its own)
 node_modules/
+
+# Local agent / tooling config (never commit — may hold local perms/secrets)
+.claude/
+.github/skills/
+skills-lock.json
+
+# Secret material — defense in depth so credentials can never be added by accident
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+*-service-account*.json
+*.local

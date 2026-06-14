@@ -1,0 +1,16 @@
+# Pre-commit hooks. One-time setup per clone:
+#   pip install pre-commit      # or: brew install pre-commit
+#   pre-commit install          # installs the git hook
+#
+# After that, `gitleaks` scans every commit's staged changes and BLOCKS the commit
+# if a secret (API key, password, token, private key, …) is detected. This is the
+# guard against re-introducing the kind of hardcoded credential found before the
+# repo went public.
+#
+# Manual full-history scan (run anytime):
+#   gitleaks detect --source . --log-opts="--all" --no-banner
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
