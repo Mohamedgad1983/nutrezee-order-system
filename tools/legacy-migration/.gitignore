@@ -1,0 +1,16 @@
+# Toolkit-local ignores (root .gitignore also covers migration-output/ + secrets).
+node_modules/
+migration-output/
+
+# Calibrated local config (may differ per environment) — config.example.json is the
+# committed reference. Credentials NEVER live here (env vars only), but keep it local.
+config.json
+
+# Secrets / env
+*.legacy-secrets.json
+.env
+.env.*
+
+# Playwright/test artefacts
+playwright-report/
+test-results/

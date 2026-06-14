@@ -1,0 +1,23 @@
+<!--
+  Mock legacy "customers" list page. SYNTHETIC data only.
+  Use this to calibrate config.json selectors WITHOUT touching the live legacy system:
+  serve it locally and point LEGACY_BASE_URL at it, or open it in Playwright codegen to
+  confirm rowSelector="table tbody tr" and the td:nth-child column map. No real PII.
+-->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Legacy · Users</title></head>
+<body>
+  <nav><a href="#">Dashboard</a></nav>
+  <h1>Users</h1>
+  <table id="users">
+    <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th>DOB</th></tr></thead>
+    <tbody>
+      <tr><td>1001</td><td>Sara Al-Rashed</td><td>0561234567</td><td>sara@example.com</td><td>1990-04-12</td></tr>
+      <tr><td>1002</td><td>سارة الراشد</td><td>00966551112233</td><td></td><td>bad-date</td></tr>
+      <tr><td>1003</td><td>John Doe</td><td>12345</td><td>john@example.com</td><td>1985-01-01</td></tr>
+    </tbody>
+  </table>
+  <a rel="next" href="#">Next</a>
+</body>
+</html>

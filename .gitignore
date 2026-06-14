@@ -26,3 +26,9 @@ skills-lock.json
 credentials*.json
 *-service-account*.json
 *.local
+
+# Legacy migration toolkit — NEVER commit extracted customer/order data or its secrets
+migration-output/
+*.legacy-secrets.json
+.env.legacy
+.env.migration

@@ -1,0 +1,22 @@
+{
+  "name": "nutrezee-legacy-migration",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Read-only legacy→new data extraction, normalization and comparison toolkit (Playwright). Dry-run / extraction / comparison only — NEVER imports or mutates.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "legacy:migration:dry-run": "tsx cli.ts --dry-run",
+    "legacy:migration:extract": "tsx cli.ts --extract",
+    "legacy:migration:compare": "tsx cli.ts --compare",
+    "legacy:migration:report": "tsx cli.ts --report-only"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.21",
+    "playwright": "^1.49.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0"
+  }
+}
