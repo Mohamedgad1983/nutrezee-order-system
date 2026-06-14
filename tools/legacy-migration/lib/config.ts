@@ -29,6 +29,10 @@ export interface MigrationConfig {
     emailEnv: string;
     passwordEnv: string;
     loginPath: string;
+    /** POST URLs/patterns allowed during the short auth-only phase. */
+    authPostAllowlist: string[];
+    /** Read-only GET URLs/patterns allowed even if they contain dangerous words. */
+    readOnlyGetAllowlist: string[];
     emailSelector: string;
     passwordSelector: string;
     submitSelector: string;
@@ -60,7 +64,10 @@ export interface ResolvedSecrets {
 export function loadConfig(path = 'config.json'): MigrationConfig {
   const file = existsSync(path) ? path : 'config.example.json';
   if (file !== path) log.warn(`config.json not found — using ${file} (legacy selectors are placeholders).`);
-  return JSON.parse(readFileSync(file, 'utf8')) as MigrationConfig;
+  const cfg = JSON.parse(readFileSync(file, 'utf8')) as MigrationConfig;
+  cfg.legacy.authPostAllowlist ??= [cfg.legacy.loginPath];
+  cfg.legacy.readOnlyGetAllowlist ??= [];
+  return cfg;
 }
 
 /** Resolve credentials from env vars ONLY. Never read from config/files. */

@@ -14,8 +14,11 @@ never mutates anything.
 
 ✅ Safe (what this toolkit does):
 - Logs in with **credentials from environment variables only** (never hardcoded, never bypassed).
-- Drives the **legacy context with a network-level READ-ONLY guard**: every `POST/PUT/PATCH/DELETE` is aborted, so legacy data cannot be mutated even by accident.
-- Refuses to click any `save/update/delete/confirm/submit/…` control (DOM guard).
+- Starts the legacy browser in **auth-only mode**: the only mutating request allowed is a `POST` to a configured login URL/pattern.
+- Switches the legacy browser to **strict read-only mode** immediately after login: every later `POST/PUT/PATCH/DELETE` is aborted.
+- Blocks dangerous same-origin legacy `GET` URLs containing mutation words such as `delete`, `remove`, `destroy`, `update`, `save`, `approve`, `reject`, `cancel`, `assign`, `autoassign`, `confirm`, `payment`, `paid`, `status`, or `action` unless a verified read-only allowlist entry matches.
+- Refuses to click any `save/update/delete/confirm/submit/…` control, or links to dangerous legacy GET URLs (DOM guard).
+- Blocks extraction for any entity with `calibrated:false`; the report shows `NEEDS_CALIBRATION` and no placeholder legacy route is visited.
 - Throttles navigation, retries with backoff, screenshots for evidence, **redacts secrets & PII in all logs**.
 - Writes outputs to `migration-output/` (gitignored) — raw + normalized + CSV + reports.
 
@@ -50,8 +53,18 @@ npm install
 cp config.example.json config.json
 # Once legacy access is granted: open the real legacy screens (Playwright codegen helps)
 # and fix each entity's `path`, `rowSelector`, `nextPageSelector`, `columns`. Then set
-# that entity's "calibrated": true. Use fixtures/mock-legacy-customers.html to practice.
+# that entity's "calibrated": true. Uncalibrated entities are skipped before navigation
+# and reported as NEEDS_CALIBRATION. Use fixtures/mock-legacy-customers.html to practice.
 ```
+
+`legacy.authPostAllowlist` must contain only the login POST target(s), normally `"/login"`.
+During auth, all other `POST/PUT/PATCH/DELETE` requests are blocked. After login, the
+context switches to strict read-only and the login POST is blocked too.
+
+`legacy.readOnlyGetAllowlist` is intentionally narrow. Add an entry only when a URL has
+been manually verified as read-only but contains a blocked token such as `payment`,
+`status`, or `action`. Entries can be exact paths such as `"/masters/payment-methods"` or
+prefixes ending in `*`; never allowlist broad action namespaces.
 
 ## 3. Run
 
@@ -63,8 +76,8 @@ npm test                            # unit tests (normalizers + comparators)
 npm run typecheck
 ```
 
-Without legacy credentials, the dry-run still runs end-to-end and produces a
-**readiness report** telling you exactly what to provide — it just extracts 0 rows.
+Without legacy credentials or calibrated selectors, the dry-run still runs end-to-end and
+produces a **readiness report** telling you exactly what to provide — it extracts 0 rows.
 
 ## 4. Where outputs go
 
@@ -88,7 +101,8 @@ migration-output/<timestamp>/
 - `INFERRED` — mapped but with an assumption (e.g. derived end-date).
 - `NEEDS_MANUAL_REVIEW` — unparseable / ambiguous / out-of-scope. **Never auto-imported.**
 
-Uncalibrated entities are auto-downgraded to `NEEDS_MANUAL_REVIEW`.
+Uncalibrated entities are not extracted. They are reported as `NEEDS_CALIBRATION` before
+any legacy page navigation occurs.
 
 ## 6. How to review the reports
 

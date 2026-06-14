@@ -17,6 +17,7 @@ export interface ExtractCtx {
   navTimeoutMs: number;
   screenshotDir: string;
   baseUrl: string;
+  readOnlyGetAllowlist: string[];
 }
 
 export type NormalizeFn = (raw: RawRow[]) => NormalizedRecord[];
@@ -54,7 +55,10 @@ async function scrape(page: Page, entity: EntityKey, cfg: EntityConfig, ctx: Ext
     const more = (await next.isVisible().catch(() => false)) && (await next.isEnabled().catch(() => false));
     if (!more) break;
     await throttle(ctx.throttleMs);                 // never scrape aggressively
-    await safeClick(page, cfg.nextPageSelector);     // pagination is non-mutating; guard re-checks
+    await safeClick(page, cfg.nextPageSelector, {
+      baseUrl: ctx.baseUrl,
+      readOnlyGetAllowlist: ctx.readOnlyGetAllowlist,
+    });                                             // pagination is non-mutating; guard re-checks
     await page.waitForLoadState('domcontentloaded').catch(() => undefined);
   }
   log.info(`[${entity}] ${raw.length} rows across ${pageNo + 1} page(s)`);
@@ -70,17 +74,19 @@ function rollup(normalized: NormalizedRecord[]): Record<Confidence, number> {
 /** Build a thin extractor for `entity` that scrapes then runs `normalize`. */
 export function defineExtractor(entity: EntityKey, normalize: NormalizeFn) {
   return async (page: Page, cfg: EntityConfig, ctx: ExtractCtx): Promise<ExtractionResult> => {
+    if (!cfg.calibrated) {
+      return {
+        entity, status: 'NEEDS_CALIBRATION', source: cfg.path, extracted_at: new Date().toISOString(),
+        row_count: 0, raw: [], normalized: [],
+        confidence_breakdown: { VERIFIED: 0, INFERRED: 0, NEEDS_MANUAL_REVIEW: 0 },
+        pages: 0, screenshots: [], dry_run: ctx.dryRun,
+        skipped_reason: 'selector config not calibrated; no legacy route visited',
+      };
+    }
     const { raw, pages, screenshots } = await scrape(page, entity, cfg, ctx);
     const normalized = normalize(raw);
-    // If the entity isn't calibrated, downgrade every row to manual review (selectors unproven).
-    if (!cfg.calibrated) {
-      for (const n of normalized) {
-        if (n.confidence === 'VERIFIED') n.confidence = 'NEEDS_MANUAL_REVIEW';
-        n.notes.push('entity not calibrated to live legacy DOM — verify selectors before trusting');
-      }
-    }
     return {
-      entity, source: cfg.path, extracted_at: new Date().toISOString(),
+      entity, status: 'OK', source: cfg.path, extracted_at: new Date().toISOString(),
       row_count: raw.length, raw, normalized,
       confidence_breakdown: rollup(normalized), pages, screenshots, dry_run: ctx.dryRun,
     };

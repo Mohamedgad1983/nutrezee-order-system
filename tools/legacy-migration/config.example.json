@@ -1,10 +1,14 @@
 {
-  "_comment": "Copy to config.json and CALIBRATE the per-entity rowSelector/columns against the live legacy DOM once access is granted. Credentials come from ENV VARS ONLY (never put them here). Every entity ships calibrated:false until verified.",
+  "_comment": "Copy to config.json and CALIBRATE the per-entity rowSelector/columns against the live legacy DOM once access is granted. Credentials come from ENV VARS ONLY (never put them here). Every entity ships calibrated:false and will not be visited until verified. Auth POST allowlist is only for the short login phase; readOnlyGetAllowlist is only for verified read-only GET URLs that contain blocked words such as payment/status/action.",
   "legacy": {
     "baseUrlEnv": "LEGACY_BASE_URL",
     "emailEnv": "LEGACY_ADMIN_EMAIL",
     "passwordEnv": "LEGACY_ADMIN_PASSWORD",
     "loginPath": "/login",
+    "authPostAllowlist": ["/login"],
+    "readOnlyGetAllowlist": [
+      "/masters/payment-methods"
+    ],
     "emailSelector": "input[name='email']",
     "passwordSelector": "input[name='password']",
     "submitSelector": "button[type='submit']",

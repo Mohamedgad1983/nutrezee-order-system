@@ -12,10 +12,10 @@ import { launchContexts } from './lib/browser.ts';
 import { loginLegacy } from './legacy-login.ts';
 import { NewApiClient } from './lib/new-api.ts';
 import { runDir, writeExtraction, writeReport, writeJson } from './lib/io.ts';
-import { throttle } from './lib/safety.ts';
+import { installLegacySafety, throttle } from './lib/safety.ts';
 import { log } from './lib/logger.ts';
 import { extractionSummary, coverageReport, readinessReport } from './lib/reports.ts';
-import type { EntityKey, ExtractionResult, ComparisonResult } from './lib/types.ts';
+import type { EntityKey, ExtractionResult, ComparisonResult, ExtractionStatus } from './lib/types.ts';
 
 import { extractCustomers } from './extractors/customers.extractor.ts';
 import { extractOrders } from './extractors/orders.extractor.ts';
@@ -46,9 +46,14 @@ const REGISTRY: Array<{ entity: EntityKey; run: typeof extractCustomers }> = [
   { entity: 'reports', run: extractReports },
 ];
 
-function emptyResult(entity: EntityKey, source: string, reason: string): ExtractionResult {
+function emptyResult(
+  entity: EntityKey,
+  source: string,
+  reason: string,
+  status: ExtractionStatus = 'SKIPPED',
+): ExtractionResult {
   return {
-    entity, source, extracted_at: new Date().toISOString(), row_count: 0, raw: [], normalized: [],
+    entity, status, source, extracted_at: new Date().toISOString(), row_count: 0, raw: [], normalized: [],
     confidence_breakdown: { VERIFIED: 0, INFERRED: 0, NEEDS_MANUAL_REVIEW: 0 },
     pages: 0, screenshots: [], dry_run: true, skipped_reason: reason,
   };
@@ -74,12 +79,25 @@ async function main(): Promise<void> {
   const extractions: ExtractionResult[] = [];
   let contexts: Awaited<ReturnType<typeof launchContexts>> | undefined;
   let legacyPage;
+  const calibratedEntities = REGISTRY.filter(({ entity }) => cfg.entities[entity]?.calibrated);
 
-  if (doExtract && legacyAvailable) {
+  if (doExtract && legacyAvailable && calibratedEntities.length > 0) {
     contexts = await launchContexts({ headed: !!process.env.MIGRATION_HEADED, navTimeoutMs: cfg.navTimeoutMs });
+    const legacySafety = await installLegacySafety(contexts.legacy, {
+      baseUrl: secrets.legacyBaseUrl!,
+      authPostAllowlist: cfg.legacy.authPostAllowlist,
+      readOnlyGetAllowlist: cfg.legacy.readOnlyGetAllowlist,
+    });
+    log.info('legacy context launched with AUTH-ONLY safety guard');
     legacyPage = await loginLegacy(contexts.legacy, cfg, secrets);
+    legacySafety.enableStrictReadOnly();
+    log.info('legacy context switched to STRICT READ-ONLY mode');
   } else if (doExtract) {
-    log.warn('extraction skipped — legacy access not provided. Producing scaffold reports only.');
+    log.warn(
+      legacyAvailable
+        ? 'extraction skipped — no entity is calibrated. Producing NEEDS_CALIBRATION reports only.'
+        : 'extraction skipped — legacy access not provided. Producing scaffold reports only.',
+    );
   }
 
   if (doExtract) {
@@ -89,17 +107,26 @@ async function main(): Promise<void> {
         extractions.push(emptyResult(entity, ecfg?.path ?? '(no config)', !legacyAvailable ? 'legacy access not provided' : 'no entity config'));
         continue;
       }
+      if (!ecfg.calibrated) {
+        extractions.push(emptyResult(entity, ecfg.path, 'selector config not calibrated; no legacy route visited', 'NEEDS_CALIBRATION'));
+        continue;
+      }
+      if (!legacyPage) {
+        extractions.push(emptyResult(entity, ecfg.path, 'legacy browser not started', 'SKIPPED'));
+        continue;
+      }
       const ctx = {
         dryRun, throttleMs: cfg.throttleMs, retries: cfg.retries, retryBackoffMs: cfg.retryBackoffMs,
         navTimeoutMs: cfg.navTimeoutMs, screenshotDir: join(dir, 'screenshots'), baseUrl: secrets.legacyBaseUrl!,
+        readOnlyGetAllowlist: cfg.legacy.readOnlyGetAllowlist,
       };
       try {
-        const result = await run(legacyPage!, ecfg, ctx);
+        const result = await run(legacyPage, ecfg, ctx);
         extractions.push(result);
         writeExtraction(dir, result);
       } catch (e) {
         log.error(`[${entity}] extraction error: ${String(e)}`);
-        extractions.push(emptyResult(entity, ecfg.path, `error: ${String(e)}`));
+        extractions.push(emptyResult(entity, ecfg.path, `error: ${String(e)}`, 'ERROR'));
       }
       await throttle(cfg.throttleMs);
     }
@@ -128,7 +155,7 @@ async function main(): Promise<void> {
   writeReport(dir, 'migration-readiness-report.md', readinessReport(exForReport, comparisons, { legacyAvailable, newAvailable }));
   writeJson(dir, 'run-manifest.json', {
     stamp, dry_run: dryRun, legacy_available: legacyAvailable, new_available: newAvailable,
-    extracted: extractions.map((e) => ({ entity: e.entity, rows: e.row_count, skipped: e.skipped_reason })),
+    extracted: extractions.map((e) => ({ entity: e.entity, status: e.status, rows: e.row_count, skipped: e.skipped_reason })),
     comparisons: comparisons.map((c) => ({ entity: c.entity, legacy: c.legacy_count, new: c.new_count, matched: c.matched })),
   });
 

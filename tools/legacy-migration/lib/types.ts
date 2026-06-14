@@ -3,6 +3,9 @@
 /** Confidence in an extracted/normalized value or row. Drives the review queue. */
 export type Confidence = 'VERIFIED' | 'INFERRED' | 'NEEDS_MANUAL_REVIEW';
 
+/** Extraction-level status; NEEDS_CALIBRATION means no legacy route was visited. */
+export type ExtractionStatus = 'OK' | 'SKIPPED' | 'NEEDS_CALIBRATION' | 'ERROR';
+
 /** A legacy entity we can extract. */
 export type EntityKey =
   | 'customers' | 'subscriptions' | 'orders' | 'packages' | 'products'
@@ -29,6 +32,7 @@ export interface NormalizedRecord<T = Record<string, unknown>> {
 /** Result of extracting one entity. */
 export interface ExtractionResult {
   entity: EntityKey;
+  status: ExtractionStatus;
   /** Legacy screen actually visited (from config), for the evidence trail. */
   source: string;
   extracted_at: string;

@@ -5,7 +5,8 @@ import type { ComparisonResult, ExtractionResult } from './types.ts';
 export function extractionSummary(results: ExtractionResult[]): string {
   const rows = results.map((r) => {
     const c = r.confidence_breakdown;
-    const status = r.skipped_reason ? `skipped (${r.skipped_reason})` : 'ok';
+    const detail = r.skipped_reason ? ` (${r.skipped_reason})` : '';
+    const status = `${r.status}${detail}`;
     return `| ${r.entity} | \`${r.source}\` | ${r.row_count} | ${r.pages} | ${c.VERIFIED} | ${c.INFERRED} | ${c.NEEDS_MANUAL_REVIEW} | ${status} |`;
   });
   const totalRows = results.reduce((s, r) => s + r.row_count, 0);
@@ -46,8 +47,9 @@ export function readinessReport(
   ctx: { legacyAvailable: boolean; newAvailable: boolean },
 ): string {
   const needReview = extractions.reduce((s, e) => s + e.confidence_breakdown.NEEDS_MANUAL_REVIEW, 0);
+  const needsCalibration = extractions.filter((e) => e.status === 'NEEDS_CALIBRATION').length;
   const totalRows = extractions.reduce((s, e) => s + e.row_count, 0);
-  const ready = ctx.legacyAvailable && ctx.newAvailable && totalRows > 0 && needReview === 0;
+  const ready = ctx.legacyAvailable && ctx.newAvailable && totalRows > 0 && needReview === 0 && needsCalibration === 0;
   const allBlockers = comparisons.flatMap((c) => c.blockers);
   return `# Migration Readiness Report
 
@@ -59,13 +61,14 @@ Generated: ${new Date().toISOString()}
 - New-system access: ${ctx.newAvailable ? '✅ connected' : '⛔ NOT PROVIDED — set NEW_STAGING_URL / NEW_ADMIN_EMAIL / NEW_ADMIN_PASSWORD'}
 - Rows extracted: ${totalRows}
 - Rows needing manual review: ${needReview}
+- Entities needing calibration: ${needsCalibration}
 
 ## What is ready
 ${ctx.legacyAvailable ? '- Extraction harness ran against the live legacy DOM.' : '- Toolkit, safety layer, normalizers, comparators and reports are built and unit-tested; waiting only on legacy credentials.'}
 
 ## What still needs manual access / decisions
 - **Legacy credentials + URL** (the S1 blocker) — until provided, extraction is a no-op scaffold.
-- **Selector calibration** — once legacy access lands, tune \`config.json\` per-entity \`rowSelector\`/\`columns\` against the real DOM (every entity then flips from \`calibrated:false\`).
+- **Selector calibration** — extraction is blocked per entity until \`config.json\` has verified \`rowSelector\`/\`columns\` and \`calibrated:true\`; uncalibrated entities are reported as \`NEEDS_CALIBRATION\` and no legacy route is visited.
 - **NEEDS_MANUAL_REVIEW rows** must be resolved before any import (never auto-applied).
 
 ## Blockers
