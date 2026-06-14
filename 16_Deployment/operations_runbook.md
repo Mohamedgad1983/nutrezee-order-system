@@ -35,7 +35,7 @@ Target signals (Phase 6 monitoring mandate). Until a metrics stack is wired, the
 | Health endpoint | `GET /health` | non-200 | page on-call (§4 incident) |
 | DB connections | PG stats | near pool max | check for leak/runaway |
 
-**Action item (MG-E7):** wire these to a lightweight alerter (even cron + webhook) before production go-live. Health + backup-freshness are the two non-negotiables for day one.
+**Action item (MG-E7):** wire these to a lightweight alerter (even cron + webhook) before production go-live. Health + backup-freshness are the two non-negotiables for day one. **A ready-to-schedule checker is committed: `tools/ops/healthcheck.sh`** (health 200 + `{"status":"ok"}`, newest backup < 26h, disk < 85%; exits non-zero + optional webhook on breach). The operator deploys + cron-schedules it on the host (deploy step in `tools/ops/README.md`) — it does not self-deploy.
 
 ## 3. Backup & restore (proven 2026-06-14)
 

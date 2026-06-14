@@ -46,7 +46,7 @@ Legend: 🟢 ready/done · 🟡 ready, awaiting an external input to execute · 
 |---|---|---|
 | Operations runbook | 🟢 ready | `16_Deployment/operations_runbook.md` |
 | Backup/restore | 🟢 drill proven 2026-06-14 | `operations_runbook.md §3` (MG-E1 closed) |
-| Monitoring/alerting | 🟡 manual now; wire before go-live | `operations_runbook.md §2` (MG-E7) |
+| Monitoring/alerting | 🟡 checker built (`tools/ops/healthcheck.sh`); operator deploys | `operations_runbook.md §2` (MG-E7) |
 | Perf baseline | 🟡 app-tier done; DB/authed/load pending | `16_Deployment/perf_baseline.md` (MG-E3) |
 | Support/hypercare plan | 🟢 ready | `16_Deployment/support_hypercare_plan.md` |
 | Go-live checklist + DEC-013 pack | 🟢 template ready | `16_Deployment/go_live_checklist.md` |

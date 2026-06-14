@@ -70,7 +70,7 @@ All 12 toolkit entities ship `calibrated:false` and are skipped before any navig
 | MG-E4 | Training per persona not executed | ops + staff | go-live gate | `16_Deployment/pilot_plan.md §Training`; per-role hands-on on staging | OPEN (joint) |
 | MG-E5 | UAT not run with real staff | ops + staff | pilot entry | Execute `15_Testing/uat_pack.md` on staging; record results | OPEN `[S2]` (values) |
 | MG-E6 | Production environment not provisioned / posture undecided (VPS pattern vs managed PG) | sponsor + eng | cutover target | Decide production posture (`16_Deployment/environment_plan.md §1`); provision before WP-14 gate | OPEN (sponsor decision) |
-| MG-E7 | Monitoring / alerting not live (outbox lag, audit-queue depth, error rates, reconciliation divergence) | eng | go-live gate (observability) | Stand up the metrics in `16_Deployment/operations_runbook.md §Monitoring` | OPEN `[ENG]` — partial now (health endpoint exists) |
+| MG-E7 | Monitoring / alerting not live (outbox lag, audit-queue depth, error rates, reconciliation divergence) | eng | go-live gate (observability) | Health+backup+disk checker committed ready-to-schedule (`tools/ops/healthcheck.sh`); operator deploys+crons it on the host. Remaining: app-internal metrics (outbox/audit lag) + alerter destination | PARTIAL `[ENG]` (checker built; deploy is operator/host action; deeper metrics pending) |
 | MG-E8 | GitHub Actions billing-blocked → no live CI gate on PRs | user/ops | true CI gate (units admin-merged after local tests + staging Playwright) | Restore Actions billing on the GitHub org | OPEN (operational) |
 
 ---
