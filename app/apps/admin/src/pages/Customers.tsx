@@ -31,6 +31,7 @@ export function CustomersPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   async function search(): Promise<void> {
     if (!phone) return;
@@ -53,7 +54,8 @@ export function CustomersPage(): React.JSX.Element {
       <section className="toolbar">
         <input placeholder="Search by phone" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ minHeight: 40, border: '1px solid #cbd5d1', borderRadius: 6, padding: '0 10px' }} />
         <button type="button" onClick={() => void search()} disabled={busy || !phone}>Search</button>
-        <button type="button" onClick={() => { setCreating(true); setProfile(null); setHits(null); }}>New customer</button>
+        <button type="button" onClick={() => { setCreating(true); setProfile(null); setHits(null); setMerging(false); }}>New customer</button>
+        <button type="button" onClick={() => { setMerging(true); setProfile(null); setHits(null); setCreating(false); }}>Merge duplicates</button>
       </section>
       {error ? <p className="error">{error}</p> : null}
 
@@ -78,7 +80,119 @@ export function CustomersPage(): React.JSX.Element {
         )
       ) : null}
 
+      {merging ? <MergePanel onClose={() => setMerging(false)} /> : null}
+
       {profile ? <ProfileCard profile={profile} onReload={() => void openProfile(profile.id)} onClose={() => setProfile(null)} /> : null}
+    </section>
+  );
+}
+
+// WP-UI-05 — surfaces the WP-API-02 merge/undo API. Pick a winner + a duplicate by
+// phone; merge re-parents the duplicate's children/drafts/orders to the winner and
+// deactivates it; undo restores within merge_undo_days.
+function CustomerPicker({ label, selected, onSelect }: {
+  label: string; selected: { id: string; name: string } | null; onSelect: (c: { id: string; name: string } | null) => void;
+}): React.JSX.Element {
+  const [phone, setPhone] = useState('');
+  const [hits, setHits] = useState<CustomerHit[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function find(): Promise<void> {
+    if (!phone) return;
+    setBusy(true);
+    try {
+      const res = await api<ListResponse<CustomerHit>>(`/customers?phone=${encodeURIComponent(phone)}`);
+      setHits(res.items);
+    } catch { setHits([]); } finally { setBusy(false); }
+  }
+
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {selected ? (
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <strong>{selected.name}</strong>
+          <button type="button" className="linkBtn" onClick={() => onSelect(null)}>change</button>
+        </div>
+      ) : (
+        <>
+          <div className="row" style={{ gap: 8 }}>
+            <input placeholder="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <button type="button" onClick={() => void find()} disabled={busy || !phone}>Find</button>
+          </div>
+          {hits ? (
+            hits.length === 0 ? <span className="hintLine">no match</span> : (
+              <ul className="hits">
+                {hits.map((h) => (
+                  <li key={h.id}>
+                    <button type="button" className="linkBtn" onClick={() => onSelect({ id: h.id, name: h.full_name_en ?? h.id })}>
+                      {h.full_name_en ?? '—'} · <span className="mono">{h.phone_normalized ?? ''}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </>
+      )}
+    </label>
+  );
+}
+
+function MergePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+  const [winner, setWinner] = useState<{ id: string; name: string } | null>(null);
+  const [loser, setLoser] = useState<{ id: string; name: string } | null>(null);
+  const [mergeId, setMergeId] = useState<string | null>(null);
+  const [done, setDone] = useState<'merged' | 'undone' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function merge(): Promise<void> {
+    if (!winner || !loser) return;
+    setBusy(true); setError(null);
+    try {
+      const { id } = await api<{ id: string }>('/customers/merge', {
+        method: 'POST', body: JSON.stringify({ winner_id: winner.id, loser_id: loser.id }),
+      });
+      setMergeId(id); setDone('merged');
+    } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+
+  async function undo(): Promise<void> {
+    if (!mergeId) return;
+    setBusy(true); setError(null);
+    try {
+      await api(`/customers/merge/${mergeId}/undo`, { method: 'POST' });
+      setDone('undone');
+    } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+
+  const sameId = !!winner && !!loser && winner.id === loser.id;
+  return (
+    <section className="card">
+      <div className="panelHead">
+        <h2>Merge duplicate customers</h2>
+        <button type="button" className="linkBtn" onClick={onClose}>Close</button>
+      </div>
+      {error ? <p className="error">{error}</p> : null}
+      <p className="hintLine">The duplicate's phones, addresses, drafts and orders move to the kept customer; the duplicate is deactivated. Undo is available within the merge-undo window.</p>
+      <div className="grid2">
+        <CustomerPicker label="Keep (winner)" selected={winner} onSelect={setWinner} />
+        <CustomerPicker label="Remove (duplicate)" selected={loser} onSelect={setLoser} />
+      </div>
+      {done === 'merged' ? (
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <span className="badge st-decided">merged</span>
+          <button type="button" onClick={() => void undo()} disabled={busy}>Undo merge</button>
+        </div>
+      ) : done === 'undone' ? (
+        <div className="row"><span className="badge">merge undone</span></div>
+      ) : (
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <button type="button" className="primary" disabled={busy || !winner || !loser || sameId} onClick={() => void merge()}>Merge</button>
+          {sameId ? <span className="hintLine">pick two different customers</span> : null}
+        </div>
+      )}
     </section>
   );
 }
