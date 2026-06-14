@@ -69,4 +69,15 @@ describe('TS-C API contract — catalog read controller (WP-API-01)', () => {
     await expect(c.listMasters(req, 'customer')).rejects.toBeInstanceOf(BadRequestException);
     expect(listMasters).toHaveBeenCalledTimes(1); // not called for the bad kind
   });
+
+  it('sets nutrition (enrichment) mapping snake→camel, 404 when product missing (WP-UI-04)', async () => {
+    const setNutrition = vi.fn().mockResolvedValue(undefined);
+    const c = controllerWith({ getProduct: vi.fn().mockResolvedValue({ id: 'p-1' }), setNutrition });
+    await expect(c.setNutrition(req, 'p-1', { calories: 500, protein_g: 30, carbs_g: 40, fat_g: 12 }))
+      .resolves.toEqual({ ok: true });
+    expect(setNutrition).toHaveBeenCalledWith(ctx, 'p-1', { calories: 500, proteinG: 30, carbsG: 40, fatG: 12 });
+
+    const missing = controllerWith({ getProduct: vi.fn().mockResolvedValue(null), setNutrition: vi.fn() });
+    await expect(missing.setNutrition(req, 'nope', { calories: 1 })).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
