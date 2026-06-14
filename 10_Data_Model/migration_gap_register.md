@@ -11,14 +11,14 @@
 
 | ID | Gap | Owner | Blocks | Unblock | Status |
 |---|---|---|---|---|---|
-| MG-A1 | Legacy admin URL + read-only credentials not provided (`LEGACY_BASE_URL`/`LEGACY_ADMIN_EMAIL`/`LEGACY_ADMIN_PASSWORD`) | sponsor | every real extraction, every compare, every apply | Provide the 3 env vars to the operator running `tools/legacy-migration` | OPEN `[S1]` |
+| MG-A1 | Legacy admin URL + read-only credentials | sponsor | every real extraction, every compare, every apply | ✅ **PROVIDED 2026-06-14** — `nutreeze.com` admin creds supplied; toolkit calibrated + **first full extraction run** (20,151 customers + 1,044 active orders + catalog masters), read-only, on the VPS. See `tools/legacy-migration/CALIBRATION_NOTES.md` + `extraction-validation-record.md §0` | CLOSED |
 | MG-A2 | Bridge pattern P1/P2/P3 not chosen (manual-reconcile vs export/import vs DB/API read) | sponsor + architect | source-format of extraction; reconciliation cadence | Disposition the 12 access items (`modules/11_undiscovered_surfaces_access_needed.md`); record in ADR-008 addendum | OPEN `[S1]` |
 | MG-A3 | Legacy DB schema / export format unknown (screen-evidence only) | sponsor | field-level mapping fidelity (types/nullability), off_days source, item-level order data | Provide DB dump, export sample, or API docs (access items 3–4) | OPEN `[S1]` |
 | MG-A4 | New-staging extraction account for compare (`NEW_*` env vars) | operator | the `compare` half of the toolkit pipeline | Provide a read-scoped staging login to the operator (exists: `uat-seed@nutrezee.local` can be reused or a read-only clone created) | OPEN `[ENG]` — closeable now |
 
 ## B. Entity calibration gaps (engineering, but gated by MG-A1)
 
-All 12 toolkit entities ship `calibrated:false` and are skipped before any navigation. Calibration = tuning `config.json` `path`/`rowSelector`/`nextPageSelector`/`columns` against the **real** legacy DOM, then flipping `calibrated:true`. Procedure: `migration_entity_calibration_playbook.md`. Until MG-A1 lands, every row below is `BLOCKED-ON-S1` but pre-scaffolded (default selectors + expected columns already authored from screen evidence).
+All 12 toolkit entities shipped `calibrated:false`. **As of 2026-06-14 the migration-critical entities are CALIBRATED + extracted** (see `CALIBRATION_NOTES.md`): customers (`/users/list/3` → ajax `/serversideuserlist`), orders active (`/orders/list/Active` → ajax `/orders/ajaxlist/Active`), packages (`/package`), package-for (`/packageFor`), delivery_methods (`/deliveryMethod`). **Still uncalibrated:** `products` (`/products` page times out >45s — needs its ajax/paged route; MG-B-products is the one open calibration), plus the secondary masters (areas/slots/payment_methods/coupons/settings/reports) which were not on the first extraction pass.
 
 | ID | Entity | Toolkit path (default) | Calibrated | Cutover batch | Status |
 |---|---|---|---|---|---|

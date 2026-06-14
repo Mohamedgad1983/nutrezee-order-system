@@ -1,7 +1,27 @@
 # Extraction Validation Record
 
-**Date:** 2026-06-14 · **Status:** Pipeline validated against fixtures + safety suite; real-data validation pending MG-A1 (legacy access) · **Owner:** Migration Operator
-**Scope:** proves the read-only extraction → normalization → comparison → reporting pipeline is correct and safe *before* it ever touches the real legacy system. Real-data validation (row-count parity, NEEDS_MANUAL_REVIEW triage) happens during calibration (`10_Data_Model/migration_entity_calibration_playbook.md`) once credentials land.
+**Date:** 2026-06-14 · **Status:** ✅ **Real extraction RUN** — pipeline validated against the live legacy system (MG-A1 access granted) · **Owner:** Migration Operator
+**Scope:** proves the read-only extraction → normalization → reporting pipeline is correct and safe. As of 2026-06-14 it has been run end-to-end against the real legacy admin (`nutreeze.com`); details + calibration in `tools/legacy-migration/CALIBRATION_NOTES.md`.
+
+## 0. Real extraction (2026-06-14) — MG-A1 satisfied
+
+Legacy credentials were provided; the toolkit was calibrated against the live DOM/ajax and run on the VPS (read-only, in the Playwright container). Result:
+
+| Entity | Rows | VERIFIED | INFERRED | REVIEW |
+|---|--:|--:|--:|--:|
+| customers | **20,151** | 12,405 | 0 | 7,746 |
+| orders (active plans) | **1,044** | 0 | 1,044 | 0 |
+| packages | 7 | 0 | 7 | 0 |
+| package-for-type | 7 | 0 | 0 | 7 |
+| delivery methods | 4 | 0 | 4 | 0 |
+
+Output written to `migration-output/<stamp>/` on the VPS (gitignored — real PII never committed). Login + read-only safety guard held throughout (auth-only POST `/logincheck`, strict read-only after). Server-side DataTables pulled via authed ajax GET in 2,500-row chunks. Kuwaiti phones (+965) and DD-MM-YYYY dates pre-conditioned so normalizers validate (61.6% of customers VERIFIED; the rest are Arabic-only-name → review per model A1). Calibration + reproduction: `CALIBRATION_NOTES.md`. **Products page times out (>45s) — the one entity still to calibrate.** Next step is the M19 dry-run import (separate, explicit; never auto-applied).
+
+---
+
+## (Pre-access validation, retained for reference)
+
+**Scope:** proves the read-only extraction → normalization → comparison → reporting pipeline is correct and safe *before* it ever touched the real legacy system.
 
 ---
 
