@@ -21,6 +21,8 @@ interface OrderDetail {
   masked?: boolean;
 }
 interface Day { id: string; date: string; status: string }
+interface PaymentInfo { id: string; status: string; method?: string | null; link_ref?: string | null; transaction_ref?: string | null; masked?: boolean }
+const PAYMENT_REQUEST_TARGETS = ['paid', 'link_sent', 'cod_pending', 'collected', 'failed'];
 
 const short = (s: string | null | undefined): string => (s ? (s.length > 12 ? `${s.slice(0, 12)}…` : s) : '—');
 
@@ -110,7 +112,7 @@ function OrderPanel({
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'view' | 'transition' | 'change' | 'exception'>('view');
+  const [tab, setTab] = useState<'view' | 'transition' | 'change' | 'exception' | 'payment'>('view');
 
   // transition
   const [target, setTarget] = useState('');
@@ -122,6 +124,12 @@ function OrderPanel({
   // exception
   const [exType, setExType] = useState('other');
   const [exNotes, setExNotes] = useState('');
+  // payment
+  const [payment, setPayment] = useState<PaymentInfo | null>(null);
+  const [linkRef, setLinkRef] = useState('');
+  const [reqStatus, setReqStatus] = useState('');
+  const [evidence, setEvidence] = useState('');
+  const [payMsg, setPayMsg] = useState<string | null>(null);
 
   // Cancelling needs a cancellation reason code; load them when targeting cancelled.
   useEffect(() => {
@@ -156,6 +164,27 @@ function OrderPanel({
     body: JSON.stringify({ type_code: exType, notes: exNotes || undefined }),
   }));
 
+  // Payment actions stay in-panel (reload the payment, don't close like the others).
+  const loadPayment = useCallback(() => {
+    api<{ payment: PaymentInfo | null }>(`/orders/${order.id}/payments`)
+      .then((d) => setPayment(d.payment))
+      .catch(() => setPayment(null));
+  }, [order.id]);
+  useEffect(() => { if (tab === 'payment') loadPayment(); }, [tab, loadPayment]);
+
+  async function runPayment(fn: () => Promise<unknown>, ok: string): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setPayMsg(null);
+    try { await fn(); loadPayment(); setPayMsg(ok); } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+  const doLinkSent = (): Promise<void> => runPayment(() => api(`/orders/${order.id}/payments/link-sent`, {
+    method: 'POST', body: JSON.stringify({ link_ref: linkRef }),
+  }), 'Payment link recorded.');
+  const doStatusRequest = (): Promise<void> => runPayment(() => api(`/orders/${order.id}/payments/status-requests`, {
+    method: 'POST', body: JSON.stringify({ requested_status: reqStatus, evidence_note: evidence || undefined }),
+  }), 'Requested — sent to Finance review.');
+
   return (
     <section className="card reviewPanel">
       <div className="panelHead">
@@ -181,9 +210,9 @@ function OrderPanel({
       )}
 
       <div className="segmented" style={{ marginTop: 12 }}>
-        {(['view', 'transition', 'change', 'exception'] as const).map((t) => (
+        {(['view', 'transition', 'change', 'exception', 'payment'] as const).map((t) => (
           <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'view' ? 'Details' : t === 'transition' ? 'Change status' : t === 'change' ? 'Change request' : 'Raise exception'}
+            {({ view: 'Details', transition: 'Change status', change: 'Change request', exception: 'Raise exception', payment: 'Payment' } as const)[t]}
           </button>
         ))}
       </div>
@@ -232,6 +261,28 @@ function OrderPanel({
             <button type="button" className="primary" onClick={() => void doException()} disabled={busy}>Raise exception</button>
           </div>
           {exType === 'allergy_incident' ? <p className="hintLine">Allergy incidents auto-escalate to the Ops Manager at HIGH severity.</p> : null}
+        </div>
+      ) : tab === 'payment' ? (
+        <div className="decideRow">
+          <dl className="kv">
+            <div><dt>Payment status</dt><dd><span className={`badge st-${payment?.status ?? ''}`}>{payment?.status ?? '…'}</span>{payment?.masked ? ' 🔒' : ''}</dd></div>
+            <div><dt>Method</dt><dd>{payment?.method ?? '—'}</dd></div>
+            <div><dt>Link ref</dt><dd className="mono">{payment?.link_ref ?? '—'}</dd></div>
+          </dl>
+          {payMsg ? <p className="hintLine">{payMsg}</p> : null}
+          <strong>Record payment link sent</strong>
+          <label className="field"><span>Link reference</span><input value={linkRef} onChange={(e) => setLinkRef(e.target.value)} placeholder="payment-link URL or ref" /></label>
+          <div className="row"><button type="button" onClick={() => void doLinkSent()} disabled={busy || !linkRef.trim()}>Record link sent</button></div>
+          <strong style={{ marginTop: 8 }}>Request a status change → Finance review</strong>
+          <label className="field">
+            <span>Requested status</span>
+            <select value={reqStatus} onChange={(e) => setReqStatus(e.target.value)}>
+              <option value="">— select —</option>
+              {PAYMENT_REQUEST_TARGETS.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>Evidence note (optional)</span><input value={evidence} onChange={(e) => setEvidence(e.target.value)} /></label>
+          <div className="row"><button type="button" className="primary" onClick={() => void doStatusRequest()} disabled={busy || !reqStatus}>Request status change</button></div>
         </div>
       ) : null}
     </section>
