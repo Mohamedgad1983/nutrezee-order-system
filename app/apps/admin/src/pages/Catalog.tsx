@@ -108,20 +108,21 @@ function ProductsTab(): React.JSX.Element {
 function ProductDetail({ id, onClose }: { id: string; onClose: () => void }): React.JSX.Element {
   const [data, setData] = useState<{ product: ProductRow; nutrition: NutritionRow | null; allergens: ResolvedAllergen[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const seq = useRef(0);
 
-  useEffect(() => {
-    let alive = true;
-    setData(null);
+  const load = useCallback(() => {
+    const mine = ++seq.current;
     setError(null);
     Promise.all([
       api<ProductRow>(`/catalog/products/${id}`),
       api<{ item: NutritionRow | null }>(`/catalog/products/${id}/nutrition`),
       api<{ items: ResolvedAllergen[] }>(`/catalog/products/${id}/allergens`),
     ])
-      .then(([product, nut, alg]) => { if (alive) setData({ product, nutrition: nut.item, allergens: alg.items }); })
-      .catch((e: unknown) => { if (alive) setError(humanMessage(e)); });
-    return () => { alive = false; };
+      .then(([product, nut, alg]) => { if (seq.current === mine) setData({ product, nutrition: nut.item, allergens: alg.items }); })
+      .catch((e: unknown) => { if (seq.current === mine) setError(humanMessage(e)); });
   }, [id]);
+  useEffect(() => { setData(null); load(); }, [load]);
 
   return (
     <section className="card reviewPanel">
@@ -141,8 +142,13 @@ function ProductDetail({ id, onClose }: { id: string; onClose: () => void }): Re
             <div><dt>Active</dt><dd>{data.product.active ? 'yes' : 'no'}</dd></div>
             <div><dt>Origin</dt><dd><span className="badge">{data.product.origin}</span></dd></div>
           </dl>
-          <strong>Nutrition</strong>
-          {data.nutrition ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <strong>Nutrition</strong>
+            {!editing ? <button type="button" className="linkBtn" onClick={() => setEditing(true)}>Edit</button> : null}
+          </div>
+          {editing ? (
+            <NutritionEditor productId={id} current={data.nutrition} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />
+          ) : data.nutrition ? (
             <dl className="kv">
               <div><dt>Calories</dt><dd>{data.nutrition.calories ?? '—'}</dd></div>
               <div><dt>Protein (g)</dt><dd>{data.nutrition.proteinG ?? '—'}</dd></div>
@@ -158,6 +164,50 @@ function ProductDetail({ id, onClose }: { id: string; onClose: () => void }): Re
         </>
       ) : null}
     </section>
+  );
+}
+
+function NutritionEditor({ productId, current, onCancel, onSaved }: {
+  productId: string; current: NutritionRow | null; onCancel: () => void; onSaved: () => void;
+}): React.JSX.Element {
+  const str = (v: number | null | undefined): string => (v === null || v === undefined ? '' : String(v));
+  const [form, setForm] = useState({
+    calories: str(current?.calories), protein_g: str(current?.proteinG),
+    carbs_g: str(current?.carbsG), fat_g: str(current?.fatG),
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(): Promise<void> {
+    const n = (v: string): number | undefined => (v.trim() === '' ? undefined : Number(v));
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/catalog/products/${productId}/nutrition`, {
+        method: 'POST',
+        body: JSON.stringify({ calories: n(form.calories), protein_g: n(form.protein_g), carbs_g: n(form.carbs_g), fat_g: n(form.fat_g) }),
+      });
+      onSaved();
+    } catch (e) { setError(humanMessage(e)); setBusy(false); }
+  }
+
+  const fields: Array<[keyof typeof form, string]> = [['calories', 'Calories'], ['protein_g', 'Protein (g)'], ['carbs_g', 'Carbs (g)'], ['fat_g', 'Fat (g)']];
+  return (
+    <div className="decideRow">
+      {error ? <p className="error">{error}</p> : null}
+      <div className="grid2">
+        {fields.map(([k, label]) => (
+          <label key={k} className="field">
+            <span>{label}</span>
+            <input type="number" min="0" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+          </label>
+        ))}
+      </div>
+      <div className="row">
+        <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button type="button" className="primary" onClick={() => void save()} disabled={busy}>Save nutrition</button>
+      </div>
+    </div>
   );
 }
 

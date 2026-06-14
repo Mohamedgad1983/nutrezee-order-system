@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Controller, Get, NotFoundException, Param, Query, Req, UnauthorizedException,
+  BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -102,6 +102,26 @@ export class CatalogController {
       if (e instanceof CatalogError) throw new BadRequestException({ error_code: e.code });
       throw e;
     }
+  }
+
+  // WP-UI-04 enrichment write. Nutrition is an ENRICHMENT path — it bypasses mirror
+  // mode (no assertWritable), so it works while catalog stays import-only. Gated by
+  // catalog.enrich (super_admin/admin/ops_manager). Upsert per product.
+  @Post('products/:id/nutrition')
+  @HttpCode(200)
+  async setNutrition(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number },
+  ) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'catalog.enrich');
+    if (!(await this.catalog.getProduct(id))) throw new NotFoundException({ error_code: 'not_found' });
+    const num = (v: unknown): number | undefined => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    await this.catalog.setNutrition(ctx, id, {
+      calories: num(body.calories), proteinG: num(body.protein_g), carbsG: num(body.carbs_g), fatG: num(body.fat_g),
+    });
+    return { ok: true };
   }
 
   private async authorize(req: Request): Promise<StaffContext> {

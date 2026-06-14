@@ -52,3 +52,32 @@ test('catalog browse — products, packages, masters tabs (read-only)', async ({
   await expect(page.getByText('Dinner')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/05-masters.png`, fullPage: true });
 });
+
+// WP-UI-04 — catalog enrichment: edit a product's nutrition (POST /catalog/products/:id/nutrition,
+// catalog.enrich; bypasses mirror mode). Demonstrable live on a seeded product.
+test('catalog — edit product nutrition (enrichment)', async ({ page }) => {
+  const crashes: string[] = [];
+  page.on('pageerror', (e) => crashes.push(e.message));
+
+  await signIn(page);
+  await page.getByRole('link', { name: 'Catalog' }).click();
+  await page.getByRole('row', { name: /Grilled Chicken Kabsa/ }).getByRole('button', { name: 'Open' }).click();
+  const panel = page.locator('.reviewPanel');
+  await expect(panel.getByRole('heading', { name: 'Grilled Chicken Kabsa' })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Calories').fill('537');
+  await page.getByLabel('Protein (g)').fill('41');
+  await page.getByLabel('Carbs (g)').fill('29');
+  await page.getByLabel('Fat (g)').fill('11');
+  const saved = page.waitForResponse((r) => /\/catalog\/products\/.+\/nutrition$/.test(r.url()) && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save nutrition' }).click();
+  expect((await saved).status()).toBe(200);
+
+  // detail re-rendered with the saved values
+  await expect(panel).toContainText('537');
+  await expect(panel).toContainText('41');
+  await page.screenshot({ path: `${SHOTS}/06-nutrition-edited.png`, fullPage: true });
+
+  expect(crashes, `client crashes: ${crashes.join(' | ')}`).toHaveLength(0);
+});
