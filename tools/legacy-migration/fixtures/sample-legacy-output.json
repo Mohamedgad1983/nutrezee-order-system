@@ -1,0 +1,21 @@
+{
+  "_note": "Illustrative shape of raw extractor output (field-key → cell text). SYNTHETIC data only — no real customer/order data is ever committed. Used by unit tests and as a calibration reference.",
+  "customers": [
+    { "id": "1001", "name": "Sara Al-Rashed", "phone": "0561234567", "email": "sara@example.com", "dob": "1990-04-12", "diet_status": "Keto" },
+    { "id": "1002", "name": "سارة الراشد", "phone": "00966551112233", "email": "", "dob": "bad-date", "diet_status": "" },
+    { "id": "1003", "name": "John Doe", "phone": "12345", "email": "john@example.com", "dob": "1985-01-01", "diet_status": "Balanced" }
+  ],
+  "orders": [
+    { "id": "5001", "customer_name": "Sara Al-Rashed", "phone": "0561234567", "package": "Monthly Balanced", "status": "active", "start_date": "2026-06-01", "end_date": "2026-06-30", "payment_status": "paid" },
+    { "id": "5002", "customer_name": "John Doe", "phone": "0567654321", "package": "Weekly Lite", "status": "pause", "start_date": "2026-06-10", "end_date": "", "payment_status": "weird_legacy_status" },
+    { "id": "5003", "customer_name": "Old Cust", "phone": "0560000000", "package": "Monthly", "status": "completed", "start_date": "2026-01-01", "end_date": "2026-01-31", "payment_status": "paid" }
+  ],
+  "products": [
+    { "id": "9001", "name": "Grilled Chicken Kabsa", "price": "45.00" },
+    { "id": "9002", "name": "Quinoa Power Salad", "price": "30" },
+    { "id": "9003", "name": "كبسة دجاج", "price": "" }
+  ],
+  "packages": [
+    { "id": "7001", "name": "Monthly Balanced", "duration": "30", "meals_per_day": "2", "price": "1200", "parent": "" }
+  ]
+}
