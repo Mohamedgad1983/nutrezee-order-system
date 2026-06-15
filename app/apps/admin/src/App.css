@@ -182,6 +182,15 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .iconBtn.sched:hover { border-color: #16a34a; background: #ecfdf3; }
 .iconBtn.ops:hover { border-color: #d97706; background: #fff7ec; }
 
+/* modal overlay for the order detail panel (pops up in view on click) */
+.modalOverlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(16, 40, 30, .5); backdrop-filter: blur(2px);
+  display: grid; place-items: start center; padding: 5vh 16px 16px; overflow-y: auto;
+}
+.modalCard { width: min(760px, 100%); max-height: 90vh; overflow-y: auto; margin: 0 !important; box-shadow: 0 24px 70px rgba(0, 0, 0, .35); animation: modalIn .14s ease; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
 /* ---------- cards / forms ---------- */
 .intake { display: grid; gap: 16px; padding: 20px 24px 32px; max-width: 880px; }
 .card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; box-shadow: var(--shadow); }

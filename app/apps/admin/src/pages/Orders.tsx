@@ -248,10 +248,11 @@ function OrderPanel({
   }), 'Requested — sent to Finance review.');
 
   return (
-    <section className="card reviewPanel">
+    <div className="modalOverlay" onClick={onClose} role="presentation">
+      <section className="card reviewPanel modalCard" onClick={(e) => e.stopPropagation()}>
       <div className="panelHead">
         <h2>Order <span className="mono">{order.order_number ?? short(order.id)}</span></h2>
-        <button type="button" className="linkBtn" onClick={onClose}>Close</button>
+        <button type="button" className="linkBtn" onClick={onClose}>Close ✕</button>
       </div>
       {error ? <p className="error">{error}</p> : null}
 
@@ -350,6 +351,7 @@ function OrderPanel({
           <div className="row"><button type="button" className="primary" onClick={() => void doStatusRequest()} disabled={busy || !reqStatus}>Request status change</button></div>
         </div>
       ) : null}
-    </section>
+      </section>
+    </div>
   );
 }
