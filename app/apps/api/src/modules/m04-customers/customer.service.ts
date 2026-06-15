@@ -78,6 +78,26 @@ export class CustomerService {
     return rows;
   }
 
+  /** Paginated customer list (legacy /users/list parity). PII is masked at the
+   *  controller per the caller's grants — this returns raw rows. */
+  async listCustomers(limit: number, offset: number): Promise<Array<Record<string, unknown>>> {
+    const { rows } = await this.pool.query(
+      `SELECT c.id, c.full_name_en, c.status,
+              (SELECT p.phone_normalized FROM customer_phone p
+                WHERE p.customer_id = c.id ORDER BY p.is_primary DESC NULLS LAST LIMIT 1) AS phone_normalized
+       FROM customer c
+       ORDER BY c.created_at DESC, c.id DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+    return rows;
+  }
+
+  async countCustomers(): Promise<number> {
+    const { rows } = await this.pool.query('SELECT count(*)::int AS n FROM customer');
+    return Number(rows[0].n);
+  }
+
   /** Guided creation: exact-phone duplicate blocks with a link to the existing
    *  profile; fuzzy name+dob match warns and requires force (validation binding §1). */
   async createGuided(actor: StaffContext, input: GuidedCreateInput): Promise<string> {

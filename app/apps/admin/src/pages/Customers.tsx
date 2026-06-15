@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError, humanMessage, type ListResponse } from '../api';
 
 // WP-UI-03a — customer admin: search by phone, guided-create (dup block/warn),
@@ -6,7 +6,9 @@ import { api, ApiError, humanMessage, type ListResponse } from '../api';
 // edit core fields, add an address. Replaces legacy /users/list/3 + the customer
 // search inside /orders/create. The merge-review screen waits on WP-API-02 wiring.
 
-interface CustomerHit { id: string; full_name_en?: string; phone_normalized?: string; masked?: boolean }
+interface CustomerHit { id: string; full_name_en?: string; phone_normalized?: string; status?: string; masked?: boolean }
+interface CustomerList extends ListResponse<CustomerHit> { page: { limit: number; offset?: number; total?: number } }
+const PAGE = 50;
 interface Phone { phone_normalized?: string; label?: string | null; is_primary?: boolean; whatsapp?: boolean }
 interface Address { id: string; label?: string | null; area_id?: string | null; address_text?: string; active?: boolean }
 interface Profile {
@@ -24,14 +26,45 @@ interface Profile {
   masked?: boolean;
 }
 
+function CustomerTable({ rows, onOpen }: { rows: CustomerHit[]; onOpen: (id: string) => void }): React.JSX.Element {
+  return (
+    <table className="table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {rows.map((h) => (
+          <tr key={h.id}>
+            <td>{h.full_name_en ?? '—'}</td>
+            <td className="mono">{h.phone_normalized ?? '—'}</td>
+            <td>{h.status ?? '—'}</td>
+            <td><button type="button" onClick={() => onOpen(h.id)}>Open</button></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function CustomersPage(): React.JSX.Element {
   const [phone, setPhone] = useState('');
   const [hits, setHits] = useState<CustomerHit[] | null>(null);
+  const [list, setList] = useState<CustomerHit[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
   const [merging, setMerging] = useState(false);
+
+  async function loadList(off: number): Promise<void> {
+    setBusy(true); setError(null);
+    try {
+      const res = await api<CustomerList>(`/customers?limit=${PAGE}&offset=${off}`);
+      setList(res.items); setTotal(res.page.total ?? res.items.length); setOffset(off);
+    } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+
+  useEffect(() => { void loadList(0); }, []);
 
   async function search(): Promise<void> {
     if (!phone) return;
@@ -49,11 +82,15 @@ export function CustomersPage(): React.JSX.Element {
     } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
   }
 
+  function backToList(): void { setHits(null); setProfile(null); setCreating(false); setMerging(false); setPhone(''); }
+
+  const showList = !creating && !merging && !profile && !hits;
   return (
     <section className="intake">
       <section className="toolbar">
-        <input placeholder="Search by phone" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ minHeight: 40, border: '1px solid #cbd5d1', borderRadius: 6, padding: '0 10px' }} />
+        <input placeholder="Search by phone" value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void search(); }} style={{ minHeight: 40, border: '1px solid #cbd5d1', borderRadius: 6, padding: '0 10px' }} />
         <button type="button" onClick={() => void search()} disabled={busy || !phone}>Search</button>
+        <button type="button" onClick={backToList}>All customers</button>
         <button type="button" onClick={() => { setCreating(true); setProfile(null); setHits(null); setMerging(false); }}>New customer</button>
         <button type="button" onClick={() => { setMerging(true); setProfile(null); setHits(null); setCreating(false); }}>Merge duplicates</button>
       </section>
@@ -64,20 +101,27 @@ export function CustomersPage(): React.JSX.Element {
       ) : null}
 
       {hits && !profile ? (
-        hits.length === 0 ? <p className="emptyLine">No match — try New customer.</p> : (
-          <table className="table">
-            <thead><tr><th>Name</th><th>Phone</th><th></th></tr></thead>
-            <tbody>
-              {hits.map((h) => (
-                <tr key={h.id}>
-                  <td>{h.full_name_en ?? '—'}</td>
-                  <td className="mono">{h.phone_normalized ?? '—'}</td>
-                  <td><button type="button" onClick={() => void openProfile(h.id)}>Open</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Search results ({hits.length})</strong>
+            <button type="button" className="linkBtn" onClick={backToList}>← All customers</button>
+          </div>
+          {hits.length === 0 ? <p className="emptyLine">No match — try New customer.</p> : <CustomerTable rows={hits} onOpen={(id) => void openProfile(id)} />}
+        </>
+      ) : null}
+
+      {showList ? (
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>All customers</strong>
+            <span className="hintLine">{total ? `${offset + 1}–${Math.min(offset + list.length, total)} of ${total.toLocaleString()}` : ''}</span>
+          </div>
+          {list.length === 0 ? <p className="emptyLine">{busy ? 'Loading…' : 'No customers yet.'}</p> : <CustomerTable rows={list} onOpen={(id) => void openProfile(id)} />}
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" onClick={() => void loadList(Math.max(offset - PAGE, 0))} disabled={busy || offset === 0}>← Prev</button>
+            <button type="button" onClick={() => void loadList(offset + PAGE)} disabled={busy || offset + list.length >= total}>Next →</button>
+          </div>
+        </>
       ) : null}
 
       {merging ? <MergePanel onClose={() => setMerging(false)} /> : null}
