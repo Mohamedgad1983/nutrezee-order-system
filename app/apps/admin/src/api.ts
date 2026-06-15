@@ -65,7 +65,7 @@ export interface Me {
 
 export interface ListResponse<T> {
   items: T[];
-  page: { limit: number };
+  page: { limit: number; offset?: number; total?: number };
 }
 
 export interface CompletenessWarning {
@@ -115,5 +115,9 @@ export interface OrderListItem {
   end_date: string;
   source_draft_id: string | null;
   total: number | string;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  package_name?: string | null;
+  payment_status?: string | null;
   masked: boolean;
 }

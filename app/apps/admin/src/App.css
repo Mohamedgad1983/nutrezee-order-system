@@ -157,8 +157,19 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .badge.st-converted, .badge.st-approved, .badge.st-active, .badge.st-decided, .badge.st-paid, .badge.st-completed { background: #d1fadf; color: #08613e; }
 .badge.st-rejected, .badge.st-cancelled, .badge.st-failed, .badge.late { background: #fee2e2; color: #991b1b; }
 .badge.st-expired { background: #eef2ef; color: #64748b; }
-.badge.st-in_review { background: #e0f2fe; color: #075985; }
+.badge.st-in_review, .badge.st-link_sent { background: #e0f2fe; color: #075985; }
+.badge.st-unpaid, .badge.st-cod_pending { background: #fef3c7; color: #92400e; }
 .badge.late { margin-left: 8px; }
+
+/* status tab bar (Orders) */
+.ordersTabs { display: flex; gap: 4px; padding: 14px 24px 0; flex-wrap: wrap; background: var(--surface); }
+.tabBtn {
+  min-height: 36px; padding: 0 16px; border: none; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-soft); font-weight: 600; font-size: 13px;
+}
+.tabBtn:hover { background: #e7efe9; color: var(--brand); box-shadow: none; }
+.tabBtn.on { background: linear-gradient(180deg, #109066, #0b6b4f); color: #fff; }
+.tabBtn.on:hover { color: #fff; }
 
 /* ---------- cards / forms ---------- */
 .intake { display: grid; gap: 16px; padding: 20px 24px 32px; max-width: 880px; }

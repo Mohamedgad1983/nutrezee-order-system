@@ -30,12 +30,24 @@ export class OrderController {
   }
 
   @Get()
-  async list(@Req() req: Request, @Query('status') status?: OrderStatus) {
+  async list(
+    @Req() req: Request,
+    @Query('status') status?: OrderStatus,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'order.read');
     const grants = await this.access.visibilityGrants(ctx.roles);
-    const items = (await this.orders.listOrders({ status })).map((o) => this.maskOrder(o, grants));
-    return { items, page: { limit: 100 } };
+    const lim = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const off = Math.max(Number(offset) || 0, 0);
+    const { rows, total } = await this.orders.listOrdersRich({ status, q, limit: lim, offset: off });
+    const items = rows.map((r) => {
+      const { data, masked } = maskFields(r, { customer_name: 'pii', customer_phone: 'pii', total: 'payment' }, grants);
+      return { ...data, masked };
+    });
+    return { items, page: { limit: lim, offset: off, total } };
   }
 
   // WP-UI-03c exceptions view. MUST precede @Get(':id') — a static 'exceptions' route

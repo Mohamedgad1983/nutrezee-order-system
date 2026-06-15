@@ -218,6 +218,53 @@ export class OrderService {
     return rows.map((r) => this.toOrder(r));
   }
 
+  /** Rich, searchable, paginated order list for the Orders screen — joins customer name/
+   *  phone, package name and latest payment status. PII/money masked at the controller. */
+  async listOrdersRich(filters: { status?: OrderStatus; q?: string; limit: number; offset: number }): Promise<{
+    rows: Array<Record<string, unknown>>; total: number;
+  }> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (filters.status) { params.push(filters.status); where.push(`o.status = $${params.length}`); }
+    if (filters.q && filters.q.trim()) {
+      params.push(`%${filters.q.trim()}%`);
+      const i = params.length;
+      where.push(`(o.order_number ILIKE $${i} OR c.full_name_en ILIKE $${i} OR c.full_name_ar ILIKE $${i}
+        OR EXISTS (SELECT 1 FROM customer_phone p WHERE p.customer_id = o.customer_id AND p.phone_normalized ILIKE $${i}))`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query(
+      `SELECT count(*)::int n FROM customer_order o LEFT JOIN customer c ON c.id = o.customer_id ${whereSql}`,
+      params,
+    );
+    const limitIdx = params.push(filters.limit);
+    const offsetIdx = params.push(filters.offset);
+    const { rows } = await this.pool.query(
+      `SELECT o.id, o.order_number, o.customer_id, o.status, o.start_date, o.end_date, o.total, o.currency,
+              c.full_name_en AS customer_name,
+              (SELECT p.phone_normalized FROM customer_phone p WHERE p.customer_id = o.customer_id ORDER BY p.is_primary DESC NULLS LAST LIMIT 1) AS customer_phone,
+              coalesce(pk.name_en, o.package_name_frozen_en) AS package_name,
+              (SELECT pr.status FROM payment_record pr WHERE pr.order_id = o.id ORDER BY pr.created_at DESC LIMIT 1) AS payment_status
+       FROM customer_order o
+       LEFT JOIN customer c ON c.id = o.customer_id
+       LEFT JOIN package pk ON pk.id = o.package_id
+       ${whereSql}
+       ORDER BY o.start_date DESC NULLS LAST, o.order_number DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params,
+    );
+    return {
+      rows: rows.map((r) => ({
+        id: r.id, order_number: r.order_number, customer_id: r.customer_id, status: r.status,
+        start_date: this.dateString(r.start_date), end_date: this.dateString(r.end_date),
+        total: r.total === null ? null : Number(r.total), currency: r.currency,
+        customer_name: r.customer_name, customer_phone: r.customer_phone,
+        package_name: r.package_name, payment_status: r.payment_status,
+      })),
+      total: Number(countRes.rows[0]?.n ?? 0),
+    };
+  }
+
   async listDays(orderId: string): Promise<Array<{ id: string; date: string; status: FulfillmentStatus }>> {
     const { rows } = await this.pool.query(
       `SELECT id, date, status FROM fulfillment_day WHERE order_id = $1 ORDER BY date`,
