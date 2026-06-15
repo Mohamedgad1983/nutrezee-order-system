@@ -41,6 +41,8 @@ const kwd = (v: number | string | null | undefined): string => {
   return Number.isFinite(num) ? (num / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
 };
 
+type PanelTab = 'view' | 'schedule' | 'transition' | 'change' | 'exception' | 'payment';
+
 export function OrdersPage(): React.JSX.Element {
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
@@ -50,7 +52,7 @@ export function OrdersPage(): React.JSX.Element {
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<{ order: OrderDetail; days: Day[] } | null>(null);
+  const [open, setOpen] = useState<{ order: OrderDetail; days: Day[]; tab: PanelTab } | null>(null);
   const seq = useRef(0);
 
   const load = useCallback((st: string, query: string, off: number) => {
@@ -68,14 +70,14 @@ export function OrdersPage(): React.JSX.Element {
 
   useEffect(() => { load(status, submittedQ, 0); }, [load, status, submittedQ]);
 
-  async function openOrder(id: string): Promise<void> {
+  async function openOrder(id: string, tab: PanelTab = 'view'): Promise<void> {
     setError(null);
     try {
       const [order, daysRes] = await Promise.all([
         api<OrderDetail>(`/orders/${id}`),
         api<ListResponse<Day>>(`/orders/${id}/fulfillment-days`),
       ]);
-      setOpen({ order, days: daysRes.items });
+      setOpen({ order, days: daysRes.items, tab });
     } catch (e) { setError(humanMessage(e)); }
   }
 
@@ -134,7 +136,13 @@ export function OrdersPage(): React.JSX.Element {
                 <td>{o.payment_status ? <span className={`badge st-${o.payment_status}`}>{o.payment_status}</span> : '—'}</td>
                 <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
                 <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{kwd(o.total)}</td>
-                <td><button type="button" onClick={() => void openOrder(o.id)}>View</button></td>
+                <td>
+                  <div className="rowOps">
+                    <button type="button" className="iconBtn view" title="View order" aria-label="View order" onClick={() => void openOrder(o.id, 'view')}>👁</button>
+                    <button type="button" className="iconBtn sched" title="Day schedule" aria-label="Day schedule" onClick={() => void openOrder(o.id, 'schedule')}>🗓</button>
+                    <button type="button" className="iconBtn ops" title="Day operations" aria-label="Day operations" onClick={() => void openOrder(o.id, 'transition')}>⚙️</button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -149,23 +157,24 @@ export function OrdersPage(): React.JSX.Element {
       ) : null}
 
       {open ? (
-        <OrderPanel order={open.order} days={open.days} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(status, submittedQ, offset); }} />
+        <OrderPanel order={open.order} days={open.days} initialTab={open.tab} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(status, submittedQ, offset); }} />
       ) : null}
     </section>
   );
 }
 
 function OrderPanel({
-  order, days, onClose, onDone,
+  order, days, onClose, onDone, initialTab,
 }: {
   order: OrderDetail;
   days: Day[];
   onClose: () => void;
   onDone: () => void;
+  initialTab: PanelTab;
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'view' | 'transition' | 'change' | 'exception' | 'payment'>('view');
+  const [tab, setTab] = useState<PanelTab>(initialTab);
 
   // transition
   const [target, setTarget] = useState('');
@@ -246,31 +255,34 @@ function OrderPanel({
       </div>
       {error ? <p className="error">{error}</p> : null}
 
-      <dl className="kv">
-        <div><dt>Status</dt><dd><span className={`badge st-${order.status}`}>{order.status}</span></dd></div>
-        <div><dt>Customer</dt><dd className="mono">{short(order.customer_id)}</dd></div>
-        <div><dt>Start</dt><dd>{order.start_date ?? '—'}</dd></div>
-        <div><dt>End</dt><dd>{order.end_date ?? '—'}</dd></div>
-        <div><dt>Total</dt><dd>{typeof order.total === 'number' ? order.total.toLocaleString() : (order.total ?? '—')}</dd></div>
-      </dl>
-
-      <strong>Fulfillment days ({days.length})</strong>
-      {days.length === 0 ? <p className="emptyLine">No days generated.</p> : (
-        <table className="table">
-          <thead><tr><th>Date</th><th>Status</th></tr></thead>
-          <tbody>{days.map((d) => <tr key={d.id}><td>{d.date}</td><td><span className={`badge st-${d.status}`}>{d.status}</span></td></tr>)}</tbody>
-        </table>
-      )}
-
-      <div className="segmented" style={{ marginTop: 12 }}>
-        {(['view', 'transition', 'change', 'exception', 'payment'] as const).map((t) => (
+      <div className="segmented" style={{ marginTop: 4 }}>
+        {(['view', 'schedule', 'transition', 'change', 'exception', 'payment'] as const).map((t) => (
           <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {({ view: 'Details', transition: 'Change status', change: 'Change request', exception: 'Raise exception', payment: 'Payment' } as const)[t]}
+            {({ view: 'Details', schedule: 'Schedule', transition: 'Change status', change: 'Change request', exception: 'Raise exception', payment: 'Payment' } as const)[t]}
           </button>
         ))}
       </div>
 
-      {tab === 'transition' ? (
+      {tab === 'view' ? (
+        <dl className="kv">
+          <div><dt>Order #</dt><dd className="mono">{order.order_number ?? '—'}</dd></div>
+          <div><dt>Status</dt><dd><span className={`badge st-${order.status}`}>{order.status}</span></dd></div>
+          <div><dt>Customer</dt><dd className="mono">{short(order.customer_id)}</dd></div>
+          <div><dt>Start</dt><dd>{order.start_date ?? '—'}</dd></div>
+          <div><dt>End</dt><dd>{order.end_date ?? '—'}</dd></div>
+          <div><dt>Total</dt><dd>{typeof order.total === 'number' ? order.total.toLocaleString() : (order.total ?? '—')}</dd></div>
+        </dl>
+      ) : tab === 'schedule' ? (
+        <div>
+          <strong>Fulfillment days ({days.length})</strong>
+          {days.length === 0 ? <p className="emptyLine">No days generated for this order.</p> : (
+            <table className="table">
+              <thead><tr><th>Date</th><th>Status</th></tr></thead>
+              <tbody>{days.map((d) => <tr key={d.id}><td>{d.date}</td><td><span className={`badge st-${d.status}`}>{d.status}</span></td></tr>)}</tbody>
+            </table>
+          )}
+        </div>
+      ) : tab === 'transition' ? (
         <div className="decideRow">
           <label className="field">
             <span>New status</span>

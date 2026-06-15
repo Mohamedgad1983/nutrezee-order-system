@@ -171,6 +171,17 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .tabBtn.on { background: linear-gradient(180deg, #109066, #0b6b4f); color: #fff; }
 .tabBtn.on:hover { color: #fff; }
 
+/* row operation icon buttons (legacy parity) */
+.rowOps { display: inline-flex; gap: 5px; }
+.iconBtn {
+  display: inline-grid; place-items: center; min-height: 32px; width: 32px; padding: 0;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 14px; line-height: 1;
+}
+.iconBtn:hover { border-color: var(--brand); background: #eefaf4; box-shadow: var(--shadow-sm); }
+.iconBtn.view:hover { border-color: #0ea5e9; background: #eff8ff; }
+.iconBtn.sched:hover { border-color: #16a34a; background: #ecfdf3; }
+.iconBtn.ops:hover { border-color: #d97706; background: #fff7ec; }
+
 /* ---------- cards / forms ---------- */
 .intake { display: grid; gap: 16px; padding: 20px 24px 32px; max-width: 880px; }
 .card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; box-shadow: var(--shadow); }
