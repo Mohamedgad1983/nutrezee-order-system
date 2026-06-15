@@ -220,12 +220,13 @@ export class OrderService {
 
   /** Rich, searchable, paginated order list for the Orders screen — joins customer name/
    *  phone, package name and latest payment status. PII/money masked at the controller. */
-  async listOrdersRich(filters: { status?: OrderStatus; q?: string; limit: number; offset: number }): Promise<{
+  async listOrdersRich(filters: { status?: OrderStatus; q?: string; customerId?: string; limit: number; offset: number }): Promise<{
     rows: Array<Record<string, unknown>>; total: number;
   }> {
     const where: string[] = [];
     const params: unknown[] = [];
     if (filters.status) { params.push(filters.status); where.push(`o.status = $${params.length}`); }
+    if (filters.customerId) { params.push(filters.customerId); where.push(`o.customer_id = $${params.length}`); }
     if (filters.q && filters.q.trim()) {
       params.push(`%${filters.q.trim()}%`);
       const i = params.length;

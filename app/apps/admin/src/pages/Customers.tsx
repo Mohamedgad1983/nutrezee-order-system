@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError, humanMessage, type ListResponse } from '../api';
+import { api, ApiError, humanMessage, type ListResponse, type OrderListItem } from '../api';
 
 // WP-UI-03a — customer admin: search by phone, guided-create (dup block/warn),
 // view profile (PII/HEALTH masked per the caller's grants — the server decides),
@@ -343,6 +343,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
             {(profile.addresses ?? []).map((a) => <li key={a.id}><span>{a.address_text ?? '—'}{a.active === false ? ' (inactive)' : ''}</span></li>)}
             {(profile.addresses ?? []).length === 0 ? <li><span>—</span></li> : null}
           </ul>
+          <AddAddressForm customerId={profile.id} onAdded={onReload} />
           {profile.allergies !== undefined ? (
             <>
               <strong>Allergies</strong>
@@ -352,6 +353,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
               </ul>
             </>
           ) : null}
+          <CustomerOrderHistory customerId={profile.id} />
           <div className="row"><button type="button" className="primary" onClick={() => setEdit(true)}>Edit</button></div>
         </>
       ) : (
@@ -369,5 +371,111 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
         </div>
       )}
     </section>
+  );
+}
+
+function AddAddressForm({ customerId, onAdded }: { customerId: string; onAdded: () => void }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add(): Promise<void> {
+    if (!address.trim()) {
+      setError('Address text is required.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/customers/${customerId}/addresses`, {
+        method: 'POST',
+        body: JSON.stringify({
+          label: label.trim() || undefined,
+          address_text: address.trim(),
+          delivery_notes: notes.trim() || undefined,
+        }),
+      });
+      setLabel('');
+      setAddress('');
+      setNotes('');
+      setBusy(false);
+      setOpen(false);
+      onAdded();
+    } catch (e) {
+      setError(humanMessage(e));
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return <button type="button" className="linkBtn" onClick={() => setOpen(true)}>+ Add address</button>;
+  }
+
+  return (
+    <div className="decideRow" style={{ marginTop: 8 }}>
+      <strong>Add address</strong>
+      {error ? <p className="error">{error}</p> : null}
+      <div className="grid2">
+        <label className="field"><span>Label</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home, office, branch" /></label>
+        <label className="field"><span>Address</span><input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
+      </div>
+      <label className="field"><span>Delivery notes</span><input value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+      <div className="row">
+        <button type="button" onClick={() => { setOpen(false); setError(null); }} disabled={busy}>Cancel</button>
+        <button type="button" className="primary" onClick={() => void add()} disabled={busy || !address.trim()}>Save address</button>
+      </div>
+      <p className="hintLine">Area stays optional until the workshop supplies the final area list.</p>
+    </div>
+  );
+}
+
+function CustomerOrderHistory({ customerId }: { customerId: string }): React.JSX.Element {
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    setError(null);
+    api<ListResponse<OrderListItem>>(`/orders?customer_id=${encodeURIComponent(customerId)}&limit=10`)
+      .then((d) => {
+        if (cancelled) return;
+        setOrders(d.items);
+        setTotal(d.page.total ?? d.items.length);
+      })
+      .catch((e) => { if (!cancelled) setError(humanMessage(e)); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [customerId]);
+
+  return (
+    <div>
+      <strong>Order history</strong>
+      {error ? <p className="hintLine">Order history unavailable: {error}</p> : null}
+      {!error && busy ? <p className="emptyLine">Loading orders…</p> : null}
+      {!error && !busy && orders.length === 0 ? <p className="emptyLine">No orders for this customer yet.</p> : null}
+      {orders.length > 0 ? (
+        <table className="table">
+          <thead><tr><th>Order</th><th>Dates</th><th>Payment</th><th>Status</th><th>Total</th></tr></thead>
+          <tbody>
+            {orders.map((o) => (
+              <tr key={o.id}>
+                <td className="mono">{o.order_number}</td>
+                <td>{o.start_date} → {o.end_date}</td>
+                <td>{o.payment_status ? <span className={`badge st-${o.payment_status}`}>{o.payment_status}</span> : '—'}</td>
+                <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
+                <td>{typeof o.total === 'number' ? (o.total / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }) : o.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {total > orders.length ? <p className="hintLine">Showing latest {orders.length} of {total.toLocaleString()} orders.</p> : null}
+    </div>
   );
 }

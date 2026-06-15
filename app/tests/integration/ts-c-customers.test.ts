@@ -34,9 +34,17 @@ describe('TS-C API contract — customers controller (WP-API-01)', () => {
     expect(searchByPhone).toHaveBeenCalledWith('0500000001');
   });
 
-  it('requires a phone query on search', async () => {
-    const c = controllerWith({ searchByPhone: vi.fn() });
-    await expect(c.search(req, undefined)).rejects.toBeInstanceOf(BadRequestException);
+  it('lists customers when no phone query is supplied', async () => {
+    const listCustomers = vi.fn().mockResolvedValue([{ id: 'c-1', full_name_en: 'A', phone_normalized: '+966500000001' }]);
+    const countCustomers = vi.fn().mockResolvedValue(1);
+    const c = controllerWith({ listCustomers, countCustomers });
+    const res = await c.search(req, undefined, '25', '5');
+    expect(res).toEqual({
+      items: [{ id: 'c-1', full_name_en: 'A', phone_normalized: '+966500000001', masked: false }],
+      page: { limit: 25, offset: 5, total: 1 },
+    });
+    expect(listCustomers).toHaveBeenCalledWith(25, 5);
+    expect(countCustomers).toHaveBeenCalledWith();
   });
 
   it('masks name and phone (PII) for a caller without the pii grant', async () => {

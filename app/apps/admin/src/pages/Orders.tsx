@@ -88,7 +88,7 @@ export function OrdersPage(): React.JSX.Element {
       o.order_number, o.customer_name ?? o.customer_id, o.customer_phone ?? '', o.package_name ?? '',
       o.start_date, o.end_date, o.payment_status ?? '', o.status, kwd(o.total),
     ].map(esc).join(',')));
-    const blob = new Blob([`﻿${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `orders-${status || 'all'}-${offset + 1}.csv`;

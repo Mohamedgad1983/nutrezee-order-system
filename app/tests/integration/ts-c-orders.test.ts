@@ -34,12 +34,15 @@ describe('TS-C API contract — orders controller (WP-09)', () => {
   });
 
   it('maps list and fulfillment-day reads to read contracts', async () => {
-    const listOrders = vi.fn().mockResolvedValue([{ id: 'order-1' }]);
+    const listOrdersRich = vi.fn().mockResolvedValue({ rows: [{ id: 'order-1' }], total: 1 });
     const listDays = vi.fn().mockResolvedValue([{ id: 'day-1' }]);
-    const c = controllerWith({ listOrders, listDays });
-    await expect(c.list(req, 'approved')).resolves.toEqual({ items: [{ id: 'order-1', masked: false }], page: { limit: 100 } });
+    const c = controllerWith({ listOrdersRich, listDays });
+    await expect(c.list(req, 'approved', 'NUT', 'cust-1', '25', '10')).resolves.toEqual({
+      items: [{ id: 'order-1', masked: false }],
+      page: { limit: 25, offset: 10, total: 1 },
+    });
     await expect(c.listDays(req, 'order-1')).resolves.toEqual({ items: [{ id: 'day-1' }], page: { limit: 100 } });
-    expect(listOrders).toHaveBeenCalledWith({ status: 'approved' });
+    expect(listOrdersRich).toHaveBeenCalledWith({ status: 'approved', q: 'NUT', customerId: 'cust-1', limit: 25, offset: 10 });
     expect(listDays).toHaveBeenCalledWith('order-1');
   });
 

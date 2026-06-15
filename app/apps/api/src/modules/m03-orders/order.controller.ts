@@ -34,6 +34,7 @@ export class OrderController {
     @Req() req: Request,
     @Query('status') status?: OrderStatus,
     @Query('q') q?: string,
+    @Query('customer_id') customerId?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -42,7 +43,7 @@ export class OrderController {
     const grants = await this.access.visibilityGrants(ctx.roles);
     const lim = Math.min(Math.max(Number(limit) || 50, 1), 200);
     const off = Math.max(Number(offset) || 0, 0);
-    const { rows, total } = await this.orders.listOrdersRich({ status, q, limit: lim, offset: off });
+    const { rows, total } = await this.orders.listOrdersRich({ status, q, customerId, limit: lim, offset: off });
     const items = rows.map((r) => {
       const { data, masked } = maskFields(r, { customer_name: 'pii', customer_phone: 'pii', total: 'payment' }, grants);
       return { ...data, masked };

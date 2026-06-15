@@ -39,6 +39,17 @@ test('customers admin — create, search, open profile, edit (end-to-end)', asyn
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/02-profile.png`, fullPage: true });
 
+  // Add address
+  await page.getByRole('button', { name: '+ Add address' }).click();
+  await page.getByLabel('Label').fill('Home');
+  await page.getByLabel('Address').fill(`Block ${suffix}, Street 1, Kuwait`);
+  const addressAdded = page.waitForResponse((r) => r.url().includes('/customers/') && r.url().endsWith('/addresses') && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save address' }).click();
+  expect((await addressAdded).status()).toBe(201);
+  await expect(page.getByText(`Block ${suffix}, Street 1, Kuwait`)).toBeVisible();
+  await expect(page.getByText('Order history')).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/02-address-added.png`, fullPage: true });
+
   // Edit notes, save
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Notes').fill('VIP — e2e edit');
