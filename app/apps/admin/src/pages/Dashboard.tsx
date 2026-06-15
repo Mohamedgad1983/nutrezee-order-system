@@ -1,45 +1,44 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type ListResponse } from '../api';
 
-// WP-UI-03c — dashboard. A read-only overview that aggregates already-wired
-// endpoints: the M15 report projections (intake funnel + daily ops) and live queue
-// counts (review / payment-review / orders). No new API, no seed dependency — each
-// source degrades to '—' on its own if it fails, so one bad fetch never blanks the page.
+// Live enterprise overview — real DB aggregates from /reports/overview plus the live
+// queue counts. Each source degrades to '—' on its own if it fails.
 
-interface IntakeFunnel { drafts_created: number; submitted: number; returned: number; approved: number; rejected: number }
-interface DailyOps { orders_approved: number; orders_cancelled: number; payment_paid: number; payment_failed: number }
+interface Overview {
+  customers: number;
+  customers_with_order: number;
+  orders: number;
+  orders_by_status: Record<string, number>;
+  payments: number;
+  revenue_minor: number;
+  addresses: number;
+  areas: number;
+  top_areas: Array<{ name: string; count: number }>;
+}
 interface Dash {
-  intake: IntakeFunnel | null;
-  ops: DailyOps | null;
+  ov: Overview | null;
   reviewsWaiting: number | null;
   paymentsWaiting: number | null;
-  orders: number | null;
 }
 
 const n = (v: number | null | undefined): string => (typeof v === 'number' ? v.toLocaleString() : '—');
+const kwd = (minor: number | null | undefined): string =>
+  typeof minor === 'number' ? `${(minor / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} KWD` : '—';
 
 async function get<T>(path: string): Promise<T | null> {
-  // Swallow per-source errors for graceful degradation; api() still fires the central
-  // 401 handler before throwing, so an expired session still redirects to login.
   try { return await api<T>(path); } catch { return null; }
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }): React.JSX.Element {
-  const hot = accent && value !== '—' && value !== '0';
+function Stat({ icon, val, lbl, sub, hot, brand }: {
+  icon: string; val: string; lbl: string; sub?: string; hot?: boolean; brand?: boolean;
+}): React.JSX.Element {
   return (
-    <div className="card" style={{ flex: '1 1 150px', minWidth: 150, borderLeft: hot ? '3px solid #c2410c' : undefined }}>
-      <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: hot ? '#c2410c' : undefined }}>{value}</div>
-      <div style={{ textTransform: 'uppercase', fontSize: 11, letterSpacing: 0.6, opacity: 0.7, marginTop: 4 }}>{label}</div>
+    <div className={`stat${hot ? ' hot' : ''}${brand ? ' brandcard' : ''}`}>
+      <div className="ico" aria-hidden>{icon}</div>
+      <div className="val">{val}</div>
+      <div className="lbl">{lbl}</div>
+      {sub ? <div className="sub">{sub}</div> : null}
     </div>
-  );
-}
-
-function Group({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <section style={{ marginTop: 8 }}>
-      <strong>{title}</strong>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 6 }}>{children}</div>
-    </section>
   );
 }
 
@@ -52,49 +51,71 @@ export function DashboardPage(): React.JSX.Element {
     const mine = ++seq.current;
     setBusy(true);
     Promise.all([
-      get<{ data: IntakeFunnel }>('/reports/intake-funnel'),
-      get<{ data: DailyOps }>('/reports/daily-ops'),
+      get<{ data: Overview }>('/reports/overview'),
       get<ListResponse<unknown>>('/review-queue?state=waiting'),
       get<ListResponse<unknown>>('/payment-reviews?state=waiting'),
-      get<ListResponse<unknown>>('/orders'),
-    ]).then(([intake, ops, rev, pay, ord]) => {
+    ]).then(([ov, rev, pay]) => {
       if (seq.current !== mine) return;
       setDash({
-        intake: intake?.data ?? null,
-        ops: ops?.data ?? null,
+        ov: ov?.data ?? null,
         reviewsWaiting: rev ? rev.items.length : null,
         paymentsWaiting: pay ? pay.items.length : null,
-        orders: ord ? ord.items.length : null,
       });
     }).finally(() => { if (seq.current === mine) setBusy(false); });
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
 
+  const ov = dash?.ov;
+  const statuses = ov ? Object.entries(ov.orders_by_status).sort((a, b) => b[1] - a[1]) : [];
+  const maxOrders = statuses.length ? Math.max(...statuses.map((s) => s[1])) : 1;
+  const needAttention = (dash?.reviewsWaiting ?? 0) + (dash?.paymentsWaiting ?? 0);
+
   return (
-    <section>
-      <section className="toolbar">
-        <button type="button" onClick={reload} disabled={busy}>Refresh</button>
-        <span className="countLine">{busy ? 'Loading…' : 'Live overview — projections + queue counts'}</span>
+    <div className="dash">
+      <section className="toolbar" style={{ margin: 0, padding: 0, border: 'none', background: 'none' }}>
+        <button type="button" onClick={reload} disabled={busy}>↻ Refresh</button>
+        <span className="countLine">{busy ? 'Loading…' : 'Live overview — real-time from the database'}</span>
       </section>
 
-      <Group title="Needs attention">
-        <StatCard label="Reviews waiting" value={n(dash?.reviewsWaiting)} accent />
-        <StatCard label="Payments to confirm" value={n(dash?.paymentsWaiting)} accent />
-      </Group>
+      <div className="statGrid">
+        <Stat brand icon="👥" val={n(ov?.customers)} lbl="Customers"
+          sub={ov ? `${n(ov.customers_with_order)} with an order` : undefined} />
+        <Stat icon="🧾" val={n(ov?.orders)} lbl="Total orders"
+          sub={ov ? `${n(ov.orders_by_status.active ?? 0)} active` : undefined} />
+        <Stat icon="💰" val={kwd(ov?.revenue_minor)} lbl="Recorded revenue"
+          sub={ov ? `${n(ov.payments)} payments` : undefined} />
+        <Stat icon="📍" val={n(ov?.addresses)} lbl="Delivery addresses"
+          sub={ov ? `${n(ov.areas)} areas` : undefined} />
+        <Stat hot={needAttention > 0} icon="🔔" val={n(needAttention)} lbl="Needs attention"
+          sub={`${n(dash?.reviewsWaiting)} reviews · ${n(dash?.paymentsWaiting)} payments`} />
+      </div>
 
-      <Group title="Intake funnel">
-        <StatCard label="Drafts created" value={n(dash?.intake?.drafts_created)} />
-        <StatCard label="Submitted" value={n(dash?.intake?.submitted)} />
-        <StatCard label="Approved" value={n(dash?.intake?.approved)} />
-        <StatCard label="Rejected" value={n(dash?.intake?.rejected)} />
-      </Group>
-
-      <Group title="Orders & payments">
-        <StatCard label="Orders" value={n(dash?.orders)} />
-        <StatCard label="Orders approved" value={n(dash?.ops?.orders_approved)} />
-        <StatCard label="Payments paid" value={n(dash?.ops?.payment_paid)} />
-      </Group>
-    </section>
+      <div className="panelGrid">
+        <div className="panel">
+          <h3>Orders by status</h3>
+          <div className="body">
+            {statuses.length === 0
+              ? <span className="emptyLine" style={{ padding: 0 }}>{busy ? 'Loading…' : 'No orders yet.'}</span>
+              : statuses.map(([s, c]) => (
+                <div className={`bar s-${s}`} key={s}>
+                  <div className="barTop"><span className="cap">{s}</span><span className="num">{c.toLocaleString()}</span></div>
+                  <div className="track"><div className="fill" style={{ width: `${Math.max(3, (c / maxOrders) * 100)}%` }} /></div>
+                </div>
+              ))}
+          </div>
+        </div>
+        <div className="panel">
+          <h3>Top delivery areas</h3>
+          <div className="body">
+            {(ov?.top_areas ?? []).length === 0
+              ? <span className="emptyLine" style={{ padding: 0 }}>{busy ? 'Loading…' : 'No areas yet.'}</span>
+              : (ov?.top_areas ?? []).map((a, i) => (
+                <div className="areaRow" key={i}><span>{a.name}</span><span className="cnt">{a.count.toLocaleString()}</span></div>
+              ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

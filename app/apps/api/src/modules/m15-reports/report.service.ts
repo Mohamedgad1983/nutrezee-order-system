@@ -206,6 +206,39 @@ export class ReportService {
     return { report: name, format: 'json', generated_at: new Date().toISOString(), data };
   }
 
+  /** Live enterprise overview — real DB aggregates (not the event projection). */
+  async overview(): Promise<{
+    customers: number; customers_with_order: number; orders: number;
+    orders_by_status: Record<string, number>; payments: number; revenue_minor: number;
+    addresses: number; areas: number; top_areas: Array<{ name: string; count: number }>;
+  }> {
+    const { rows: t } = await this.pool.query(
+      `SELECT
+         (SELECT count(*) FROM customer)::int AS customers,
+         (SELECT count(DISTINCT customer_id) FROM customer_order)::int AS customers_with_order,
+         (SELECT count(*) FROM customer_order)::int AS orders,
+         (SELECT count(*) FROM payment_record)::int AS payments,
+         (SELECT coalesce(sum(amount),0) FROM payment_record)::bigint AS revenue_minor,
+         (SELECT count(*) FROM address)::int AS addresses,
+         (SELECT count(*) FROM area)::int AS areas`,
+    );
+    const { rows: st } = await this.pool.query("SELECT status, count(*)::int c FROM customer_order GROUP BY status");
+    const { rows: areas } = await this.pool.query(
+      `SELECT coalesce(a.name_en, a.name_ar, 'unknown') AS name, count(ad.id)::int c
+       FROM area a JOIN address ad ON ad.area_id = a.id GROUP BY 1 ORDER BY c DESC LIMIT 6`,
+    );
+    const orders_by_status: Record<string, number> = {};
+    for (const r of st) orders_by_status[r.status as string] = Number(r.c);
+    const row = t[0] ?? {};
+    return {
+      customers: Number(row.customers ?? 0), customers_with_order: Number(row.customers_with_order ?? 0),
+      orders: Number(row.orders ?? 0), orders_by_status,
+      payments: Number(row.payments ?? 0), revenue_minor: Number(row.revenue_minor ?? 0),
+      addresses: Number(row.addresses ?? 0), areas: Number(row.areas ?? 0),
+      top_areas: areas.map((r) => ({ name: r.name as string, count: Number(r.c) })),
+    };
+  }
+
   async rebuildFromOutbox(): Promise<ProjectionSnapshot> {
     return this.project(await this.events());
   }

@@ -18,6 +18,13 @@ export class ReportController {
     private readonly reports: ReportService,
   ) {}
 
+  @Get('reports/overview')
+  async overview(@Req() req: Request) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'report.view.daily_ops');
+    return { report: 'overview', data: await this.reports.overview() };
+  }
+
   @Get('reports/:name')
   async report(@Req() req: Request, @Param('name') name: ReportName, @Query('date') date?: string) {
     const ctx = await this.ctx(req);
