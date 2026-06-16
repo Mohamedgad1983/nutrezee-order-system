@@ -34,7 +34,7 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await expect(page.getByText('Kitchen readiness', { exact: true })).toBeVisible();
   await expect(page.getByText('14-day order trend', { exact: true })).toBeVisible();
   await expect(page.locator('.metricCard').filter({ hasText: 'Reviews waiting' })).toBeVisible();
-  await expect(page.getByText('Drafts created', { exact: true })).toBeVisible();
+  await expect(page.locator('.metricCard').filter({ hasText: 'Drafts created' })).toBeVisible();
 
   await expect(page.locator('.analyticsPanel')).toHaveCount(8);
   await expect(page.locator('.metricCard')).toHaveCount(11);
