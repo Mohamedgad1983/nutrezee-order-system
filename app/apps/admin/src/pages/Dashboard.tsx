@@ -74,6 +74,9 @@ interface DetailRow {
   share?: string;
 }
 
+type MetricTone = 'good' | 'warn' | 'bad' | 'neutral' | 'brand';
+type MetricKey = 'orders' | 'revenue' | 'attention' | 'conversion' | 'drafts' | 'aov' | 'paidRate' | 'cancellations';
+
 const MINOR_UNITS: Record<string, number> = {
   BHD: 1000,
   IQD: 1000,
@@ -157,35 +160,65 @@ function detailRows(rows: Array<[string, number]>, total = rows.reduce((sum, [, 
 }
 
 function MetricCard({
-  label: text, value, context, tone = 'neutral', details,
+  label: text, value, context, tone = 'neutral', selected = false, onSelect, testId,
 }: {
   label: string;
   value: string;
   context?: string;
-  tone?: 'good' | 'warn' | 'bad' | 'neutral' | 'brand';
-  details?: ReactNode;
+  tone?: MetricTone;
+  selected?: boolean;
+  onSelect?: () => void;
+  testId?: string;
 }): React.JSX.Element {
-  const [open, setOpen] = useState(false);
-  if (!details) {
-    return (
-      <article className={`card metricCard tone-${tone}`}>
+  const body = (
+    <>
+      <span className="metricTop">
         <span className="metricLabel">{text}</span>
-        <strong>{value}</strong>
-        {context ? <span className="metricContext">{context}</span> : null}
-      </article>
-    );
-  }
+        {onSelect ? <span className="metricChevron" aria-hidden>{selected ? '-' : '+'}</span> : null}
+      </span>
+      <strong>{value}</strong>
+      {context ? <span className="metricContext">{context}</span> : null}
+    </>
+  );
+
+  if (!onSelect) return <article className={`card metricCard tone-${tone}`}>{body}</article>;
 
   return (
-    <article className={`card metricCard metricAction tone-${tone}${open ? ' isOpen' : ''}`}>
-      <button type="button" className="metricButton" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className="metricLabel">{text}</span>
-        <strong>{value}</strong>
-        {context ? <span className="metricContext">{context}</span> : null}
-        <span className="metricDetailCue">{open ? 'Hide details' : 'Details'}</span>
+    <article className={`card metricCard metricAction tone-${tone}${selected ? ' isSelected' : ''}`}>
+      <button
+        type="button"
+        className="metricButton"
+        onClick={onSelect}
+        aria-pressed={selected}
+        data-testid={testId}
+      >
+        {body}
       </button>
-      {open ? <div className="metricDetailDrop">{details}</div> : null}
     </article>
+  );
+}
+
+function MetricInspector({
+  title, value, context, tone, children,
+}: {
+  title: string;
+  value: string;
+  context?: string;
+  tone: MetricTone;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <section className={`metricInspector tone-${tone}`} data-testid="metric-inspector">
+      <div className="metricInspectorSummary">
+        <span className="metricInspectorEyebrow">Selected metric</span>
+        <h3>{title}</h3>
+        <strong>{value}</strong>
+        {context ? <p>{context}</p> : null}
+      </div>
+      <div className="metricInspectorBody">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -228,7 +261,7 @@ function AttentionDetail({
             <tbody>
               {reviewItems.map((item) => (
                 <tr key={item.id}>
-                  <td className="mono">{short(item.draft_id)}</td>
+                  <td className="mono idCell">{item.draft_id}</td>
                   <td>{item.channel}</td>
                   <td>{fmtTs(item.sla_due_at)}{item.sla_late ? ' late' : ''}</td>
                   <td>{item.missing.length + item.warnings.length}</td>
@@ -248,10 +281,10 @@ function AttentionDetail({
             <tbody>
               {paymentItems.map((item) => (
                 <tr key={item.id}>
-                  <td className="mono">{short(item.order_id)}</td>
+                  <td className="mono idCell">{item.order_id}</td>
                   <td>{label(item.requested_status)}</td>
                   <td>{fmtTs(item.created_at)}</td>
-                  <td>{item.evidence_note ? short(item.evidence_note, 24) : '—'}</td>
+                  <td className="noteCell">{item.evidence_note ? item.evidence_note : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -438,6 +471,7 @@ function KitchenPanel({
 export function DashboardPage(): React.JSX.Element {
   const [dash, setDash] = useState<Dash | null>(null);
   const [busy, setBusy] = useState(true);
+  const [activeMetric, setActiveMetric] = useState<MetricKey>('attention');
   const seq = useRef(0);
 
   const reload = useCallback(() => {
@@ -490,6 +524,101 @@ export function DashboardPage(): React.JSX.Element {
   const totalCustomers = ov?.customers ?? 0;
   const convertedCustomers = ov?.customers_with_order ?? 0;
   const unconvertedCustomers = Math.max(0, totalCustomers - convertedCustomers);
+  const avgOrderValue = avgOrder === null ? '—' : money(avgOrder, ov?.revenue_by_currency[0]?.currency ?? 'KWD');
+  const metricDetails: Record<MetricKey, { title: string; value: string; context?: string; tone: MetricTone; body: ReactNode }> = {
+    orders: {
+      title: 'Total orders',
+      value: num(ov?.orders),
+      context: `${num(ov?.orders_by_status.active ?? 0)} active · ${num(ov?.orders_by_status.approved ?? 0)} approved`,
+      tone: 'brand',
+      body: (
+        <>
+          <MetricDetailTable rows={[
+            { label: 'All orders', value: num(ov?.orders), share: '100%' },
+            ...detailRows(orderStatuses, totalOrders),
+          ]} />
+          {orderChannels.length > 0 ? <MetricDetailTable rows={detailRows(orderChannels, totalOrders)} /> : null}
+        </>
+      ),
+    },
+    revenue: {
+      title: 'Recorded revenue',
+      value: revenue.value,
+      context: revenue.sub,
+      tone: 'good',
+      body: <MetricDetailTable rows={[
+        { label: 'Recorded revenue', value: revenue.value, share: 'all currencies' },
+        ...(ov?.revenue_by_currency ?? []).map((row) => ({
+          label: row.currency,
+          value: money(row.amount_minor, row.currency),
+          share: `${num(row.payments)} payments`,
+        })),
+      ]} />,
+    },
+    attention: {
+      title: 'Needs attention',
+      value: num(needAttention),
+      context: `${num(reviewsWaiting.length)} reviews waiting · ${num(paymentsWaiting.length)} payments to confirm`,
+      tone: needAttention > 0 ? 'warn' : 'good',
+      body: <AttentionDetail reviews={dash?.reviewsWaiting ?? null} payments={dash?.paymentsWaiting ?? null} />,
+    },
+    conversion: {
+      title: 'Customer conversion',
+      value: customerConversion,
+      context: `${num(ov?.customers_with_order)} of ${num(ov?.customers)} customers with orders`,
+      tone: 'neutral',
+      body: <MetricDetailTable rows={[
+        { label: 'Customers with orders', value: num(convertedCustomers), share: percent(convertedCustomers, totalCustomers) },
+        { label: 'Customers without orders', value: num(unconvertedCustomers), share: percent(unconvertedCustomers, totalCustomers) },
+        { label: 'Delivery addresses', value: num(ov?.addresses), share: `${num(ov?.areas)} areas` },
+      ]} />,
+    },
+    drafts: {
+      title: 'Drafts created',
+      value: num(intake?.drafts_created),
+      context: `${approvalRate} approved from intake`,
+      tone: 'brand',
+      body: <MetricDetailTable rows={detailRows([
+        ['Drafts created', intake?.drafts_created ?? 0],
+        ['Submitted', intake?.submitted ?? 0],
+        ['Approved', intake?.approved ?? 0],
+        ['Returned', intake?.returned ?? 0],
+        ['Rejected', intake?.rejected ?? 0],
+      ], intake?.drafts_created ?? 0)} />,
+    },
+    aov: {
+      title: 'Average order value',
+      value: avgOrderValue,
+      context: 'recorded revenue / orders',
+      tone: 'neutral',
+      body: <MetricDetailTable rows={[
+        { label: 'Recorded revenue', value: revenue.value, share: `${num(ov?.payments)} payments` },
+        { label: 'Total orders', value: num(ov?.orders), share: 'denominator' },
+        { label: 'Average order value', value: avgOrderValue, share: 'revenue / orders' },
+      ]} />,
+    },
+    paidRate: {
+      title: 'Payment paid rate',
+      value: percent(paidPayments, paymentTotal),
+      context: `${num(paidPayments)} paid or collected of ${num(paymentTotal)}`,
+      tone: safeRatio(paidPayments, paymentTotal) >= 80 ? 'good' : 'warn',
+      body: <MetricDetailTable rows={[
+        { label: 'Paid or collected', value: num(paidPayments), share: percent(paidPayments, paymentTotal) },
+        ...detailRows(paymentStatuses, paymentTotal),
+      ]} />,
+    },
+    cancellations: {
+      title: 'Cancellation pressure',
+      value: cancelRate,
+      context: `${num(daily?.orders_cancelled)} cancelled in projections`,
+      tone: (daily?.orders_cancelled ?? 0) > 0 ? 'bad' : 'neutral',
+      body: <MetricDetailTable rows={[
+        { label: 'Orders approved', value: num(daily?.orders_approved), share: percent(daily?.orders_approved, (daily?.orders_approved ?? 0) + (daily?.orders_cancelled ?? 0)) },
+        { label: 'Orders cancelled', value: num(daily?.orders_cancelled), share: cancelRate },
+      ]} />,
+    },
+  };
+  const activeMetricDetail = metricDetails[activeMetric];
 
   return (
     <main className="dash analyticsDash">
@@ -505,65 +634,41 @@ export function DashboardPage(): React.JSX.Element {
         <MetricCard label="Total orders" value={num(ov?.orders)}
           context={`${num(ov?.orders_by_status.active ?? 0)} active · ${num(ov?.orders_by_status.approved ?? 0)} approved`}
           tone="brand"
-          details={<>
-            <MetricDetailTable rows={[
-              { label: 'All orders', value: num(ov?.orders), share: '100%' },
-              ...detailRows(orderStatuses, totalOrders),
-            ]} />
-            {orderChannels.length > 0 ? <MetricDetailTable rows={detailRows(orderChannels, totalOrders)} /> : null}
-          </>} />
+          selected={activeMetric === 'orders'} onSelect={() => setActiveMetric('orders')} testId="metric-orders" />
         <MetricCard label="Recorded revenue" value={revenue.value} context={revenue.sub} tone="good"
-          details={<MetricDetailTable rows={[
-            { label: 'Recorded revenue', value: revenue.value, share: 'all currencies' },
-            ...(ov?.revenue_by_currency ?? []).map((row) => ({
-              label: row.currency,
-              value: money(row.amount_minor, row.currency),
-              share: `${num(row.payments)} payments`,
-            })),
-          ]} />} />
+          selected={activeMetric === 'revenue'} onSelect={() => setActiveMetric('revenue')} testId="metric-revenue" />
         <MetricCard label="Needs attention" value={num(needAttention)}
           context={`${num(reviewsWaiting.length)} Reviews waiting · ${num(paymentsWaiting.length)} Payments to confirm`}
           tone={needAttention > 0 ? 'warn' : 'good'}
-          details={<AttentionDetail reviews={dash?.reviewsWaiting ?? null} payments={dash?.paymentsWaiting ?? null} />} />
+          selected={activeMetric === 'attention'} onSelect={() => setActiveMetric('attention')} testId="metric-attention" />
         <MetricCard label="Customer conversion" value={customerConversion}
           context={`${num(ov?.customers_with_order)} of ${num(ov?.customers)} customers with orders`}
-          details={<MetricDetailTable rows={[
-            { label: 'Customers with orders', value: num(convertedCustomers), share: percent(convertedCustomers, totalCustomers) },
-            { label: 'Customers without orders', value: num(unconvertedCustomers), share: percent(unconvertedCustomers, totalCustomers) },
-            { label: 'Delivery addresses', value: num(ov?.addresses), share: `${num(ov?.areas)} areas` },
-          ]} />} />
+          selected={activeMetric === 'conversion'} onSelect={() => setActiveMetric('conversion')} testId="metric-conversion" />
       </section>
 
       <section className="healthGrid">
         <MetricCard label="Drafts created" value={num(intake?.drafts_created)}
           context={`${approvalRate} approved from intake`} tone="brand"
-          details={<MetricDetailTable rows={detailRows([
-            ['Drafts created', intake?.drafts_created ?? 0],
-            ['Submitted', intake?.submitted ?? 0],
-            ['Approved', intake?.approved ?? 0],
-            ['Returned', intake?.returned ?? 0],
-            ['Rejected', intake?.rejected ?? 0],
-          ], intake?.drafts_created ?? 0)} />} />
-        <MetricCard label="Average order value" value={avgOrder === null ? '—' : money(avgOrder, ov?.revenue_by_currency[0]?.currency ?? 'KWD')}
+          selected={activeMetric === 'drafts'} onSelect={() => setActiveMetric('drafts')} testId="metric-drafts" />
+        <MetricCard label="Average order value" value={avgOrderValue}
           context="recorded revenue / orders"
-          details={<MetricDetailTable rows={[
-            { label: 'Recorded revenue', value: revenue.value, share: `${num(ov?.payments)} payments` },
-            { label: 'Total orders', value: num(ov?.orders), share: 'denominator' },
-            { label: 'Average order value', value: avgOrder === null ? '—' : money(avgOrder, ov?.revenue_by_currency[0]?.currency ?? 'KWD'), share: 'revenue / orders' },
-          ]} />} />
+          selected={activeMetric === 'aov'} onSelect={() => setActiveMetric('aov')} testId="metric-aov" />
         <MetricCard label="Payment paid rate" value={percent(paidPayments, paymentTotal)}
           context={`${num(paidPayments)} paid or collected of ${num(paymentTotal)}`} tone={safeRatio(paidPayments, paymentTotal) >= 80 ? 'good' : 'warn'}
-          details={<MetricDetailTable rows={[
-            { label: 'Paid or collected', value: num(paidPayments), share: percent(paidPayments, paymentTotal) },
-            ...detailRows(paymentStatuses, paymentTotal),
-          ]} />} />
+          selected={activeMetric === 'paidRate'} onSelect={() => setActiveMetric('paidRate')} testId="metric-paid-rate" />
         <MetricCard label="Cancellation pressure" value={cancelRate}
           context={`${num(daily?.orders_cancelled)} cancelled in projections`} tone={(daily?.orders_cancelled ?? 0) > 0 ? 'bad' : 'neutral'}
-          details={<MetricDetailTable rows={[
-            { label: 'Orders approved', value: num(daily?.orders_approved), share: percent(daily?.orders_approved, (daily?.orders_approved ?? 0) + (daily?.orders_cancelled ?? 0)) },
-            { label: 'Orders cancelled', value: num(daily?.orders_cancelled), share: cancelRate },
-          ]} />} />
+          selected={activeMetric === 'cancellations'} onSelect={() => setActiveMetric('cancellations')} testId="metric-cancellations" />
       </section>
+
+      <MetricInspector
+        title={activeMetricDetail.title}
+        value={activeMetricDetail.value}
+        context={activeMetricDetail.context}
+        tone={activeMetricDetail.tone}
+      >
+        {activeMetricDetail.body}
+      </MetricInspector>
 
       <section className="analyticsGrid wideLeft">
         <RecordBars title="Orders & payments" rows={orderStatuses} empty={busy ? 'Loading orders…' : 'No orders yet.'} />

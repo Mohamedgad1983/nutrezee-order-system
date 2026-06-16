@@ -27,7 +27,7 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   // Group headers + key cards render.
   await expect(page.getByText('Executive snapshot', { exact: true })).toBeVisible();
   await expect(page.getByText('Live operations analytics', { exact: true })).toBeVisible();
-  await expect(page.getByText('Needs attention', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('metric-attention')).toBeVisible();
   await expect(page.getByText('Intake funnel', { exact: true })).toBeVisible();
   await expect(page.getByText('Orders & payments', { exact: true })).toBeVisible();
   await expect(page.getByText('Payment status mix', { exact: true })).toBeVisible();
@@ -39,12 +39,16 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await expect(page.locator('.analyticsPanel')).toHaveCount(8);
   await expect(page.locator('.metricCard')).toHaveCount(11);
 
-  const attentionCard = page.locator('.metricCard').filter({ hasText: 'Needs attention' });
-  await attentionCard.getByRole('button').click();
-  const attentionDetail = attentionCard.locator('.metricDetailDrop');
-  await expect(attentionDetail).toBeVisible();
-  await expect(attentionDetail.getByRole('heading', { name: 'Reviews waiting' })).toBeVisible();
-  await expect(attentionDetail.getByRole('heading', { name: 'Payments to confirm' })).toBeVisible();
+  const inspector = page.getByTestId('metric-inspector');
+  await expect(inspector).toBeVisible();
+  await expect(inspector).toContainText('Needs attention');
+  await expect(inspector.getByRole('heading', { name: 'Reviews waiting' })).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: 'Payments to confirm' })).toBeVisible();
+
+  await page.getByTestId('metric-orders').click();
+  await expect(inspector).toContainText('Total orders');
+  await page.getByTestId('metric-attention').click();
+  await expect(inspector).toContainText('Needs attention');
 
   for (const title of [
     'Orders & payments',
