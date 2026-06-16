@@ -103,15 +103,20 @@ function parseAjaxOrderRows(json) {
   return rows.map((r) => {
     const action = String(r[15] || r[r.length - 1] || '');
     const idm = action.match(/\/orders\/view\/(\d+)/);
+    // r[2] = "Name[ phone ]" — needed for WhatsApp renewal segmentation (phone is the
+    // operational key, name personalizes the message). PII -> output stays outside the repo.
+    const cust = stripTags(String(r[2] ?? ''));
+    const cm = cust.match(/^(.*?)\s*\[\s*(\+?[\d][\d\s]*)\s*\]\s*$/);
     return {
       order_number: String(r[1] ?? ''),
       internal_id: idm ? idm[1] : null,
+      customer_name: cm ? cm[1].trim() : (cust || null),
+      customer_phone: cm ? cm[2].replace(/\s+/g, '') : null,
       package: String(r[3] ?? ''), subpackage: String(r[4] ?? ''),
       start: String(r[5] ?? ''), end: String(r[6] ?? ''), order_date: String(r[7] ?? ''),
       txn: String(r[8] ?? ''), order_type: String(r[9] ?? ''),
       payment_status: stripTags(String(r[10] ?? '')), order_status: stripTags(String(r[11] ?? '')),
       amt_a: String(r[13] ?? ''), amt_b: String(r[14] ?? ''),
-      // r[2] is "name[ phone ]" — PII; kept in raw recordsTotal capture only, not parsed out here
     };
   });
 }
