@@ -7,17 +7,20 @@ Date: 2026-06-15
 ```bash
 cd tools/e2e-staging
 npx playwright test tests/wpui-auth-unauth.spec.ts
+E2E_EMAIL=... E2E_PASSWORD=... npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts
 ```
 
 ## Current Run Status
 
-Passed: 2/2 browser tests.
+No-secret smoke passed: 2/2 browser tests.
 
 ```text
 tests/wpui-auth-unauth.spec.ts
 - protected admin routes redirect to login without a session
 - invalid admin login shows an error and stays on login
 ```
+
+Authenticated run blocked at login: staging returned `Invalid email or password.` for the supplied account. No authenticated route assertions ran after that failure.
 
 ## Expected Coverage From Updated Specs
 
@@ -40,6 +43,6 @@ tests/wpui-auth-unauth.spec.ts
 
 ## Authenticated Browser Blockers
 
-- E2E credentials were missing at discovery time.
+- Supplied E2E credentials were rejected by staging with `Invalid email or password.`
 - If not deployed, staging will not contain this branch's customer address/order-history UI.
-- Authenticated specs (`wpui-orders`, `wpui-customers`, full navigation) were updated but not run in this shell because `E2E_EMAIL` and `E2E_PASSWORD` are unset.
+- Authenticated specs (`wpui-orders`, `wpui-customers`, full navigation) were attempted but did not pass login.

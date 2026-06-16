@@ -4,7 +4,7 @@ Date: 2026-06-15
 
 ## Status
 
-Partial. Code, evidence docs, local gates, and no-secret browser smoke are complete. Authenticated staging browser coverage is blocked by missing `E2E_EMAIL`/`E2E_PASSWORD` in this shell and by the need to deploy this branch before testing its new customer-profile UI on staging.
+Partial. Code, evidence docs, local gates, and no-secret browser smoke are complete. Authenticated staging browser coverage is blocked because the supplied staging account was rejected with `Invalid email or password`; this branch also still needs deployment before its new customer-profile UI can be tested on staging.
 
 ## What Was Discovered
 
@@ -12,7 +12,7 @@ Partial. Code, evidence docs, local gates, and no-secret browser smoke are compl
 - Verified: current branch has unmerged order/customer UI improvements beyond `main`.
 - Verified: legacy baseline includes many additional operational/content/finance/dispatch areas beyond the current order-ops cutover path.
 - Verified: real legacy data migration is still blocked by missing legacy export/DB/source access.
-- Verified: staging/browser tests exist, but this shell lacks `E2E_EMAIL` and `E2E_PASSWORD`.
+- Verified: staging/browser tests exist; the supplied account did not authenticate on the new staging admin.
 
 ## What Was Missing
 
@@ -41,8 +41,9 @@ Partial. Code, evidence docs, local gates, and no-secret browser smoke are compl
 | `cd app && npx vitest run tests/integration/ts-c-orders.test.ts tests/integration/ts-c-customers.test.ts` | Passed: 23 tests |
 | `cd app && npm run test:placeholder` | Passed: 46 files, 204 tests |
 | `cd tools/e2e-staging && npx playwright test tests/wpui-auth-unauth.spec.ts` | Passed: 2 browser tests, screenshots captured |
+| `cd tools/e2e-staging && E2E_EMAIL=... E2E_PASSWORD=... npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts` | Blocked: login returned `Invalid email or password.` |
 
-Authenticated Playwright specs were not run because secure staging credentials were not available in the shell.
+Authenticated Playwright specs were attempted but stopped at login because staging rejected the supplied account.
 
 ## Remaining Gaps
 
