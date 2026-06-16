@@ -8,7 +8,7 @@ Date: 2026-06-16
 cd tools/e2e-staging
 npx playwright test tests/wpui-auth-unauth.spec.ts
 # authenticated run requires E2E_EMAIL/E2E_PASSWORD exported from a secret source first
-npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts
+npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts tests/wpui-dashboard.spec.ts
 ```
 
 ## Current Run Status
@@ -22,17 +22,10 @@ npx playwright test tests/wpui-auth-unauth.spec.ts
 
 Result: passed, 2/2 browser tests.
 
-Authenticated staging E2E was **not run in this follow-up** because the required
-runtime credentials were not present in the environment:
-
-```text
-E2E_EMAIL missing
-E2E_PASSWORD missing
-E2E_BASE_URL missing (the Playwright config defaults to the staging URL)
-```
-
-Per the staging E2E rule, credentials must be supplied via environment/secret
-store at run time. They were not hardcoded, echoed, or committed.
+Authenticated staging E2E was rerun after the operator explicitly approved using
+the staging account already present in the conversation. Credentials were supplied
+as runtime environment variables only; they were not hardcoded, echoed, or
+committed.
 
 No-secret smoke passed: 2/2 browser tests.
 
@@ -61,11 +54,16 @@ tests/wpui-shell.spec.ts
 - kitchen board Generate/Refresh works inside the shell
 - deep-link hard refresh renders the SPA
 - sign out revokes the session server-side
+
+tests/wpui-dashboard.spec.ts
+- dashboard loads
+- KPI cards navigate to dedicated metric detail pages
+- analytics panel detail rows open without client crashes
 ```
 
-Result: 11/11 authenticated tests passed.
+Result: 12/12 authenticated tests passed.
 
-Staging deployment used the current branch archive at commit `19b827c`; `api` and `admin` images were rebuilt and restarted. VPS health after deploy: `postgres` healthy, `api` up, `admin` up, `caddy` up. Pre-deploy repo backup on VPS: `/opt/nutrezee/backups/repo-pre-admin-gap-20260616055912.tgz`.
+Staging deployment used the current branch archive; `api` and `admin` images were rebuilt and restarted. VPS health after deploy: `postgres` healthy, `api` up, `admin` up, `caddy` up.
 
 Secret hygiene: generated Playwright artifacts were scanned for the supplied email and password; no matches were found.
 
@@ -75,6 +73,7 @@ Secret hygiene: generated Playwright artifacts were scanned for the supplied ema
 |---|---|
 | `tests/wpui-orders.spec.ts` | Login, orders route load, Active status tab re-query, cancellation reason-code endpoint |
 | `tests/wpui-customers.spec.ts` | Login, customers route load, create customer, add address, profile order-history section, edit notes, search by phone |
+| `tests/wpui-dashboard.spec.ts` | Login, dashboard cards, KPI detail pages, analytics detail dropdowns |
 | `tests/wpui-auth-unauth.spec.ts` | Protected route redirect and invalid-login error without secrets |
 
 ## Screenshot Target
@@ -87,6 +86,7 @@ Secret hygiene: generated Playwright artifacts were scanned for the supplied ema
 |---|---|
 | `screenshots/01-login-redirect.png` | `/app/orders` redirects to `/app/login` without a session |
 | `screenshots/02-invalid-login.png` | Invalid login stays on login and shows an error |
+| `screenshots/authenticated-staging/` | Authenticated staging shell, customers, orders, dashboard coverage |
 
 ## Authenticated Browser Blockers
 
