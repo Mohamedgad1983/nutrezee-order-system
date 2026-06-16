@@ -1,6 +1,6 @@
 # Playwright / Browser Results
 
-Date: 2026-06-15
+Date: 2026-06-16
 
 ## Commands Run
 
@@ -20,7 +20,32 @@ tests/wpui-auth-unauth.spec.ts
 - invalid admin login shows an error and stays on login
 ```
 
-Authenticated run blocked at login: staging returned `Invalid email or password.` for the supplied account. No authenticated route assertions ran after that failure.
+Authenticated staging run passed after resetting the supplied staging account password and deploying this branch's app/API changes to staging.
+
+```text
+tests/wpui-customers.spec.ts
+- customers admin — create, search, open profile, edit (end-to-end)
+
+tests/wpui-orders.spec.ts
+- Orders screen loads from the live API
+- status filter re-queries without error
+- cancellation reason-code endpoint is wired
+
+tests/wpui-shell.spec.ts
+- unauthenticated visit redirects to login
+- sign in lands on kitchen board
+- sidebar navigates drafts, review queue, and orders with seeded-data tolerant assertions
+- Payments opens from the sidebar as a live queue
+- kitchen board Generate/Refresh works inside the shell
+- deep-link hard refresh renders the SPA
+- sign out revokes the session server-side
+```
+
+Result: 11/11 authenticated tests passed.
+
+Staging deployment used the current branch archive at commit `19b827c`; `api` and `admin` images were rebuilt and restarted. VPS health after deploy: `postgres` healthy, `api` up, `admin` up, `caddy` up. Pre-deploy repo backup on VPS: `/opt/nutrezee/backups/repo-pre-admin-gap-20260616055912.tgz`.
+
+Secret hygiene: generated Playwright artifacts were scanned for the supplied email and password; no matches were found.
 
 ## Expected Coverage From Updated Specs
 
@@ -43,6 +68,10 @@ Authenticated run blocked at login: staging returned `Invalid email or password.
 
 ## Authenticated Browser Blockers
 
-- Supplied E2E credentials were rejected by staging with `Invalid email or password.`
-- If not deployed, staging will not contain this branch's customer address/order-history UI.
-- Authenticated specs (`wpui-orders`, `wpui-customers`, full navigation) were attempted but did not pass login.
+None for this branch's current authenticated staging coverage.
+
+Resolved during follow-up:
+
+- The supplied E2E account initially failed login; password was reset on staging through the VPS access path and login was verified in the in-app Browser.
+- Staging initially lacked this branch's customer add-address/order-history UI; the current branch archive was deployed to staging and `api`/`admin` were rebuilt.
+- Older shell assertions assumed empty staging lists and a Payments placeholder; the test now accepts seeded data and verifies the live Payments queue.

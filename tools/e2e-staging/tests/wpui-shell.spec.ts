@@ -14,6 +14,10 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Kitchen board' })).toBeVisible();
 }
 
+async function expectListState(page: Page, emptyText: string): Promise<void> {
+  await expect(page.getByText(emptyText).or(page.locator('table.table')).first()).toBeVisible();
+}
+
 test('1 — unauthenticated visit redirects to the new login screen', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/app\/login$/);
@@ -37,30 +41,33 @@ test('3 — sidebar navigates the live list screens', async ({ page }) => {
 
   await page.getByRole('link', { name: 'Intake drafts' }).click();
   await expect(page.getByRole('heading', { name: 'Intake drafts' })).toBeVisible();
-  await expect(page.getByText('No drafts yet')).toBeVisible();
+  await expectListState(page, 'No drafts yet');
   await page.screenshot({ path: `${SHOTS}/03-drafts-screen.png`, fullPage: true });
 
   await page.getByRole('link', { name: 'Review queue' }).click();
   await expect(page.getByRole('heading', { name: 'Review queue' })).toBeVisible();
-  await expect(page.getByText('Review queue is empty')).toBeVisible();
+  await expectListState(page, 'Review queue is empty');
   await page.screenshot({ path: `${SHOTS}/04-review-queue-screen.png`, fullPage: true });
 
   await page.getByRole('link', { name: 'Orders' }).click();
   await expect(page.getByRole('heading', { name: 'Orders' })).toBeVisible();
-  await expect(page.getByText('No orders yet')).toBeVisible();
+  await expectListState(page, 'No orders yet');
   await page.screenshot({ path: `${SHOTS}/05-orders-screen.png`, fullPage: true });
 });
 
-test('4 — unbuilt sections show the WP-UI-02 placeholder honestly', async ({ page }) => {
+test('4 — Payments opens from the sidebar as a live queue', async ({ page }) => {
   await signIn(page);
   await page.getByRole('link', { name: 'Payments' }).click();
-  await expect(page.getByText('scheduled in WP-UI-02')).toBeVisible();
-  await page.screenshot({ path: `${SHOTS}/06-placeholder-payments.png`, fullPage: true });
+  await expect(page).toHaveURL(/\/app\/payments$/);
+  await expect(page.getByRole('heading', { name: 'Payments' })).toBeVisible();
+  await expect(page.getByLabel('State')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
+  await expectListState(page, 'Payment review queue is empty');
+  await page.screenshot({ path: `${SHOTS}/06-payments-screen.png`, fullPage: true });
 });
 
 test('5 — kitchen board still works inside the shell (Generate + Refresh)', async ({ page }) => {
   await signIn(page);
-  await expect(page.getByText('No tickets')).toBeVisible();
   const gen = page.waitForResponse((r) => r.url().includes('/kitchen/generate-tickets') && r.status() < 300);
   await page.getByRole('button', { name: 'Generate' }).click();
   await gen;
