@@ -211,6 +211,12 @@ export class ReportService {
     customers: number; customers_with_order: number; orders: number;
     orders_by_status: Record<string, number>; payments: number; revenue_minor: number;
     addresses: number; areas: number; top_areas: Array<{ name: string; count: number }>;
+    orders_by_channel: Record<string, number>; payment_by_status: Record<string, number>;
+    fulfillment_by_status: Record<string, number>; kitchen_tickets_by_status: Record<string, number>;
+    orders_last_14_days: Array<{ date: string; count: number }>;
+    top_packages: Array<{ name: string; count: number }>;
+    revenue_by_currency: Array<{ currency: string; amount_minor: number; payments: number }>;
+    upcoming_fulfillment_days: number;
   }> {
     const { rows: t } = await this.pool.query(
       `SELECT
@@ -227,8 +233,55 @@ export class ReportService {
       `SELECT coalesce(a.name_en, a.name_ar, 'unknown') AS name, count(ad.id)::int c
        FROM area a JOIN address ad ON ad.area_id = a.id GROUP BY 1 ORDER BY c DESC LIMIT 6`,
     );
+    const { rows: channels } = await this.pool.query(
+      "SELECT channel, count(*)::int c FROM customer_order GROUP BY channel ORDER BY c DESC, channel LIMIT 8",
+    );
+    const { rows: paymentStatuses } = await this.pool.query(
+      "SELECT status, count(*)::int c FROM payment_record GROUP BY status ORDER BY c DESC, status",
+    );
+    const { rows: fulfillmentStatuses } = await this.pool.query(
+      "SELECT status, count(*)::int c FROM fulfillment_day GROUP BY status ORDER BY c DESC, status",
+    );
+    const { rows: ticketStatuses } = await this.pool.query(
+      "SELECT status, count(*)::int c FROM kitchen_ticket GROUP BY status ORDER BY c DESC, status",
+    );
+    const { rows: trend } = await this.pool.query(
+      `SELECT to_char(d::date, 'YYYY-MM-DD') AS date, coalesce(x.c, 0)::int AS c
+       FROM generate_series(current_date - interval '13 days', current_date, interval '1 day') d
+       LEFT JOIN (
+         SELECT created_at::date AS day, count(*)::int AS c
+         FROM customer_order
+         WHERE created_at >= current_date - interval '13 days'
+         GROUP BY 1
+       ) x ON x.day = d::date
+       ORDER BY d::date`,
+    );
+    const { rows: packages } = await this.pool.query(
+      `SELECT coalesce(nullif(package_name_frozen_en, ''), package_id, 'Unknown package') AS name,
+              count(*)::int AS c
+       FROM customer_order
+       GROUP BY 1
+       ORDER BY c DESC, name
+       LIMIT 6`,
+    );
+    const { rows: currencies } = await this.pool.query(
+      `SELECT currency, count(*)::int AS payments, coalesce(sum(amount), 0)::bigint AS amount_minor
+       FROM payment_record
+       GROUP BY currency
+       ORDER BY amount_minor DESC, currency`,
+    );
+    const { rows: upcoming } = await this.pool.query(
+      `SELECT count(*)::int AS n
+       FROM fulfillment_day
+       WHERE date BETWEEN current_date AND current_date + interval '6 days'
+         AND status NOT IN ('cancelled_day', 'skipped')`,
+    );
     const orders_by_status: Record<string, number> = {};
     for (const r of st) orders_by_status[r.status as string] = Number(r.c);
+    const orders_by_channel = this.countRecord(channels, 'channel');
+    const payment_by_status = this.countRecord(paymentStatuses, 'status');
+    const fulfillment_by_status = this.countRecord(fulfillmentStatuses, 'status');
+    const kitchen_tickets_by_status = this.countRecord(ticketStatuses, 'status');
     const row = t[0] ?? {};
     return {
       customers: Number(row.customers ?? 0), customers_with_order: Number(row.customers_with_order ?? 0),
@@ -236,6 +289,15 @@ export class ReportService {
       payments: Number(row.payments ?? 0), revenue_minor: Number(row.revenue_minor ?? 0),
       addresses: Number(row.addresses ?? 0), areas: Number(row.areas ?? 0),
       top_areas: areas.map((r) => ({ name: r.name as string, count: Number(r.c) })),
+      orders_by_channel, payment_by_status, fulfillment_by_status, kitchen_tickets_by_status,
+      orders_last_14_days: trend.map((r) => ({ date: r.date as string, count: Number(r.c) })),
+      top_packages: packages.map((r) => ({ name: r.name as string, count: Number(r.c) })),
+      revenue_by_currency: currencies.map((r) => ({
+        currency: r.currency as string,
+        amount_minor: Number(r.amount_minor),
+        payments: Number(r.payments),
+      })),
+      upcoming_fulfillment_days: Number(upcoming[0]?.n ?? 0),
     };
   }
 
@@ -280,5 +342,11 @@ export class ReportService {
 
   private emptyKitchenDay(): ProjectionSnapshot['kitchen_day_list']['by_date'][string] {
     return { tickets_generated: 0, unrouted: 0, per_section: {}, ready_to_pack: 0, packed: 0 };
+  }
+
+  private countRecord(rows: Array<Record<string, unknown>>, key: string): Record<string, number> {
+    const record: Record<string, number> = {};
+    for (const row of rows) record[String(row[key] ?? 'unknown')] = Number(row.c ?? 0);
+    return record;
   }
 }

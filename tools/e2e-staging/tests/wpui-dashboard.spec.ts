@@ -14,9 +14,8 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Kitchen board' })).toBeVisible();
 }
 
-// WP-UI-03c — dashboard. Read-only overview aggregating the M15 report projections +
-// live queue counts. Demonstrable against the seed (1 review waiting, 1 payment to
-// confirm, 1 order, 4 drafts created, 1 approved).
+// Dashboard is read-only and runs against mutable staging data, so assertions check
+// live analytics structure rather than fixed seed counts.
 test('dashboard — stat cards from live projections + queue counts', async ({ page }) => {
   const crashes: string[] = [];
   page.on('pageerror', (e) => crashes.push(e.message));
@@ -25,16 +24,20 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await page.getByRole('link', { name: 'Dashboard' }).click();
   await expect(page).toHaveURL(/\/app\/dashboard$/);
 
-  // Group headers + key cards render
+  // Group headers + key cards render.
+  await expect(page.getByText('Executive snapshot', { exact: true })).toBeVisible();
+  await expect(page.getByText('Live operations analytics', { exact: true })).toBeVisible();
   await expect(page.getByText('Needs attention', { exact: true })).toBeVisible();
   await expect(page.getByText('Intake funnel', { exact: true })).toBeVisible();
   await expect(page.getByText('Orders & payments', { exact: true })).toBeVisible();
-  await expect(page.getByText('Reviews waiting', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payment status mix', { exact: true })).toBeVisible();
+  await expect(page.getByText('Kitchen readiness', { exact: true })).toBeVisible();
+  await expect(page.getByText('14-day order trend', { exact: true })).toBeVisible();
+  await expect(page.locator('.metricCard').filter({ hasText: 'Reviews waiting' })).toBeVisible();
   await expect(page.getByText('Drafts created', { exact: true })).toBeVisible();
 
-  // Real data flows from the live API: the seeded queues/order each have one item.
-  await expect(page.locator('.card').filter({ hasText: 'Reviews waiting' })).toContainText('1');
-  await expect(page.locator('.card').filter({ hasText: 'Payments to confirm' })).toContainText('1');
+  await expect(page.locator('.analyticsPanel')).toHaveCount(8);
+  await expect(page.locator('.metricCard')).toHaveCount(11);
 
   await page.screenshot({ path: `${SHOTS}/01-dashboard.png`, fullPage: true });
 

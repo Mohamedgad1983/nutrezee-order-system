@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type ListResponse } from '../api';
-
-// Live enterprise overview — real DB aggregates from /reports/overview plus the live
-// queue counts. Each source degrades to '—' on its own if it fails.
 
 interface Overview {
   customers: number;
@@ -14,31 +11,262 @@ interface Overview {
   addresses: number;
   areas: number;
   top_areas: Array<{ name: string; count: number }>;
+  orders_by_channel: Record<string, number>;
+  payment_by_status: Record<string, number>;
+  fulfillment_by_status: Record<string, number>;
+  kitchen_tickets_by_status: Record<string, number>;
+  orders_last_14_days: Array<{ date: string; count: number }>;
+  top_packages: Array<{ name: string; count: number }>;
+  revenue_by_currency: Array<{ currency: string; amount_minor: number; payments: number }>;
+  upcoming_fulfillment_days: number;
 }
+
+interface IntakeFunnel {
+  drafts_created: number;
+  submitted: number;
+  returned: number;
+  approved: number;
+  rejected: number;
+  by_channel: Record<string, number>;
+}
+
+interface DailyOps {
+  orders_approved: number;
+  orders_cancelled: number;
+  payment_paid: number;
+  payment_failed: number;
+  fulfillment_by_status: Record<string, number>;
+}
+
+interface KitchenDay {
+  tickets_generated: number;
+  unrouted: number;
+  per_section: Record<string, number>;
+  ready_to_pack: number;
+  packed: number;
+}
+
+interface KitchenReport {
+  by_date: Record<string, KitchenDay>;
+}
+
 interface Dash {
   ov: Overview | null;
+  intake: IntakeFunnel | null;
+  daily: DailyOps | null;
+  kitchen: KitchenReport | null;
   reviewsWaiting: number | null;
   paymentsWaiting: number | null;
 }
 
-const n = (v: number | null | undefined): string => (typeof v === 'number' ? v.toLocaleString() : '—');
-const kwd = (minor: number | null | undefined): string =>
-  typeof minor === 'number' ? `${(minor / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} KWD` : '—';
+const MINOR_UNITS: Record<string, number> = {
+  BHD: 1000,
+  IQD: 1000,
+  JOD: 1000,
+  KWD: 1000,
+  LYD: 1000,
+  OMR: 1000,
+  TND: 1000,
+};
+
+const statusTone: Record<string, 'good' | 'warn' | 'bad' | 'neutral'> = {
+  active: 'good',
+  approved: 'good',
+  paid: 'good',
+  collected: 'good',
+  completed: 'good',
+  packed: 'good',
+  prepared: 'good',
+  ready_to_pack: 'good',
+  submitted: 'warn',
+  waiting: 'warn',
+  pending_review: 'warn',
+  cod_pending: 'warn',
+  link_sent: 'warn',
+  queued: 'warn',
+  in_progress: 'warn',
+  in_preparation: 'warn',
+  failed: 'bad',
+  rejected: 'bad',
+  cancelled: 'bad',
+  cancelled_day: 'bad',
+  blocked: 'bad',
+  expired: 'neutral',
+  paused: 'neutral',
+  scheduled: 'neutral',
+  skipped: 'neutral',
+};
 
 async function get<T>(path: string): Promise<T | null> {
   try { return await api<T>(path); } catch { return null; }
 }
 
-function Stat({ icon, val, lbl, sub, hot, brand }: {
-  icon: string; val: string; lbl: string; sub?: string; hot?: boolean; brand?: boolean;
+const num = (v: number | null | undefined): string => (typeof v === 'number' ? v.toLocaleString() : '—');
+const label = (s: string): string => s.replaceAll('_', ' ');
+const sumRecord = (r: Record<string, number> | null | undefined): number =>
+  Object.values(r ?? {}).reduce((total, v) => total + v, 0);
+const percent = (part: number | null | undefined, whole: number | null | undefined): string => {
+  if (!whole || typeof part !== 'number') return '—';
+  return `${Math.round((part / whole) * 100)}%`;
+};
+const safeRatio = (part: number | null | undefined, whole: number | null | undefined): number =>
+  !whole || typeof part !== 'number' ? 0 : Math.max(0, Math.min(100, (part / whole) * 100));
+
+function money(minor: number | null | undefined, currency = 'KWD'): string {
+  if (typeof minor !== 'number') return '—';
+  const divisor = MINOR_UNITS[currency] ?? 100;
+  return `${(minor / divisor).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`;
+}
+
+function primaryRevenue(ov: Overview | null | undefined): { value: string; sub: string } {
+  const first = ov?.revenue_by_currency?.[0];
+  if (!first) return { value: money(ov?.revenue_minor), sub: `${num(ov?.payments)} payments` };
+  return {
+    value: money(first.amount_minor, first.currency),
+    sub: `${num(first.payments)} payments · ${first.currency}`,
+  };
+}
+
+function sortedEntries(record: Record<string, number> | null | undefined): Array<[string, number]> {
+  return Object.entries(record ?? {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function MetricCard({
+  label: text, value, context, tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  context?: string;
+  tone?: 'good' | 'warn' | 'bad' | 'neutral' | 'brand';
 }): React.JSX.Element {
   return (
-    <div className={`stat${hot ? ' hot' : ''}${brand ? ' brandcard' : ''}`}>
-      <div className="ico" aria-hidden>{icon}</div>
-      <div className="val">{val}</div>
-      <div className="lbl">{lbl}</div>
-      {sub ? <div className="sub">{sub}</div> : null}
+    <article className={`card metricCard tone-${tone}`}>
+      <span className="metricLabel">{text}</span>
+      <strong>{value}</strong>
+      {context ? <span className="metricContext">{context}</span> : null}
+    </article>
+  );
+}
+
+function ProgressRow({
+  name, value, max, tone,
+}: {
+  name: string;
+  value: number;
+  max: number;
+  tone?: 'good' | 'warn' | 'bad' | 'neutral';
+}): React.JSX.Element {
+  const width = max > 0 ? Math.max(3, (value / max) * 100) : 0;
+  return (
+    <div className={`progressRow tone-${tone ?? statusTone[name] ?? 'neutral'}`}>
+      <div className="progressTop">
+        <span>{label(name)}</span>
+        <strong>{num(value)}</strong>
+      </div>
+      <div className="progressTrack" aria-hidden>
+        <span style={{ width: `${width}%` }} />
+      </div>
     </div>
+  );
+}
+
+function RecordBars({
+  title, rows, empty, limit = 7,
+}: {
+  title: string;
+  rows: Array<[string, number]>;
+  empty: string;
+  limit?: number;
+}): React.JSX.Element {
+  const shown = rows.slice(0, limit);
+  const max = shown.length ? Math.max(...shown.map(([, value]) => value)) : 0;
+  return (
+    <section className="analyticsPanel">
+      <h2>{title}</h2>
+      <div className="analyticsBody">
+        {shown.length === 0 ? <p className="emptyLine compact">{empty}</p> : null}
+        {shown.map(([name, value]) => <ProgressRow key={name} name={name} value={value} max={max} />)}
+      </div>
+    </section>
+  );
+}
+
+function TrendBars({ rows }: { rows: Array<{ date: string; count: number }> }): React.JSX.Element {
+  const max = rows.length ? Math.max(1, ...rows.map((r) => r.count)) : 1;
+  return (
+    <section className="analyticsPanel trendPanel">
+      <h2>14-day order trend</h2>
+      <div className="trendBars" aria-label="Orders created during the last 14 days">
+        {rows.map((r) => (
+          <span
+            key={r.date}
+            title={`${r.date}: ${r.count.toLocaleString()} orders`}
+            style={{ height: `${Math.max(6, (r.count / max) * 100)}%` }}
+          >
+            <i>{r.count}</i>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FunnelPanel({ intake }: { intake: IntakeFunnel | null }): React.JSX.Element {
+  const rows: Array<[string, number]> = [
+    ['Drafts created', intake?.drafts_created ?? 0],
+    ['Submitted', intake?.submitted ?? 0],
+    ['Approved', intake?.approved ?? 0],
+    ['Returned', intake?.returned ?? 0],
+    ['Rejected', intake?.rejected ?? 0],
+  ];
+  const max = Math.max(1, ...rows.map(([, value]) => value));
+  return (
+    <section className="analyticsPanel">
+      <h2>Intake funnel</h2>
+      <div className="analyticsBody">
+        {rows.map(([name, value]) => (
+          <ProgressRow
+            key={name}
+            name={name}
+            value={value}
+            max={max}
+            tone={name === 'Approved' ? 'good' : name === 'Rejected' ? 'bad' : 'warn'}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KitchenPanel({
+  ov, kitchen,
+}: {
+  ov: Overview | null;
+  kitchen: KitchenReport | null;
+}): React.JSX.Element {
+  const tickets = ov?.kitchen_tickets_by_status ?? {};
+  const totalTickets = sumRecord(tickets);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayKitchen = kitchen?.by_date[today];
+  const packed = tickets.prepared ?? 0;
+  return (
+    <section className="analyticsPanel opsFocus">
+      <h2>Kitchen readiness</h2>
+      <div className="opsRows">
+        <MetricCard label="Ticket readiness" value={percent(packed, totalTickets)}
+          context={`${num(packed)} prepared of ${num(totalTickets)} tickets`} tone={packed > 0 ? 'good' : 'neutral'} />
+        <MetricCard label="Upcoming fulfillment" value={num(ov?.upcoming_fulfillment_days)}
+          context="next 7 calendar days" tone="brand" />
+        <MetricCard label="Today generated" value={num(todayKitchen?.tickets_generated)}
+          context={`${num(todayKitchen?.unrouted)} unrouted`} tone={(todayKitchen?.unrouted ?? 0) > 0 ? 'warn' : 'neutral'} />
+      </div>
+      <div className="analyticsBody flush">
+        {sortedEntries(tickets).length === 0 ? <p className="emptyLine compact">No kitchen tickets yet.</p> : null}
+        {sortedEntries(tickets).map(([name, value]) => (
+          <ProgressRow key={name} name={name} value={value} max={Math.max(1, totalTickets)} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -52,12 +280,18 @@ export function DashboardPage(): React.JSX.Element {
     setBusy(true);
     Promise.all([
       get<{ data: Overview }>('/reports/overview'),
+      get<{ data: IntakeFunnel }>('/reports/intake-funnel'),
+      get<{ data: DailyOps }>('/reports/daily-ops'),
+      get<{ data: KitchenReport }>('/reports/kitchen-day-list'),
       get<ListResponse<unknown>>('/review-queue?state=waiting'),
       get<ListResponse<unknown>>('/payment-reviews?state=waiting'),
-    ]).then(([ov, rev, pay]) => {
+    ]).then(([ov, intake, daily, kitchen, rev, pay]) => {
       if (seq.current !== mine) return;
       setDash({
         ov: ov?.data ?? null,
+        intake: intake?.data ?? null,
+        daily: daily?.data ?? null,
+        kitchen: kitchen?.data ?? null,
         reviewsWaiting: rev ? rev.items.length : null,
         paymentsWaiting: pay ? pay.items.length : null,
       });
@@ -66,56 +300,78 @@ export function DashboardPage(): React.JSX.Element {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const ov = dash?.ov;
-  const statuses = ov ? Object.entries(ov.orders_by_status).sort((a, b) => b[1] - a[1]) : [];
-  const maxOrders = statuses.length ? Math.max(...statuses.map((s) => s[1])) : 1;
+  const ov = dash?.ov ?? null;
+  const intake = dash?.intake ?? null;
+  const daily = dash?.daily ?? null;
+  const kitchen = dash?.kitchen ?? null;
+  const revenue = primaryRevenue(ov);
   const needAttention = (dash?.reviewsWaiting ?? 0) + (dash?.paymentsWaiting ?? 0);
+  const paymentTotal = Math.max(ov?.payments ?? 0, sumRecord(ov?.payment_by_status));
+  const paidPayments = (ov?.payment_by_status.paid ?? 0) + (ov?.payment_by_status.collected ?? 0);
+  const customerConversion = percent(ov?.customers_with_order, ov?.customers);
+  const approvalRate = percent(intake?.approved, intake?.drafts_created);
+  const cancelRate = percent(daily?.orders_cancelled, (daily?.orders_approved ?? 0) + (daily?.orders_cancelled ?? 0));
+  const avgOrder = ov?.orders ? Math.round((ov.revenue_minor ?? 0) / ov.orders) : null;
+  const orderStatuses = useMemo(() => sortedEntries(ov?.orders_by_status), [ov]);
+  const paymentStatuses = useMemo(() => sortedEntries(ov?.payment_by_status), [ov]);
+  const fulfillmentStatuses = useMemo(
+    () => sortedEntries(ov?.fulfillment_by_status).length ? sortedEntries(ov?.fulfillment_by_status) : sortedEntries(daily?.fulfillment_by_status),
+    [ov, daily],
+  );
 
   return (
-    <div className="dash">
-      <section className="toolbar" style={{ margin: 0, padding: 0, border: 'none', background: 'none' }}>
-        <button type="button" onClick={reload} disabled={busy}>↻ Refresh</button>
-        <span className="countLine">{busy ? 'Loading…' : 'Live overview — real-time from the database'}</span>
+    <main className="dash analyticsDash">
+      <section className="dashHeader">
+        <div>
+          <p className="sectionTitle">Executive snapshot</p>
+          <h2>Live operations analytics</h2>
+        </div>
+        <button type="button" onClick={reload} disabled={busy}>Refresh</button>
       </section>
 
-      <div className="statGrid">
-        <Stat brand icon="👥" val={n(ov?.customers)} lbl="Customers"
-          sub={ov ? `${n(ov.customers_with_order)} with an order` : undefined} />
-        <Stat icon="🧾" val={n(ov?.orders)} lbl="Total orders"
-          sub={ov ? `${n(ov.orders_by_status.active ?? 0)} active` : undefined} />
-        <Stat icon="💰" val={kwd(ov?.revenue_minor)} lbl="Recorded revenue"
-          sub={ov ? `${n(ov.payments)} payments` : undefined} />
-        <Stat icon="📍" val={n(ov?.addresses)} lbl="Delivery addresses"
-          sub={ov ? `${n(ov.areas)} areas` : undefined} />
-        <Stat hot={needAttention > 0} icon="🔔" val={n(needAttention)} lbl="Needs attention"
-          sub={`${n(dash?.reviewsWaiting)} reviews · ${n(dash?.paymentsWaiting)} payments`} />
-      </div>
+      <section className="insightStrip">
+        <MetricCard label="Total orders" value={num(ov?.orders)}
+          context={`${num(ov?.orders_by_status.active ?? 0)} active · ${num(ov?.orders_by_status.approved ?? 0)} approved`} tone="brand" />
+        <MetricCard label="Recorded revenue" value={revenue.value} context={revenue.sub} tone="good" />
+        <MetricCard label="Needs attention" value={num(needAttention)}
+          context={`${num(dash?.reviewsWaiting)} Reviews waiting · ${num(dash?.paymentsWaiting)} Payments to confirm`}
+          tone={needAttention > 0 ? 'warn' : 'good'} />
+        <MetricCard label="Customer conversion" value={customerConversion}
+          context={`${num(ov?.customers_with_order)} of ${num(ov?.customers)} customers with orders`} />
+      </section>
 
-      <div className="panelGrid">
-        <div className="panel">
-          <h3>Orders by status</h3>
-          <div className="body">
-            {statuses.length === 0
-              ? <span className="emptyLine" style={{ padding: 0 }}>{busy ? 'Loading…' : 'No orders yet.'}</span>
-              : statuses.map(([s, c]) => (
-                <div className={`bar s-${s}`} key={s}>
-                  <div className="barTop"><span className="cap">{s}</span><span className="num">{c.toLocaleString()}</span></div>
-                  <div className="track"><div className="fill" style={{ width: `${Math.max(3, (c / maxOrders) * 100)}%` }} /></div>
-                </div>
-              ))}
-          </div>
-        </div>
-        <div className="panel">
-          <h3>Top delivery areas</h3>
-          <div className="body">
-            {(ov?.top_areas ?? []).length === 0
-              ? <span className="emptyLine" style={{ padding: 0 }}>{busy ? 'Loading…' : 'No areas yet.'}</span>
-              : (ov?.top_areas ?? []).map((a, i) => (
-                <div className="areaRow" key={i}><span>{a.name}</span><span className="cnt">{a.count.toLocaleString()}</span></div>
-              ))}
-          </div>
-        </div>
-      </div>
-    </div>
+      <section className="healthGrid">
+        <MetricCard label="Drafts created" value={num(intake?.drafts_created)}
+          context={`${approvalRate} approved from intake`} tone="brand" />
+        <MetricCard label="Average order value" value={avgOrder === null ? '—' : money(avgOrder, ov?.revenue_by_currency[0]?.currency ?? 'KWD')}
+          context="recorded revenue / orders" />
+        <MetricCard label="Payment paid rate" value={percent(paidPayments, paymentTotal)}
+          context={`${num(paidPayments)} paid or collected of ${num(paymentTotal)}`} tone={safeRatio(paidPayments, paymentTotal) >= 80 ? 'good' : 'warn'} />
+        <MetricCard label="Cancellation pressure" value={cancelRate}
+          context={`${num(daily?.orders_cancelled)} cancelled in projections`} tone={(daily?.orders_cancelled ?? 0) > 0 ? 'bad' : 'neutral'} />
+      </section>
+
+      <section className="analyticsGrid wideLeft">
+        <RecordBars title="Orders & payments" rows={orderStatuses} empty={busy ? 'Loading orders…' : 'No orders yet.'} />
+        <RecordBars title="Payment status mix" rows={paymentStatuses} empty={busy ? 'Loading payments…' : 'No payments yet.'} />
+      </section>
+
+      <section className="analyticsGrid">
+        <FunnelPanel intake={intake} />
+        <TrendBars rows={ov?.orders_last_14_days ?? []} />
+      </section>
+
+      <section className="analyticsGrid wideRight">
+        <RecordBars title="Fulfillment pipeline" rows={fulfillmentStatuses} empty={busy ? 'Loading fulfillment…' : 'No fulfillment days yet.'} />
+        <KitchenPanel ov={ov} kitchen={kitchen} />
+      </section>
+
+      <section className="analyticsGrid">
+        <RecordBars title="Top delivery areas" rows={(ov?.top_areas ?? []).map((a) => [a.name, a.count])}
+          empty={busy ? 'Loading areas…' : 'No address areas yet.'} limit={6} />
+        <RecordBars title="Top packages" rows={(ov?.top_packages ?? []).map((p) => [p.name, p.count])}
+          empty={busy ? 'Loading packages…' : 'No package orders yet.'} limit={6} />
+      </section>
+    </main>
   );
 }

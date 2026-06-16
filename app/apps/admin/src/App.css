@@ -231,39 +231,83 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .emptyLine { padding: 28px 24px; margin: 0; color: var(--muted); }
 
 /* ---------- dashboard ---------- */
-.dash { padding: 22px 24px 36px; display: grid; gap: 22px; }
-.statGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-.stat {
-  position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 18px 18px 16px; box-shadow: var(--shadow); overflow: hidden;
+.dash { padding: 22px 24px 36px; display: grid; gap: 18px; }
+.analyticsDash { max-width: 1500px; }
+.dashHeader {
+  display: flex; align-items: end; justify-content: space-between; gap: 16px;
+  min-height: 64px; padding-bottom: 4px;
 }
-.stat::after { content: ''; position: absolute; right: -20px; top: -20px; width: 80px; height: 80px; border-radius: 50%; background: var(--brand); opacity: .05; }
-.stat .ico { font-size: 20px; }
-.stat .val { font-size: 30px; font-weight: 800; line-height: 1.05; letter-spacing: -.5px; margin-top: 10px; font-variant-numeric: tabular-nums; }
-.stat .lbl { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 4px; }
-.stat .sub { color: var(--ink-soft); font-size: 12px; margin-top: 6px; }
-.stat.hot { border-color: #f1c389; background: linear-gradient(180deg, #fffdf9, #fff7ec); }
-.stat.hot .val { color: var(--accent); }
-.stat.brandcard { background: linear-gradient(135deg, #0e7c5a, #0a5c43); border: none; color: #fff; }
-.stat.brandcard .lbl, .stat.brandcard .sub { color: rgba(255,255,255,.78); }
-.stat.brandcard::after { background: #fff; opacity: .08; }
-
-.panelGrid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-.panel > h3 { margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
-.panel .body { padding: 16px 18px; display: grid; gap: 12px; }
-.bar { display: grid; gap: 5px; }
-.bar .barTop { display: flex; justify-content: space-between; font-size: 13px; }
-.bar .barTop .cap { text-transform: capitalize; font-weight: 600; }
-.bar .barTop .num { color: var(--muted); font-variant-numeric: tabular-nums; }
-.bar .track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.bar .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #14a374, #0b6b4f); }
-.bar.s-expired .fill { background: #94a3b8; }
-.bar.s-cancelled .fill, .bar.s-rejected .fill { background: #ef8d8d; }
-.bar.s-active .fill { background: linear-gradient(90deg, #14a374, #0b6b4f); }
-.areaRow { display: flex; align-items: center; justify-content: space-between; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
-.areaRow:last-child { border-bottom: none; }
-.areaRow .cnt { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+.dashHeader h2 { margin: 2px 0 0; font-size: 24px; letter-spacing: 0; line-height: 1.1; }
+.insightStrip, .healthGrid, .analyticsGrid {
+  display: grid; gap: 14px; min-width: 0;
+}
+.insightStrip { grid-template-columns: repeat(4, minmax(170px, 1fr)); }
+.healthGrid { grid-template-columns: repeat(4, minmax(170px, 1fr)); }
+.analyticsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.analyticsGrid.wideLeft { grid-template-columns: minmax(0, 1.35fr) minmax(0, .95fr); }
+.analyticsGrid.wideRight { grid-template-columns: minmax(0, .95fr) minmax(0, 1.35fr); }
+.metricCard {
+  min-height: 118px; display: grid; align-content: space-between; gap: 10px;
+  border-radius: 8px; padding: 16px; box-shadow: var(--shadow-sm);
+}
+.metricCard strong {
+  display: block; min-width: 0; overflow-wrap: anywhere;
+  font-size: clamp(22px, 2.4vw, 34px); line-height: 1; font-weight: 800; letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.metricLabel, .metricContext {
+  display: block; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 700;
+  letter-spacing: .35px; text-transform: uppercase;
+}
+.metricContext {
+  color: var(--ink-soft); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; line-height: 1.35;
+}
+.metricCard.tone-brand { border-color: transparent; background: #0b6b4f; color: #fff; }
+.metricCard.tone-brand .metricLabel, .metricCard.tone-brand .metricContext { color: rgba(255,255,255,.76); }
+.metricCard.tone-good { border-left: 4px solid #10b981; }
+.metricCard.tone-warn { border-left: 4px solid #d97706; background: #fffaf0; }
+.metricCard.tone-bad { border-left: 4px solid #dc2626; background: #fff7f7; }
+.analyticsPanel {
+  min-width: 0; min-height: 250px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: var(--shadow-sm); overflow: hidden;
+}
+.analyticsPanel h2 {
+  min-height: 50px; display: flex; align-items: center; margin: 0; padding: 0 16px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2);
+  font-size: 14px; font-weight: 800; letter-spacing: 0;
+}
+.analyticsBody { padding: 15px 16px; display: grid; gap: 11px; }
+.analyticsBody.flush { padding-top: 0; }
+.emptyLine.compact { padding: 8px 0; }
+.progressRow { display: grid; gap: 6px; min-width: 0; }
+.progressTop { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.progressTop span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink-soft); font-weight: 650; text-transform: capitalize;
+}
+.progressTop strong { color: var(--muted); font-variant-numeric: tabular-nums; }
+.progressTrack { height: 9px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.progressTrack span { display: block; height: 100%; border-radius: inherit; background: #64748b; }
+.progressRow.tone-good .progressTrack span { background: #10b981; }
+.progressRow.tone-warn .progressTrack span { background: #d97706; }
+.progressRow.tone-bad .progressTrack span { background: #ef4444; }
+.progressRow.tone-neutral .progressTrack span { background: #64748b; }
+.trendPanel { min-height: 250px; }
+.trendBars {
+  height: 198px; display: flex; align-items: end; gap: 7px; padding: 18px 16px 16px;
+}
+.trendBars span {
+  position: relative; flex: 1; min-width: 8px; border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #2563eb, #38bdf8);
+}
+.trendBars span i {
+  position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  color: var(--muted); font-size: 10px; font-style: normal; font-variant-numeric: tabular-nums;
+}
+.opsFocus { display: grid; grid-template-rows: auto auto 1fr; }
+.opsRows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 14px 10px; }
+.opsRows .metricCard { min-height: 96px; padding: 12px; box-shadow: none; }
+.opsRows .metricCard strong { font-size: clamp(20px, 2vw, 28px); }
 .sectionTitle { font-size: 13px; font-weight: 700; color: var(--ink-soft); letter-spacing: .3px; text-transform: uppercase; }
 
 /* ---------- login ---------- */
@@ -296,6 +340,10 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .insightStrip, .healthGrid { grid-template-columns: repeat(2, minmax(170px, 1fr)); }
+  .analyticsGrid, .analyticsGrid.wideLeft, .analyticsGrid.wideRight { grid-template-columns: 1fr; }
+}
 @media (max-width: 860px) { .panelGrid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
   .layout { flex-direction: column; }
@@ -308,4 +356,9 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
   .grid2 { grid-template-columns: 1fr; }
   .toolbar { align-items: stretch; }
   .board { grid-template-columns: 1fr; padding-inline: 12px; }
+  .dash { padding: 16px 12px 28px; }
+  .dashHeader { align-items: stretch; flex-direction: column; }
+  .insightStrip, .healthGrid, .opsRows { grid-template-columns: 1fr; }
+  .metricCard { min-height: 104px; }
+  .trendBars { gap: 4px; padding-inline: 10px; }
 }
