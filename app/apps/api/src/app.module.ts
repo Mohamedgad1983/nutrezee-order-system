@@ -45,6 +45,10 @@ import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
 import { BatchRunner } from './modules/m19-migration/batch-runner';
 import { MigrationController } from './modules/m19-migration/migration.controller';
 import { MigrationService } from './modules/m19-migration/migration.service';
+import { PackingController } from './modules/m20-packing/packing.controller';
+import { PackingService } from './modules/m20-packing/packing.service';
+import { DeliveryController } from './modules/m21-delivery/delivery.controller';
+import { DeliveryService } from './modules/m21-delivery/delivery.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
@@ -57,6 +61,7 @@ export const POOL = 'POOL';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
+    PackingController, DeliveryController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -238,6 +243,18 @@ export const POOL = 'POOL';
         BatchRunner, CustomerService, CatalogService, SyncRecordService,
         OrderService, PaymentService, SettingsReader,
       ],
+    },
+    // Wave-6 operational foundation (migration track): packing + driver/area assignment.
+    // Each writes only its own tables, reads order/customer data, and audits in-transaction.
+    {
+      provide: PackingService,
+      useFactory: (pool: Pool, audit: AuditService) => new PackingService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      provide: DeliveryService,
+      useFactory: (pool: Pool, audit: AuditService) => new DeliveryService(pool, audit),
+      inject: [POOL, AuditService],
     },
   ],
 })
