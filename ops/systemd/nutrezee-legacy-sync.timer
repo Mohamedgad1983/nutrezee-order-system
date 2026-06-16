@@ -1,0 +1,15 @@
+[Unit]
+Description=Run Nutrezee incremental legacy sync every 30 min (STAGING, DRY-RUN)
+
+[Timer]
+# Fire at minute 0 and 30 of every hour.
+OnCalendar=*:0/30
+# Do NOT catch up missed runs after downtime — a stale drift report is misleading.
+Persistent=false
+AccuracySec=30s
+# Spread load / avoid thundering herd if other timers share the tick.
+RandomizedDelaySec=20s
+Unit=nutrezee-legacy-sync.service
+
+[Install]
+WantedBy=timers.target
