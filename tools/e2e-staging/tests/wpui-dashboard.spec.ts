@@ -39,6 +39,23 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await expect(page.locator('.analyticsPanel')).toHaveCount(8);
   await expect(page.locator('.metricCard')).toHaveCount(11);
 
+  for (const title of [
+    'Orders & payments',
+    'Payment status mix',
+    'Intake funnel',
+    '14-day order trend',
+    'Fulfillment pipeline',
+    'Kitchen readiness',
+    'Top delivery areas',
+    'Top packages',
+  ]) {
+    const panel = page.locator('.analyticsPanel').filter({ hasText: title });
+    await panel.getByRole('button').click();
+    await expect(panel.locator('.detailDrop')).toBeVisible();
+    await expect(panel.getByRole('columnheader', { name: 'Metric' })).toBeVisible();
+  }
+  await expect(page.locator('.detailDrop')).toHaveCount(8);
+
   await page.screenshot({ path: `${SHOTS}/01-dashboard.png`, fullPage: true });
 
   expect(crashes, `client crashes: ${crashes.join(' | ')}`).toHaveLength(0);

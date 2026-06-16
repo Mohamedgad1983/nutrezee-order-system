@@ -59,6 +59,12 @@ interface Dash {
   paymentsWaiting: number | null;
 }
 
+interface DetailRow {
+  label: string;
+  value: string;
+  share?: string;
+}
+
 const MINOR_UNITS: Record<string, number> = {
   BHD: 1000,
   IQD: 1000,
@@ -131,6 +137,14 @@ function sortedEntries(record: Record<string, number> | null | undefined): Array
   return Object.entries(record ?? {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
+function detailRows(rows: Array<[string, number]>, total = rows.reduce((sum, [, value]) => sum + value, 0)): DetailRow[] {
+  return rows.map(([name, value]) => ({
+    label: label(name),
+    value: num(value),
+    share: percent(value, total),
+  }));
+}
+
 function MetricCard({
   label: text, value, context, tone = 'neutral',
 }: {
@@ -145,6 +159,48 @@ function MetricCard({
       <strong>{value}</strong>
       {context ? <span className="metricContext">{context}</span> : null}
     </article>
+  );
+}
+
+function AnalyticsPanel({
+  title, children, details, className = '',
+}: {
+  title: string;
+  children: React.ReactNode;
+  details: DetailRow[];
+  className?: string;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className={`analyticsPanel ${className}${open ? ' isOpen' : ''}`}>
+      <h2 className="panelHeading">
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          <span>{title}</span>
+          <span className="detailCue">{open ? 'Hide details' : 'Details'}</span>
+        </button>
+      </h2>
+      {children}
+      {open ? (
+        <div className="detailDrop">
+          {details.length === 0 ? <p className="emptyLine compact">No detail rows available.</p> : (
+            <table className="detailTable">
+              <thead>
+                <tr><th>Metric</th><th>Value</th><th>Share</th></tr>
+              </thead>
+              <tbody>
+                {details.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.value}</td>
+                    <td>{row.share ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -180,22 +236,26 @@ function RecordBars({
 }): React.JSX.Element {
   const shown = rows.slice(0, limit);
   const max = shown.length ? Math.max(...shown.map(([, value]) => value)) : 0;
+  const total = rows.reduce((sum, [, value]) => sum + value, 0);
   return (
-    <section className="analyticsPanel">
-      <h2>{title}</h2>
+    <AnalyticsPanel title={title} details={detailRows(rows, total)}>
       <div className="analyticsBody">
         {shown.length === 0 ? <p className="emptyLine compact">{empty}</p> : null}
         {shown.map(([name, value]) => <ProgressRow key={name} name={name} value={value} max={max} />)}
       </div>
-    </section>
+    </AnalyticsPanel>
   );
 }
 
 function TrendBars({ rows }: { rows: Array<{ date: string; count: number }> }): React.JSX.Element {
   const max = rows.length ? Math.max(1, ...rows.map((r) => r.count)) : 1;
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
   return (
-    <section className="analyticsPanel trendPanel">
-      <h2>14-day order trend</h2>
+    <AnalyticsPanel
+      title="14-day order trend"
+      className="trendPanel"
+      details={rows.map((row) => ({ label: row.date, value: num(row.count), share: percent(row.count, total) }))}
+    >
       <div className="trendBars" aria-label="Orders created during the last 14 days">
         {rows.map((r) => (
           <span
@@ -207,7 +267,7 @@ function TrendBars({ rows }: { rows: Array<{ date: string; count: number }> }): 
           </span>
         ))}
       </div>
-    </section>
+    </AnalyticsPanel>
   );
 }
 
@@ -221,8 +281,7 @@ function FunnelPanel({ intake }: { intake: IntakeFunnel | null }): React.JSX.Ele
   ];
   const max = Math.max(1, ...rows.map(([, value]) => value));
   return (
-    <section className="analyticsPanel">
-      <h2>Intake funnel</h2>
+    <AnalyticsPanel title="Intake funnel" details={detailRows(rows, intake?.drafts_created ?? 0)}>
       <div className="analyticsBody">
         {rows.map(([name, value]) => (
           <ProgressRow
@@ -234,7 +293,7 @@ function FunnelPanel({ intake }: { intake: IntakeFunnel | null }): React.JSX.Ele
           />
         ))}
       </div>
-    </section>
+    </AnalyticsPanel>
   );
 }
 
@@ -249,9 +308,15 @@ function KitchenPanel({
   const today = new Date().toISOString().slice(0, 10);
   const todayKitchen = kitchen?.by_date[today];
   const packed = tickets.prepared ?? 0;
+  const ticketRows = sortedEntries(tickets);
+  const kitchenDetails: DetailRow[] = [
+    { label: 'Prepared tickets', value: num(packed), share: percent(packed, totalTickets) },
+    { label: 'Upcoming fulfillment days', value: num(ov?.upcoming_fulfillment_days), share: 'next 7 days' },
+    { label: 'Today tickets generated', value: num(todayKitchen?.tickets_generated), share: `${num(todayKitchen?.unrouted)} unrouted` },
+    ...detailRows(ticketRows, totalTickets),
+  ];
   return (
-    <section className="analyticsPanel opsFocus">
-      <h2>Kitchen readiness</h2>
+    <AnalyticsPanel title="Kitchen readiness" className="opsFocus" details={kitchenDetails}>
       <div className="opsRows">
         <MetricCard label="Ticket readiness" value={percent(packed, totalTickets)}
           context={`${num(packed)} prepared of ${num(totalTickets)} tickets`} tone={packed > 0 ? 'good' : 'neutral'} />
@@ -261,12 +326,12 @@ function KitchenPanel({
           context={`${num(todayKitchen?.unrouted)} unrouted`} tone={(todayKitchen?.unrouted ?? 0) > 0 ? 'warn' : 'neutral'} />
       </div>
       <div className="analyticsBody flush">
-        {sortedEntries(tickets).length === 0 ? <p className="emptyLine compact">No kitchen tickets yet.</p> : null}
-        {sortedEntries(tickets).map(([name, value]) => (
+        {ticketRows.length === 0 ? <p className="emptyLine compact">No kitchen tickets yet.</p> : null}
+        {ticketRows.map(([name, value]) => (
           <ProgressRow key={name} name={name} value={value} max={Math.max(1, totalTickets)} />
         ))}
       </div>
-    </section>
+    </AnalyticsPanel>
   );
 }
 
