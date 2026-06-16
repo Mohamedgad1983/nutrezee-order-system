@@ -7,7 +7,7 @@ BLOCKED
 build/wp-ui-customers-list
 
 ## Commit
-Verification started from `80d3b1e` with this readiness report and focused contract-test updates pending commit.
+`652b413` (`test(admin): verify customer profile staging e2e readiness`)
 
 ## Deployment Target
 Staging VPS: `https://13-140-159-201.sslip.io`
