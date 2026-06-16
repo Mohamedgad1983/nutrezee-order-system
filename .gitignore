@@ -26,3 +26,11 @@ skills-lock.json
 credentials*.json
 *-service-account*.json
 *.local
+
+# Legacy extraction output — raw HTML / JSONL contain customer PII; NEVER commit.
+# (The real runs write OUTSIDE the repo, but guard in case OUT points inside it.)
+legacy-detail-out/
+**/legacy-detail-out/
+*.html.gz
+**/raw/*.jsonl
+**/migration-output/

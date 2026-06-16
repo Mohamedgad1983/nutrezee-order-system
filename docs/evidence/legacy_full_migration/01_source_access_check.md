@@ -2,6 +2,13 @@
 
 Date: 2026-06-16 (supersedes the 2026-06-16 BLOCKED_BY_MISSING_ACCESS entry below)
 
+## Update 2 — LIVE legacy access obtained
+
+The sponsor provided live legacy admin credentials (`https://nutreeze.com/admin`). Verified working read-only (login `POST /logincheck`; all else GET). Source class upgraded to **live read-only admin available**. This unblocked a targeted re-extraction of the P0-gap data (products, delivery, payment detail) — see `13_legacy_detail_reextraction.md`. Credentials are runtime-only — never printed or committed. Target/import gate unchanged: staging only, no apply this session (`MIGRATION_APPLY` unset; sponsor chose extract+validate+dry-run only).
+
+---
+
+
 ## Update — access re-classified after discovering the on-VPS migration
 
 The previous entry classified access as `BLOCKED_BY_MISSING_ACCESS` because the **local shell** has no `LEGACY_*` / `NEW_DATABASE_URL` env vars. That is still true of the local shell, but it is **not** the whole picture: the legacy→staging migration was already executed directly on the staging VPS, and both the legacy extraction and the target DB are reachable through the `nutrezee-vps` MCP. Re-classified accordingly.
