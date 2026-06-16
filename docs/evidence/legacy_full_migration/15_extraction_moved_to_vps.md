@@ -49,8 +49,8 @@ unset LEGACY_EMAIL LEGACY_PASS
 
 ## Current state
 
-- **VPS_JOB_RUNNING** — container `Up`, `{"login":true,"ok":true}`, order_detail advancing past 1,818.
-- Remaining: ~18,800 of 20,637 distinct orders × 1.2s ≈ ~6.3 h.
+- **VPS_JOB_COMPLETE** (2026-06-16 ~16:20) — container `Exited (0)`, `{"done":true,"mode":"orders-detail"}`. **20,637 / 20,637 orders, 0 errors**, 20,698 raw HTML files. Container removed afterward (`docker rm`) to clear the env credentials from `docker inspect`.
+- Delivery + payment detail reconciled — see `delivery_extraction_summary.json` (all 4 methods, 114 areas, 96%+ coverage). MM-02 moves from gap to extracted; per-order import remains gated on `MIGRATION_APPLY`.
 
 ## Security notes
 

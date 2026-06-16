@@ -1,0 +1,33 @@
+{
+  "_note": "Per-order delivery + payment-detail extraction from the live legacy admin (/orders/view/<id>), read-only, completed on the VPS in a node:22 container. PII-free aggregate. Per-order rows live on the VPS at /opt/nutrezee/legacy-detail-2026/out/order_detail.jsonl (+ raw/), never committed.",
+  "completed_at": "2026-06-16",
+  "orders_total": 20637,
+  "errors": 0,
+  "raw_html_captured": 20698,
+  "delivery_method_distribution": {
+    "الاتصال عند الوصول (Call on arrival)": 8659,
+    "اترك الصندوق عند الباب (Leave the box at door)": 6039,
+    "رن الجرس عند الوصول (Ring the bell on arrival)": 5145,
+    "Deliver 1 day before": 73,
+    "(none)": 721
+  },
+  "coverage": {
+    "with_delivery_method": 19916,
+    "with_delivery_time": 19873,
+    "with_area": 20626,
+    "distinct_areas": 114,
+    "with_payment_method": 10906
+  },
+  "payment_method_distribution": {
+    "(none)": 9731,
+    "KNET": 8008,
+    "CC": 2897,
+    "CASH": 1
+  },
+  "staging_comparison": {
+    "staging_delivery_method_master": 1,
+    "staging_areas_master": 127,
+    "staging_orders_with_delivery_linkage": 0
+  },
+  "verdict": "MM-02 deliveries: all 4 legacy methods + delivery time + 114 areas now extracted for ~19,900 orders. Gap is CLOSEABLE; per-order delivery import into staging remains gated on MIGRATION_APPLY=true."
+}

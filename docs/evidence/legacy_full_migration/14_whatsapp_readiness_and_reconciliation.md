@@ -69,8 +69,9 @@ Notes: INVALID_PHONE / MISSING_DATE / DUPLICATE = 0 among order-holders (import 
 | orders | 20,637 distinct | 19,465 | ❌ | ~1,172 | 0 dup order_number | 0 orphan | shortfall concentrated in expired |
 | packages | 7 | 7 | ✅ | 0 | — | — | match |
 | payments | not yet profiled | 11,257 | ⚠️ | — | — | 0 orphan | needs source baseline (re-extract) |
-| delivery method | 4 | 1 master / per-order extracting | ❌→closeable | per-order backfill | — | — | all 4 confirmed in extraction |
-| delivery time | per-order | — | ⏳ | — | — | — | extracting now |
+| delivery method | 4 (19,916 orders) | 1 master / 0 per-order | ❌→**extracted** | 3 masters + per-order import | — | — | ✅ extraction complete (0 errors) |
+| delivery time | 19,873 orders (96.3%) | 0 | ❌→**extracted** | per-order import | — | — | ✅ extraction complete |
+| delivery area | 114 distinct (20,626 orders) | 127 masters / 0 per-order | ⚠️→**extracted** | per-order link import | — | — | ✅ extraction complete |
 | status | A/Expire/cancel/pending | active/expired/cancelled/rejected | ⚠️ | — | — | — | active 1,026 vs 1,054 (daily drift) |
 | products catalog | 1,296 | 2 | ❌ | 1,294 | — | — | extracted; import gated |
 
