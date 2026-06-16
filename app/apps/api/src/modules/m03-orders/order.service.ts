@@ -84,6 +84,9 @@ export interface ImportedActivePlanInput {
   importBatchId: string;
   addressFrozen?: Record<string, unknown>;
   slotId?: string;
+  deliveryMethodFrozen?: string;
+  deliveryTimeFrozen?: string;
+  deliveryAreaFrozen?: string;
 }
 
 export interface ExceptionRow {
@@ -444,21 +447,28 @@ export class OrderService {
       throw new OrderError('validation_failed', { field: 'status' });
     }
     const existing = await this.findByOrderNumberInTx(client, input.orderNumber);
-    if (existing) return { id: existing, dayCount: 0 };
+    if (existing) {
+      // Idempotent re-import: don't recreate, but backfill frozen legacy delivery onto
+      // the existing order if it carries delivery and none is stored yet.
+      await this.setFrozenDeliveryInTx(client, actorId, existing, input);
+      return { id: existing, dayCount: 0 };
+    }
     const id = newId();
     const addressFrozen = input.addressFrozen ?? { legacy_import: true, address_unverified: true };
     await client.query(
       `INSERT INTO customer_order
         (id, order_number, customer_id, package_id, package_name_frozen_en, package_name_frozen_ar,
          status, start_date, end_date, off_days, off_days_unverified, channel, package_amount,
-         discount, total, currency, origin, import_batch_id, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$13,$14,'legacy',$15,$16)`,
+         discount, total, currency, origin, import_batch_id, created_by,
+         delivery_method_frozen, delivery_time_frozen, delivery_area_frozen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$13,$14,'legacy',$15,$16,$17,$18,$19)`,
       [
         id, input.orderNumber, input.customerId, input.packageId ?? null,
         input.packageNameEn ?? null, input.packageNameAr ?? null, status,
         input.startDate, input.endDate, JSON.stringify(input.offDays ?? []),
         input.offDaysUnverified ?? false, input.channel ?? 'legacy',
         input.total ?? 0, input.currency ?? 'SAR', input.importBatchId, actorId,
+        input.deliveryMethodFrozen ?? null, input.deliveryTimeFrozen ?? null, input.deliveryAreaFrozen ?? null,
       ],
     );
     let dayCount = 0;
@@ -471,6 +481,36 @@ export class OrderService {
       dayCount += 1;
     }
     return { id, dayCount };
+  }
+
+  /**
+   * Backfill frozen legacy delivery (method/time/area) onto an existing imported order.
+   * Idempotent: only fills columns that are currently NULL, so re-runs are no-ops and a
+   * later better value never overwrites a stored one. Returns true if any column was set.
+   * M03 owns customer_order, so this stays inside the single write path.
+   */
+  async setFrozenDeliveryInTx(
+    client: PoolClient,
+    actorId: string,
+    orderId: string,
+    input: { deliveryMethodFrozen?: string; deliveryTimeFrozen?: string; deliveryAreaFrozen?: string },
+  ): Promise<boolean> {
+    const method = input.deliveryMethodFrozen ?? null;
+    const time = input.deliveryTimeFrozen ?? null;
+    const area = input.deliveryAreaFrozen ?? null;
+    if (method === null && time === null && area === null) return false;
+    const { rowCount } = await client.query(
+      `UPDATE customer_order
+          SET delivery_method_frozen = COALESCE(delivery_method_frozen, $2),
+              delivery_time_frozen   = COALESCE(delivery_time_frozen,   $3),
+              delivery_area_frozen   = COALESCE(delivery_area_frozen,   $4),
+              updated_at = now(), updated_by = $5
+        WHERE id = $1
+          AND (delivery_method_frozen IS NULL OR delivery_time_frozen IS NULL OR delivery_area_frozen IS NULL)
+          AND ($2::text IS NOT NULL OR $3::text IS NOT NULL OR $4::text IS NOT NULL)`,
+      [orderId, method, time, area, actorId],
+    );
+    return (rowCount ?? 0) > 0;
   }
 
   async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {
