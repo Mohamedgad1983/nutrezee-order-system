@@ -1,0 +1,34 @@
+{
+  "_note": "Authoritative legacy extraction counts from the 2026-06-14 pull of the live nutreeze.com admin (read-only). Source files live on the VPS under /opt/nutrezee/pr38-legacy-migration/tools/legacy-migration/migration-output/2026-06-14T13-29-40-368Z/ and /opt/nutrezee/analysis-results.json. Not re-pulled this session; legacy live re-access not configured in this environment.",
+  "extraction_date": "2026-06-14",
+  "legacy_source": "https://nutreeze.com (Symfony/PHP admin)",
+  "access_class": "FULL_EXPORT_AVAILABLE (prior browser/API extraction on VPS)",
+  "entities": {
+    "customers": {
+      "extracted": 20151,
+      "raw_jsonl_lines": 20165,
+      "confidence": { "VERIFIED": 12405, "INFERRED": 0, "NEEDS_MANUAL_REVIEW": 7746 },
+      "valid_phone": 20060,
+      "invalid_or_missing_phone": 91,
+      "dup_phone_groups": 552,
+      "dup_phone_rows": 1264
+    },
+    "orders_active": { "extracted": 1044, "confidence": { "INFERRED": 1044 } },
+    "orders_pause": { "extracted": 0 },
+    "orders_history": { "extracted": "raw/orders_history.json (full history; loaded as 19465 in staging)", "note": "no authoritative source-side total captured" },
+    "packages": { "extracted": 7 },
+    "delivery_methods": { "extracted": 4 },
+    "products": { "extracted": "not separately captured (sync_record shows 2 mapped)" }
+  },
+  "reconciliation_summary": {
+    "decision": "NOT_VERIFIED_WITH_MISMATCHES",
+    "staging_customers_legacy": 19379,
+    "staging_orders_legacy": 19465,
+    "staging_order_items": 1,
+    "staging_addresses_legacy": 9506,
+    "staging_payments_legacy": 11257,
+    "import_errors": 1732,
+    "import_merge_review_unresolved": 93,
+    "customer_shortfall": 772
+  }
+}
