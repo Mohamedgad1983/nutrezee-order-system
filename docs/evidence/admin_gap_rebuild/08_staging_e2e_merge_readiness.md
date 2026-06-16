@@ -7,7 +7,7 @@ READY_TO_MERGE
 build/wp-ui-customers-list
 
 ## Commit
-`PENDING_DOC_COMMIT` (authenticated staging E2E passed; final hash set after commit)
+`e44a6d9` (`test(admin): complete authenticated staging e2e readiness`)
 
 ## Deployment Target
 Staging VPS: `https://13-140-159-201.sslip.io`
