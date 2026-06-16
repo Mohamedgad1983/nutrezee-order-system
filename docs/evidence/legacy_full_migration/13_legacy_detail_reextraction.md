@@ -35,6 +35,24 @@ Active orders now read **1,026** at source (was 1,044 profiled / 1,054 staged) �
 - **Order index (all statuses): ~19,465 order_number↔internal_id pairs — extracted.** ✅
 - **Order view detail (delivery + payment): running in the background** (active orders first, then history; ~6h at 1.2s throttle for all ~19,465). Output is written **outside the repo** (PII; never committed); meals page captured raw for a 30-order sample only.
 
+## Order-index reconciliation (NEW — resolves MM-06)
+
+The full order index was extracted (PII-free — the customer name/phone column is dropped at parse time), giving the **authoritative source-side order total** that was previously missing:
+
+| Source (live legacy, 2026-06-16) | Count |
+| --- | ---: |
+| Active | 1,026 |
+| Expire | 17,241 |
+| cancel | 1,863 |
+| pending | 5,941 |
+| Pause | 0 |
+| **rows fetched** | 26,071 |
+| **distinct orders (internal_id)** | **20,637** |
+
+(26,071 rows vs 20,637 distinct = paging overlaps while the live dataset shifted during the multi-minute scrape; distinct is authoritative.)
+
+**Reconciliation:** staging holds **19,465** legacy orders vs **~20,637** at source → **~1,172 orders short in staging** (consistent with the 1,732 recorded `active_plans` import errors). Status mapping also shows legacy Expire 17,241 vs staging expired 11,162 — the shortfall concentrates in expired/historical orders. MM-06 moves from "unprovable" to a **quantified ~1,172-order gap**.
+
 ## Next (after extraction completes)
 
 Normalize (delivery method → reason/master mapping; area → `area` master; payment detail → `payment_record`), validate, and **dry-run** an import. **No staging apply** until the sponsor authorizes `MIGRATION_APPLY=true`. Then re-reconcile so MM-02 (deliveries) and MM-09 (products) can move from gap to closed, and decide the per-meal `order_item` question (MM-01).
