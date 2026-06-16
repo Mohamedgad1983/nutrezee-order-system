@@ -39,16 +39,24 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await expect(page.locator('.analyticsPanel')).toHaveCount(8);
   await expect(page.locator('.metricCard')).toHaveCount(11);
 
-  const inspector = page.getByTestId('metric-inspector');
-  await expect(inspector).toBeVisible();
-  await expect(inspector).toContainText('Needs attention');
-  await expect(inspector.getByRole('heading', { name: 'Reviews waiting' })).toBeVisible();
-  await expect(inspector.getByRole('heading', { name: 'Payments to confirm' })).toBeVisible();
+  await expect(page.getByTestId('metric-page-body')).toHaveCount(0);
+
+  await page.getByTestId('metric-attention').click();
+  await expect(page).toHaveURL(/\/app\/dashboard\/attention$/);
+  const attentionPage = page.getByTestId('metric-page-body');
+  await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible();
+  await expect(attentionPage.getByRole('heading', { name: 'Reviews waiting' })).toBeVisible();
+  await expect(attentionPage.getByRole('heading', { name: 'Payments to confirm' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Back to dashboard' }).click();
+  await expect(page).toHaveURL(/\/app\/dashboard$/);
 
   await page.getByTestId('metric-orders').click();
-  await expect(inspector).toContainText('Total orders');
-  await page.getByTestId('metric-attention').click();
-  await expect(inspector).toContainText('Needs attention');
+  await expect(page).toHaveURL(/\/app\/dashboard\/orders$/);
+  await expect(page.getByRole('heading', { name: 'Total orders' })).toBeVisible();
+  await expect(page.getByTestId('metric-page-body').getByRole('columnheader', { name: 'Metric' })).toHaveCount(2);
+  await page.getByRole('link', { name: 'Back to dashboard' }).click();
+  await expect(page).toHaveURL(/\/app\/dashboard$/);
 
   for (const title of [
     'Orders & payments',

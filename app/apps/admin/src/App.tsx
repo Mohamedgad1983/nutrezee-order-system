@@ -53,6 +53,7 @@ function Routed(): React.JSX.Element | null {
     return <Redirect to="/app/kitchen" />;
   }
 
+  const shellPath = path.startsWith('/app/dashboard/') ? '/app/dashboard' : path;
   let page: React.JSX.Element;
   switch (path) {
     case '/app/dashboard':
@@ -98,7 +99,11 @@ function Routed(): React.JSX.Element | null {
       page = <AuditPage />;
       break;
     default:
-      page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
+      if (path.startsWith('/app/dashboard/')) {
+        page = <DashboardPage metricSlug={path.slice('/app/dashboard/'.length)} />;
+      } else {
+        page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
+      }
   }
-  return <Shell path={path}>{page}</Shell>;
+  return <Shell path={shellPath}>{page}</Shell>;
 }

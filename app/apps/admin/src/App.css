@@ -275,40 +275,37 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
   padding: 15px; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; box-shadow: none;
 }
 .metricButton:hover:not(:disabled) { border-color: transparent; color: inherit; box-shadow: none; background: rgba(14, 124, 90, .035); }
-.metricCard.isSelected { border-color: color-mix(in srgb, var(--metric-accent) 46%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--metric-accent) 18%, transparent), var(--shadow-sm); }
-.metricCard.isSelected .metricButton { background: color-mix(in srgb, var(--metric-accent) 7%, transparent); }
-.metricChevron {
+.metricArrow {
   display: inline-grid; place-items: center; flex: 0 0 auto;
   width: 24px; height: 24px; border: 1px solid color-mix(in srgb, var(--metric-accent) 36%, var(--line));
   border-radius: 50%; color: var(--metric-accent); background: #fff; font-size: 16px; line-height: 1; font-weight: 800;
 }
-.metricInspector {
+.metricPage { max-width: 1500px; }
+.metricPageHero {
   --metric-accent: #64748b;
-  display: grid; grid-template-columns: minmax(210px, .35fr) minmax(0, 1fr);
-  min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
-  box-shadow: var(--shadow-sm); overflow: hidden;
-}
-.metricInspector.tone-brand { --metric-accent: #0b6b4f; }
-.metricInspector.tone-good { --metric-accent: #059669; }
-.metricInspector.tone-warn { --metric-accent: #d97706; }
-.metricInspector.tone-bad { --metric-accent: #dc2626; }
-.metricInspectorSummary {
-  display: grid; align-content: start; gap: 8px; padding: 18px;
-  border-left: 5px solid var(--metric-accent); border-right: 1px solid var(--line);
+  display: flex; align-items: end; justify-content: space-between; gap: 24px;
+  min-width: 0; border: 1px solid var(--line); border-left: 5px solid var(--metric-accent);
+  border-radius: 8px; padding: 20px; box-shadow: var(--shadow-sm);
   background: linear-gradient(180deg, color-mix(in srgb, var(--metric-accent) 7%, #fff), #fff);
 }
-.metricInspectorSummary h3 { margin: 0; font-size: 16px; line-height: 1.2; }
-.metricInspectorSummary strong {
+.metricPageHero.tone-brand { --metric-accent: #0b6b4f; }
+.metricPageHero.tone-good { --metric-accent: #059669; }
+.metricPageHero.tone-warn { --metric-accent: #d97706; }
+.metricPageHero.tone-bad { --metric-accent: #dc2626; }
+.metricPageHero h2 { margin: 4px 0 0; font-size: clamp(24px, 3vw, 36px); line-height: 1.05; letter-spacing: 0; }
+.metricPageHero p { margin: 8px 0 0; max-width: 620px; color: var(--ink-soft); line-height: 1.45; }
+.metricPageHero strong {
   display: block; color: var(--ink); font-size: clamp(26px, 3vw, 38px); line-height: 1; font-weight: 850;
-  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: right;
 }
-.metricInspectorSummary p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.4; }
-.metricInspectorEyebrow {
-  color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase;
+.backLink { display: inline-flex; align-items: center; min-height: 32px; color: var(--brand); font-size: 13px; font-weight: 800; }
+.metricPageBody {
+  min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  box-shadow: var(--shadow-sm); padding: 18px; overflow-x: auto;
 }
-.metricInspectorBody { min-width: 0; max-height: 420px; overflow: auto; padding: 16px; }
-.metricInspectorBody > .detailTable + .detailTable { margin-top: 14px; }
-.metricInspectorBody .detailTable th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.metricPageBody > h3 { margin: 0 0 14px; font-size: 15px; }
+.metricPageBody > .detailTable + .detailTable { margin-top: 14px; }
+.metricPageBody .detailTable th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .attentionDetail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; }
 .attentionDetail section {
   min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: auto;
@@ -425,8 +422,6 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 @media (max-width: 1100px) {
   .insightStrip, .healthGrid { grid-template-columns: repeat(2, minmax(170px, 1fr)); }
   .analyticsGrid, .analyticsGrid.wideLeft, .analyticsGrid.wideRight { grid-template-columns: 1fr; }
-  .metricInspector { grid-template-columns: 1fr; }
-  .metricInspectorSummary { border-right: 0; border-bottom: 1px solid var(--line); }
   .attentionDetail { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) { .panelGrid { grid-template-columns: 1fr; } }
@@ -446,9 +441,8 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
   .insightStrip, .healthGrid, .opsRows { grid-template-columns: 1fr; }
   .metricCard { min-height: 104px; }
   .metricButton { min-height: 104px; }
-  .metricInspector { grid-template-columns: 1fr; }
-  .metricInspectorSummary { border-right: 0; border-bottom: 1px solid var(--line); }
-  .metricInspectorBody { max-height: 520px; overflow-x: auto; }
+  .metricPageHero { align-items: stretch; flex-direction: column; }
+  .metricPageHero strong { text-align: left; }
   .attentionDetail { grid-template-columns: 1fr; }
   .trendBars { gap: 4px; padding-inline: 10px; }
   .panelHeading button { align-items: stretch; flex-direction: column; justify-content: center; }

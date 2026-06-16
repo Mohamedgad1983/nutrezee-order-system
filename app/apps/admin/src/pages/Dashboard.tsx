@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type ListResponse, type ReviewQueueListItem } from '../api';
+import { Link, navigate } from '../router';
 
 interface Overview {
   customers: number;
@@ -76,6 +77,37 @@ interface DetailRow {
 
 type MetricTone = 'good' | 'warn' | 'bad' | 'neutral' | 'brand';
 type MetricKey = 'orders' | 'revenue' | 'attention' | 'conversion' | 'drafts' | 'aov' | 'paidRate' | 'cancellations';
+
+interface MetricDefinition {
+  title: string;
+  value: string;
+  context?: string;
+  tone: MetricTone;
+  body: ReactNode;
+}
+
+const metricPath = (key: MetricKey): string => {
+  switch (key) {
+    case 'paidRate': return '/app/dashboard/paid-rate';
+    case 'aov': return '/app/dashboard/aov';
+    case 'cancellations': return '/app/dashboard/cancellations';
+    default: return `/app/dashboard/${key}`;
+  }
+};
+
+function metricFromSlug(slug: string | undefined): MetricKey | null {
+  switch (slug) {
+    case 'orders': return 'orders';
+    case 'revenue': return 'revenue';
+    case 'attention': return 'attention';
+    case 'conversion': return 'conversion';
+    case 'drafts': return 'drafts';
+    case 'aov': return 'aov';
+    case 'paid-rate': return 'paidRate';
+    case 'cancellations': return 'cancellations';
+    default: return null;
+  }
+}
 
 const MINOR_UNITS: Record<string, number> = {
   BHD: 1000,
@@ -160,36 +192,34 @@ function detailRows(rows: Array<[string, number]>, total = rows.reduce((sum, [, 
 }
 
 function MetricCard({
-  label: text, value, context, tone = 'neutral', selected = false, onSelect, testId,
+  label: text, value, context, tone = 'neutral', to, testId,
 }: {
   label: string;
   value: string;
   context?: string;
   tone?: MetricTone;
-  selected?: boolean;
-  onSelect?: () => void;
+  to?: string;
   testId?: string;
 }): React.JSX.Element {
   const body = (
     <>
       <span className="metricTop">
         <span className="metricLabel">{text}</span>
-        {onSelect ? <span className="metricChevron" aria-hidden>{selected ? '-' : '+'}</span> : null}
+        {to ? <span className="metricArrow" aria-hidden>&gt;</span> : null}
       </span>
       <strong>{value}</strong>
       {context ? <span className="metricContext">{context}</span> : null}
     </>
   );
 
-  if (!onSelect) return <article className={`card metricCard tone-${tone}`}>{body}</article>;
+  if (!to) return <article className={`card metricCard tone-${tone}`}>{body}</article>;
 
   return (
-    <article className={`card metricCard metricAction tone-${tone}${selected ? ' isSelected' : ''}`}>
+    <article className={`card metricCard metricAction tone-${tone}`}>
       <button
         type="button"
         className="metricButton"
-        onClick={onSelect}
-        aria-pressed={selected}
+        onClick={() => navigate(to)}
         data-testid={testId}
       >
         {body}
@@ -198,27 +228,27 @@ function MetricCard({
   );
 }
 
-function MetricInspector({
-  title, value, context, tone, children,
+function MetricDetailPage({
+  detail,
 }: {
-  title: string;
-  value: string;
-  context?: string;
-  tone: MetricTone;
-  children: ReactNode;
+  detail: MetricDefinition;
 }): React.JSX.Element {
   return (
-    <section className={`metricInspector tone-${tone}`} data-testid="metric-inspector">
-      <div className="metricInspectorSummary">
-        <span className="metricInspectorEyebrow">Selected metric</span>
-        <h3>{title}</h3>
-        <strong>{value}</strong>
-        {context ? <p>{context}</p> : null}
-      </div>
-      <div className="metricInspectorBody">
-        {children}
-      </div>
-    </section>
+    <main className="dash metricPage">
+      <section className={`metricPageHero tone-${detail.tone}`}>
+        <div>
+          <Link to="/app/dashboard" className="backLink">Back to dashboard</Link>
+          <p className="sectionTitle">Dashboard metric</p>
+          <h2>{detail.title}</h2>
+          {detail.context ? <p>{detail.context}</p> : null}
+        </div>
+        <strong>{detail.value}</strong>
+      </section>
+      <section className="metricPageBody" data-testid="metric-page-body">
+        <h3>Breakdown</h3>
+        {detail.body}
+      </section>
+    </main>
   );
 }
 
@@ -468,10 +498,9 @@ function KitchenPanel({
   );
 }
 
-export function DashboardPage(): React.JSX.Element {
+export function DashboardPage({ metricSlug }: { metricSlug?: string }): React.JSX.Element {
   const [dash, setDash] = useState<Dash | null>(null);
   const [busy, setBusy] = useState(true);
-  const [activeMetric, setActiveMetric] = useState<MetricKey>('attention');
   const seq = useRef(0);
 
   const reload = useCallback(() => {
@@ -525,7 +554,7 @@ export function DashboardPage(): React.JSX.Element {
   const convertedCustomers = ov?.customers_with_order ?? 0;
   const unconvertedCustomers = Math.max(0, totalCustomers - convertedCustomers);
   const avgOrderValue = avgOrder === null ? '—' : money(avgOrder, ov?.revenue_by_currency[0]?.currency ?? 'KWD');
-  const metricDetails: Record<MetricKey, { title: string; value: string; context?: string; tone: MetricTone; body: ReactNode }> = {
+  const metricDetails: Record<MetricKey, MetricDefinition> = {
     orders: {
       title: 'Total orders',
       value: num(ov?.orders),
@@ -618,7 +647,21 @@ export function DashboardPage(): React.JSX.Element {
       ]} />,
     },
   };
-  const activeMetricDetail = metricDetails[activeMetric];
+  const requestedMetric = metricFromSlug(metricSlug);
+
+  if (metricSlug && !requestedMetric) {
+    return (
+      <main className="dash metricPage">
+        <section className="placeholder card">
+          <h2>Metric not found</h2>
+          <p>The dashboard metric URL is not available.</p>
+          <Link to="/app/dashboard" className="primaryLink">Back to dashboard</Link>
+        </section>
+      </main>
+    );
+  }
+
+  if (requestedMetric) return <MetricDetailPage detail={metricDetails[requestedMetric]} />;
 
   return (
     <main className="dash analyticsDash">
@@ -634,41 +677,32 @@ export function DashboardPage(): React.JSX.Element {
         <MetricCard label="Total orders" value={num(ov?.orders)}
           context={`${num(ov?.orders_by_status.active ?? 0)} active · ${num(ov?.orders_by_status.approved ?? 0)} approved`}
           tone="brand"
-          selected={activeMetric === 'orders'} onSelect={() => setActiveMetric('orders')} testId="metric-orders" />
+          to={metricPath('orders')} testId="metric-orders" />
         <MetricCard label="Recorded revenue" value={revenue.value} context={revenue.sub} tone="good"
-          selected={activeMetric === 'revenue'} onSelect={() => setActiveMetric('revenue')} testId="metric-revenue" />
+          to={metricPath('revenue')} testId="metric-revenue" />
         <MetricCard label="Needs attention" value={num(needAttention)}
           context={`${num(reviewsWaiting.length)} Reviews waiting · ${num(paymentsWaiting.length)} Payments to confirm`}
           tone={needAttention > 0 ? 'warn' : 'good'}
-          selected={activeMetric === 'attention'} onSelect={() => setActiveMetric('attention')} testId="metric-attention" />
+          to={metricPath('attention')} testId="metric-attention" />
         <MetricCard label="Customer conversion" value={customerConversion}
           context={`${num(ov?.customers_with_order)} of ${num(ov?.customers)} customers with orders`}
-          selected={activeMetric === 'conversion'} onSelect={() => setActiveMetric('conversion')} testId="metric-conversion" />
+          to={metricPath('conversion')} testId="metric-conversion" />
       </section>
 
       <section className="healthGrid">
         <MetricCard label="Drafts created" value={num(intake?.drafts_created)}
           context={`${approvalRate} approved from intake`} tone="brand"
-          selected={activeMetric === 'drafts'} onSelect={() => setActiveMetric('drafts')} testId="metric-drafts" />
+          to={metricPath('drafts')} testId="metric-drafts" />
         <MetricCard label="Average order value" value={avgOrderValue}
           context="recorded revenue / orders"
-          selected={activeMetric === 'aov'} onSelect={() => setActiveMetric('aov')} testId="metric-aov" />
+          to={metricPath('aov')} testId="metric-aov" />
         <MetricCard label="Payment paid rate" value={percent(paidPayments, paymentTotal)}
           context={`${num(paidPayments)} paid or collected of ${num(paymentTotal)}`} tone={safeRatio(paidPayments, paymentTotal) >= 80 ? 'good' : 'warn'}
-          selected={activeMetric === 'paidRate'} onSelect={() => setActiveMetric('paidRate')} testId="metric-paid-rate" />
+          to={metricPath('paidRate')} testId="metric-paid-rate" />
         <MetricCard label="Cancellation pressure" value={cancelRate}
           context={`${num(daily?.orders_cancelled)} cancelled in projections`} tone={(daily?.orders_cancelled ?? 0) > 0 ? 'bad' : 'neutral'}
-          selected={activeMetric === 'cancellations'} onSelect={() => setActiveMetric('cancellations')} testId="metric-cancellations" />
+          to={metricPath('cancellations')} testId="metric-cancellations" />
       </section>
-
-      <MetricInspector
-        title={activeMetricDetail.title}
-        value={activeMetricDetail.value}
-        context={activeMetricDetail.context}
-        tone={activeMetricDetail.tone}
-      >
-        {activeMetricDetail.body}
-      </MetricInspector>
 
       <section className="analyticsGrid wideLeft">
         <RecordBars title="Orders & payments" rows={orderStatuses} empty={busy ? 'Loading orders…' : 'No orders yet.'} />
