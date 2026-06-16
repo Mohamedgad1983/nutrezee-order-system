@@ -1,9 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { OrderController } from '../../apps/api/src/modules/m03-orders/order.controller';
 import type { OrderService } from '../../apps/api/src/modules/m03-orders/order.service';
-import type { SessionService, StaffContext } from '../../apps/api/src/platform/auth/session.service';
+import { AuthError, type SessionService, type StaffContext } from '../../apps/api/src/platform/auth/session.service';
 import type { AccessService } from '../../apps/api/src/platform/rbac/access.service';
 
 const ctx: StaffContext = {
@@ -21,6 +21,19 @@ function controllerWith(orders: Partial<OrderService>) {
 }
 
 describe('TS-C API contract — orders controller (WP-09)', () => {
+  it('blocks order list reads without a valid session', async () => {
+    const c = controllerWith({ listOrdersRich: vi.fn() });
+    await expect(c.list({ cookies: {} } as unknown as Request)).rejects.toBeInstanceOf(UnauthorizedException);
+
+    const sessions = { validate: vi.fn().mockRejectedValue(new AuthError('expired')) } as unknown as SessionService;
+    const access = {
+      decide: vi.fn(),
+      visibilityGrants: vi.fn(),
+    } as unknown as AccessService;
+    const expired = new OrderController(sessions, access, { listOrdersRich: vi.fn() } as unknown as OrderService);
+    await expect(expired.list(req)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('creates an order from an approved draft using POST /orders', async () => {
     const createFromApprovedDraft = vi.fn().mockResolvedValue({ id: 'order-1', replay: false });
     const c = controllerWith({ createFromApprovedDraft });
@@ -44,6 +57,29 @@ describe('TS-C API contract — orders controller (WP-09)', () => {
     await expect(c.listDays(req, 'order-1')).resolves.toEqual({ items: [{ id: 'day-1' }], page: { limit: 100 } });
     expect(listOrdersRich).toHaveBeenCalledWith({ status: 'approved', q: 'NUT', customerId: 'cust-1', limit: 25, offset: 10 });
     expect(listDays).toHaveBeenCalledWith('order-1');
+  });
+
+  it('masks order list PII and payment fields when grants are absent', async () => {
+    const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
+    const access = {
+      decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+      visibilityGrants: vi.fn().mockResolvedValue(new Set<string>()),
+    } as unknown as AccessService;
+    const listOrdersRich = vi.fn().mockResolvedValue({
+      rows: [{
+        id: 'order-1',
+        customer_name: 'Private Customer',
+        customer_phone: '+96550000000',
+        total: 12345,
+      }],
+      total: 1,
+    });
+    const c = new OrderController(sessions, access, { listOrdersRich } as unknown as OrderService);
+    const res = await c.list(req);
+    expect(res.items[0].customer_name).not.toBe('Private Customer');
+    expect(res.items[0].customer_phone).not.toBe('+96550000000');
+    expect(res.items[0].total).not.toBe(12345);
+    expect(res.items[0].masked).toBe(true);
   });
 
   it('lists exceptions with the state filter and returns the read contract', async () => {

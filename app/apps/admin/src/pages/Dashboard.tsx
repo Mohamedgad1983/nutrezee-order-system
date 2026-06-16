@@ -162,7 +162,6 @@ const percent = (part: number | null | undefined, whole: number | null | undefin
 const safeRatio = (part: number | null | undefined, whole: number | null | undefined): number =>
   !whole || typeof part !== 'number' ? 0 : Math.max(0, Math.min(100, (part / whole) * 100));
 const fmtTs = (iso?: string | null): string => (iso ? new Date(iso).toLocaleString() : '—');
-const short = (s: string | null | undefined, len = 12): string => (s ? (s.length > len ? `${s.slice(0, len)}…` : s) : '—');
 
 function money(minor: number | null | undefined, currency = 'KWD'): string {
   if (typeof minor !== 'number') return '—';

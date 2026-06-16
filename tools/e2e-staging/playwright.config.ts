@@ -7,7 +7,7 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'https://13-140-159-201.sslip.io',
+    baseURL: process.env.E2E_BASE_URL ?? 'https://13-140-159-201.sslip.io',
     viewport: { width: 1280, height: 800 },
     video: 'on',
     screenshot: 'on',

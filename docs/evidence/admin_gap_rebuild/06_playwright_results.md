@@ -7,10 +7,32 @@ Date: 2026-06-16
 ```bash
 cd tools/e2e-staging
 npx playwright test tests/wpui-auth-unauth.spec.ts
-E2E_EMAIL=... E2E_PASSWORD=... npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts
+# authenticated run requires E2E_EMAIL/E2E_PASSWORD exported from a secret source first
+npx playwright test tests/wpui-shell.spec.ts tests/wpui-orders.spec.ts tests/wpui-customers.spec.ts
 ```
 
 ## Current Run Status
+
+Follow-up readiness run on branch `build/wp-ui-customers-list`:
+
+```bash
+cd tools/e2e-staging
+npx playwright test tests/wpui-auth-unauth.spec.ts
+```
+
+Result: passed, 2/2 browser tests.
+
+Authenticated staging E2E was **not run in this follow-up** because the required
+runtime credentials were not present in the environment:
+
+```text
+E2E_EMAIL missing
+E2E_PASSWORD missing
+E2E_BASE_URL missing (the Playwright config defaults to the staging URL)
+```
+
+Per the staging E2E rule, credentials must be supplied via environment/secret
+store at run time. They were not hardcoded, echoed, or committed.
 
 No-secret smoke passed: 2/2 browser tests.
 
