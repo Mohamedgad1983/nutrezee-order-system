@@ -1,6 +1,6 @@
 # Proposal: Minimal Safe Schema Extension for Legacy Per-Order Delivery
 
-Date: 2026-06-16 · Status: **PROPOSED — not applied.** (Sponsor authorized proposing; no schema change made.)
+Date: 2026-06-16 · Status: **OPTION B CHOSEN + APPLIED** (sponsor approved). Migration `0014_order_delivery_frozen.sql` applied to staging; governed importer updated (`8b920a6`, TS-M tested); existing orders backfilled. Per-order delivery now stored — see `18_db_full_reconciliation.md`.
 
 ## Problem
 
