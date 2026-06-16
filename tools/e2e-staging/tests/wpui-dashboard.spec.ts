@@ -39,6 +39,12 @@ test('dashboard — stat cards from live projections + queue counts', async ({ p
   await expect(page.locator('.analyticsPanel')).toHaveCount(8);
   await expect(page.locator('.metricCard')).toHaveCount(11);
 
+  const attentionCard = page.locator('.metricCard').filter({ hasText: 'Needs attention' });
+  await attentionCard.getByRole('button').click();
+  await expect(attentionCard.locator('.metricDetailDrop')).toBeVisible();
+  await expect(attentionCard.getByText('Reviews waiting')).toBeVisible();
+  await expect(attentionCard.getByText('Payments to confirm')).toBeVisible();
+
   for (const title of [
     'Orders & payments',
     'Payment status mix',
