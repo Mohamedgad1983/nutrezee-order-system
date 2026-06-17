@@ -61,13 +61,14 @@ try {
     process.exit(2);
   }
 
-  // open missing_order_link exceptions (+ raw_sha for provenance)
+  // open missing_order_link exceptions (+ ONE raw_sha for provenance). The raw provenance is a
+  // scalar subquery (LIMIT 1), NOT a LEFT JOIN — an order can have multiple raw archives (re-scrapes),
+  // and a join would multiply the exception rows and inflate the counts.
   const whereOpen = resolutionSupported ? "AND e.resolution_status='open'" : '';
   const exRows = (await client.query(
     `SELECT e.id, e.legacy_order_id, e.detail->>'order_number' AS order_number, e.meal_date,
-            r.raw_sha
+            (SELECT raw_sha FROM legacy_meal_history_raw r WHERE r.source_record_id = e.legacy_order_id LIMIT 1) AS raw_sha
      FROM customer_meal_history_exceptions e
-     LEFT JOIN legacy_meal_history_raw r ON r.source_record_id = e.legacy_order_id
      WHERE e.reason=$1 ${whereOpen}`,
     [REASON],
   )).rows;

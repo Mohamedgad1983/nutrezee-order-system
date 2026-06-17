@@ -115,4 +115,21 @@ describe('TS-I meal-history relink', () => {
     const promoted = await pool.query(`SELECT count(*)::int AS n FROM customer_meal_history_items WHERE legacy_order_id='23999'`);
     expect(promoted.rows[0].n).toBe(0);   // nothing promoted for the unresolved order
   });
+
+  it('does not inflate the exception load when an order has multiple raw archives (scalar-subquery, not JOIN)', async () => {
+    // order 23999 has 1 exception; give it TWO raw archives (re-scrapes). A LEFT JOIN to raw would
+    // double the exception row; the relink uses a scalar subquery (LIMIT 1) so it stays 1.
+    await pool.query(`INSERT INTO legacy_meal_history_raw (id,source_system,source_name,source_record_id,payload,raw_sha) VALUES ($1,'s','n','23999','{}','SHA-MULTI-A')`, [newId()]);
+    await pool.query(`INSERT INTO legacy_meal_history_raw (id,source_system,source_name,source_record_id,payload,raw_sha) VALUES ($1,'s','n','23999','{}','SHA-MULTI-B')`, [newId()]);
+    const joined = await pool.query(
+      `SELECT count(*)::int AS n FROM customer_meal_history_exceptions e
+       LEFT JOIN legacy_meal_history_raw r ON r.source_record_id = e.legacy_order_id
+       WHERE e.legacy_order_id='23999'`);
+    const scalar = await pool.query(
+      `SELECT count(*)::int AS n FROM (
+         SELECT e.id, (SELECT raw_sha FROM legacy_meal_history_raw r WHERE r.source_record_id=e.legacy_order_id LIMIT 1) AS raw_sha
+         FROM customer_meal_history_exceptions e WHERE e.legacy_order_id='23999') q`);
+    expect(joined.rows[0].n).toBe(2);    // the buggy JOIN would have doubled it
+    expect(scalar.rows[0].n).toBe(1);    // the relink's scalar subquery keeps it at one-per-exception
+  });
 });
