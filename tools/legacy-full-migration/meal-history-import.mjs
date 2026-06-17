@@ -128,13 +128,16 @@ try {
     );
   }
 
+  // accepts both the legacy sample naming (meals_<internalId>.html.gz) and the scraper naming
+  // (meals_<internalId>_<orderNumber>_<sha8>.html.gz); internalId is the leading digit group.
+  const MEAL_FILE_RE = /^meals_(\d+)(?:_.*)?\.html\.gz$/;
   const files = fs.existsSync(RAW_DIR)
-    ? fs.readdirSync(RAW_DIR).filter((f) => /^meals_\d+\.html\.gz$/.test(f)).sort()
+    ? fs.readdirSync(RAW_DIR).filter((f) => MEAL_FILE_RE.test(f)).sort()
     : (errors.push(`raw_dir_missing:${RAW_DIR}`), []);
 
   for (const file of files) {
     counts.records_seen += 1;
-    const internalId = (file.match(/^meals_(\d+)\.html\.gz$/) || [])[1];
+    const internalId = (file.match(MEAL_FILE_RE) || [])[1];
     let html;
     try { html = zlib.gunzipSync(fs.readFileSync(path.join(RAW_DIR, file))).toString('utf8'); }
     catch { bumpException('parse_error'); errors.push(`gunzip_fail:${file}`); continue; }
