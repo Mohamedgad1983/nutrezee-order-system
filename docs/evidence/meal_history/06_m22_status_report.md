@@ -1,5 +1,9 @@
 # 06 — m22 Customer Meal-History: Phase-1 Status Report
 
+> **Superseded for Phase 2/3** by `12_m22_phase_2_3_status_report.md` (staging deploy of 0018 +
+> gated last-30-days apply + V1–V8). This doc remains the Phase-1 (dry-run foundation) record.
+
+
 > WP `m22-customer-meal-history`, Phase 1 foundation. Branch
 > `migration/legacy-full-clone-reconciliation`. **NO bridge** — controlled transfer into PostgreSQL.
 

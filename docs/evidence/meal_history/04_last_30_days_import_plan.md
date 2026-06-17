@@ -42,12 +42,15 @@ duration_ms` (+ `dedup_checked`, `window_from/to`, `applied:false`).
 `internal_id` (grid filename) → `order_number` (`orders_index.jsonl`) → `customer_order.id` +
 `customer_id` (`sync_record.new_ref`). Legacy ids preserved throughout.
 
-## Controlled apply path (Phase 2 — NOT in this run)
-When dry-run + validation (doc 05) pass and the migration is deployed to staging, the apply path will,
-**inside a transaction per order**: insert `legacy_meal_history_raw` (skip on `raw_sha` conflict) →
-upsert `customer_meal_history` → insert `customer_meal_history_items` (skip dup meal-days) → write
-unlinked/invalid rows to `customer_meal_history_exceptions` → finalize the `import_runs` row with
-counts. Apply will remain gated: `SYNC_TARGET=staging` + explicit confirmation + `scope=last_30_days`.
+## Controlled apply path — **IMPLEMENTED + EXECUTED in Phase 2/3** (docs 07–10)
+The apply path is now built and was run on staging. **Per order, inside its own transaction**: insert
+`legacy_meal_history_raw` (skip on `raw_sha` conflict → idempotent) → insert `customer_meal_history`
+(`ON CONFLICT (legacy_order_id) DO NOTHING`) → insert `customer_meal_history_items`
+(`ON CONFLICT DO NOTHING` on the no-dup-meal-day index) → write unlinked/invalid meal-days to
+`customer_meal_history_exceptions` → finalize the `import_runs` row with counts. Gating (all required):
+`MEAL_IMPORT_MODE=apply` + `SYNC_TARGET=staging` + `scope=last_30_days` +
+`MEAL_IMPORT_APPLY_CONFIRM=APPLY_LAST_30_STAGING` + destination tables deployed. Staging apply result:
+raw 60 / parent 60 / item 211 / exception 28; idempotent on re-run (doc 09).
 
 ## Out of scope now
 full-history import · scheduled sync (step 9) · per-dish backfill (~500k ajax) · any UI (until the

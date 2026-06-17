@@ -29,3 +29,9 @@ plus a per-order list (`legacy_order_id`, `meal_date`, `reason`) — **ids + rea
 ## Acceptance decision
 Proceed to last-90 → last-year → full **only after** V1–V8 pass on the last-30-days apply, and only
 then build the read-only meal-history UI. Until then: dry-run + this validation define done.
+
+> **EXECUTED (2026-06-17):** the gated last-30-days apply ran on staging
+> (`01KVAKEJ81NY46128Z7CWZ1FEY`) and **V1–V8 all PASS** against ground-truth reconciliation
+> (`239 in-window meal-days = 211 clean + 28 exceptions`, 0 silent drops, idempotent). See
+> `10_last_30_days_validation_v1_v8.md`. Widening to last-90 is gated on the exception relink pass
+> (`11_exception_review_and_link_repair_plan.md`).
