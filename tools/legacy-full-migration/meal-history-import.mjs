@@ -37,17 +37,24 @@ if (SCOPE === 'full' && process.env.ALLOW_FULL_HISTORY !== '1') {
   log({ fatal: 'refused: scope=full requires ALLOW_FULL_HISTORY=1 (no whole-history import)' });
   process.exit(2);
 }
-if (APPLY && TARGET !== 'staging') {
-  log({ fatal: `refused: apply mode requires SYNC_TARGET=staging (got '${TARGET}')` });
-  process.exit(2);
-}
-if (APPLY && SCOPE !== 'last_30_days') {
-  log({ fatal: `refused: apply scope must be last_30_days in Phase 2/3 (got '${SCOPE}')` });
-  process.exit(2);
-}
-if (APPLY && process.env.MEAL_IMPORT_APPLY_CONFIRM !== 'APPLY_LAST_30_STAGING') {
-  log({ fatal: 'refused: apply requires MEAL_IMPORT_APPLY_CONFIRM=APPLY_LAST_30_STAGING (explicit confirmation)' });
-  process.exit(2);
+// Gated apply scopes only — last_30_days and last_90_days. full / last_year / all / unknown windows
+// are NOT applyable. Each scope needs its own explicit confirmation token + a VPS-source assertion.
+const APPLY_SCOPES = { last_30_days: 'APPLY_LAST_30_STAGING', last_90_days: 'APPLY_LAST_90_STAGING' };
+if (APPLY) {
+  if (!TARGET) { log({ fatal: 'refused: apply requires --target/SYNC_TARGET=staging' }); process.exit(2); }
+  if (TARGET !== 'staging') { log({ fatal: `refused: apply requires SYNC_TARGET=staging (got '${TARGET}') — no production` }); process.exit(2); }
+  if (!Object.prototype.hasOwnProperty.call(APPLY_SCOPES, SCOPE)) {
+    log({ fatal: `refused: apply scope must be one of ${Object.keys(APPLY_SCOPES).join('|')} (got '${SCOPE}') — no full/last_year/all/unknown apply` });
+    process.exit(2);
+  }
+  if (process.env.MEAL_IMPORT_APPLY_CONFIRM !== APPLY_SCOPES[SCOPE]) {
+    log({ fatal: `refused: apply requires MEAL_IMPORT_APPLY_CONFIRM=${APPLY_SCOPES[SCOPE]} (explicit per-scope confirmation)` });
+    process.exit(2);
+  }
+  if (process.env.MEAL_IMPORT_SOURCE_VPS !== '1') {
+    log({ fatal: 'refused: apply requires MEAL_IMPORT_SOURCE_VPS=1 (assert raw is from the VPS-approved scrape path)' });
+    process.exit(2);
+  }
 }
 
 const { default: pg } = await import('pg');
@@ -115,6 +122,15 @@ try {
     log({ fatal: 'refused: apply requires the m22 tables deployed on the target (dedup_checked=false)' });
     await client.end().catch(() => {});
     process.exit(2);
+  }
+  // Apply requires staging DB version >= 0019 (deterministic floor for the m22 exception/resolution schema).
+  if (APPLY) {
+    const v = await client.query("SELECT max(filename) AS m FROM schema_migrations").catch(() => ({ rows: [{ m: '' }] }));
+    if (String(v.rows[0]?.m || '') < '0019') {
+      log({ fatal: `refused: apply requires staging DB version >= 0019 (got '${v.rows[0]?.m || 'none'}')` });
+      await client.end().catch(() => {});
+      process.exit(2);
+    }
   }
 
   // Apply opens its own import-run record (counts finalized at the end).
