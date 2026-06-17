@@ -172,6 +172,10 @@ try {
   summary.duration_ms = Date.now() - t0;
   if (summary.errors.length > 0) summary.ok = false;
   log({ DRY_RUN_SUMMARY: summary });
+  // Bare, grep-able one-liner so a wrapper running this via `docker exec` can persist host-side
+  // run-history without needing jq or a shared mount (the RUN_HISTORY/ALERT_FILE paths below are
+  // container-internal and only used when the script runs directly on the host).
+  console.log('SUMMARY ' + JSON.stringify(summary));
   appendHistory(summary);
   if (!summary.ok) writeAlert(summary);
   releaseLock();

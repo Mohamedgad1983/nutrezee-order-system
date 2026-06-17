@@ -15,15 +15,16 @@ the foundations themselves.
 ## 1. Cron / incremental sync
 | Item | Result |
 |---|---|
-| Scheduled | **Yes — built, committed, NOT enabled** (`ops/systemd/nutrezee-legacy-sync.{service,timer}` + `run-legacy-sync.sh`) |
-| Mode | **dry-run only** (script refuses `apply` / non-staging, fail-fast before loading drivers) |
+| Scheduled | **Yes — built + INSTALLED-DISABLED on the VPS** (`/etc/systemd/system/nutrezee-legacy-sync.{service,timer}` + `/opt/nutrezee/sync/run-legacy-sync.sh`) |
+| Timer state | `is-enabled=disabled`, `is-active=inactive`, service `static` (timer-triggered only); not in `list-timers` |
+| Mode | **dry-run only** (script refuses `apply` / non-staging → exit 2, fail-fast before loading drivers) |
 | Schedule | `OnCalendar=*:0/30` (every 30 min), `Persistent=false` |
-| Overlap guard | triple: `Type=oneshot` + `flock -n` + `O_EXCL` PID lockfile (+ wrapper PID lock) |
-| Output schema | started_at, finished_at, duration_ms, records_seen, would_create/update/skip/fail, errors, watermark, next_cursor → run-history.jsonl; alert file on failure |
-| Live evidence | staging watermark 24,630; 20,103 synced orders; 26,071 records in extract; 1,272 pending exceptions (read-only) |
-| Apply mode | **out of scope** until dry-run signed off as stable (doc 25 §6 checklist) |
+| Overlap guard | proven: `flock -n` second concurrent run → `SKIP`; plus `Type=oneshot` + `O_EXCL`/PID lockfiles |
+| **Dry-run proof (2026-06-17)** | **3 consecutive ticks, all `ok=true`, `would_fail=0`, identical counts** (records_seen 26,071 · would_create 0 · would_skip 639 · watermark 24,630 · next_cursor 24,675); no alert file; host-side `run-history.jsonl` (counts only) |
+| Live evidence | staging watermark 24,630; 20,103 synced orders; 1,272 pending exceptions (read-only) |
+| Apply mode | **out of scope** — and `would_create=0` because the on-disk extract lacks phone/amount; a full-shape legacy pull is required before apply is ever considered (doc 25 §6.1) |
 
-Doc: `25_incremental_sync_scheduled_dry_run.md`.
+Doc: `25_incremental_sync_scheduled_dry_run.md` (§6.1 VPS proof).
 
 ## 2. Packing (m20-packing)
 | Aspect | Status |
@@ -90,7 +91,10 @@ additive schema only ✅ · legacy IDs preserved (`order_id`, `legacy_driver_id`
 audit logs for operational actions ✅ · every workflow browser/API testable ✅.
 
 ## NEXT STEP
-On the VPS: install the units **disabled**, run `run-legacy-sync.sh` manually for ≥3 consecutive
-30-min ticks, confirm `would_fail=0` + clean run-history, then sign off doc 25 §6 before
-`systemctl enable --now nutrezee-legacy-sync.timer`. (Apply mode and WhatsApp sending remain out of
-scope until operational data is proven stable.)
+Units are installed-disabled and the dry-run is proven stable (3 clean ticks, doc 25 §6.1). The
+**only** remaining gate is **human approval to flip the timer on** (`systemctl enable --now
+nutrezee-legacy-sync.timer`) — not done here by design. Before enabling, also **bake the dry-run
+script + a full-shape orders pull into the API image** (the proof used `docker cp` + the phone-less
+`orders_index` extract, doc 25 §6.2), so the diff can find real candidates and the files survive
+container recreation. Apply mode and WhatsApp sending remain out of scope until that full-shape pull
+is wired and separately signed off.

@@ -10,7 +10,10 @@ set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/opt/nutrezee/sync}"
 CONTAINER="${CONTAINER:-nutrezee-api-1}"
-SCRIPT_IN_CONTAINER="${SCRIPT_IN_CONTAINER:-/app/tools/legacy-full-migration/incremental-sync.mjs}"
+# In-container paths. The staging API image runs with workdir /srv and resolves node_modules at
+# /srv/node_modules, so the dry-run script + its orders extract live under /srv (baked at image
+# build for production; docker-cp'd for the manual pre-enable proof). Override for other layouts.
+SCRIPT_IN_CONTAINER="${SCRIPT_IN_CONTAINER:-/srv/incremental-sync.mjs}"
 ORDERS_JSON="${ORDERS_JSON:-/srv/orders_history.json}"
 LOG_DIR="${LOG_DIR:-${APP_DIR}/logs}"
 LOG="${LOG:-${LOG_DIR}/incremental-sync.log}"
@@ -32,23 +35,32 @@ trap 'rm -f "${PIDLOCK}"' EXIT
 
 echo "$(TS) START incremental-sync (DRY-RUN, staging only, no WhatsApp)" >>"${LOG}"
 
-# The node script appends a counts-only summary to ${HISTORY} and writes ${ALERT} on failure.
-# It refuses to run unless SYNC_MODE=dry-run and SYNC_TARGET=staging (defense in depth).
+# The node script refuses to run unless SYNC_MODE=dry-run and SYNC_TARGET=staging (defense in
+# depth) and emits a counts-only `SUMMARY {json}` line. We run it inside the API container (where
+# pg/argon2/ulid resolve), capture its output to the host log, and persist the summary to the
+# host-side run-history (the script's own RUN_HISTORY/ALERT_FILE are container-internal and only
+# used when it runs directly on the host).
+OUT="$(mktemp)"
 set +e
 docker exec \
   -e NOTIFY_DISABLE=1 \
   -e SYNC_MODE=dry-run \
   -e SYNC_TARGET=staging \
-  -e RUN_HISTORY="${HISTORY}" \
-  -e ALERT_FILE="${ALERT}" \
   "${CONTAINER}" \
-  node "${SCRIPT_IN_CONTAINER}" "${ORDERS_JSON}" >>"${LOG}" 2>&1
+  node "${SCRIPT_IN_CONTAINER}" "${ORDERS_JSON}" >"${OUT}" 2>&1
 rc=$?
 set -e
+
+cat "${OUT}" >>"${LOG}"
+# Extract the bare summary line -> host run-history (counts only, no PII).
+summary="$(grep -E '^SUMMARY ' "${OUT}" | tail -1 | sed 's/^SUMMARY //')"
+if [[ -n "${summary}" ]]; then echo "${summary}" >>"${HISTORY}"; fi
+rm -f "${OUT}"
 
 if [[ $rc -eq 0 ]]; then
   echo "$(TS) OK incremental-sync rc=0" >>"${LOG}"
 else
   echo "$(TS) FAIL incremental-sync rc=${rc} (see ${ALERT})" >>"${LOG}"
+  if [[ -n "${summary}" ]]; then echo "${summary}" >"${ALERT}"; else echo "{\"ok\":false,\"rc\":${rc},\"at\":\"$(TS)\"}" >"${ALERT}"; fi
 fi
 exit $rc

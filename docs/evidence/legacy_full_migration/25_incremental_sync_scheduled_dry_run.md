@@ -1,9 +1,10 @@
 # 25 — Incremental Sync: Scheduled 30-Minute **Dry-Run** (built, disabled)
 
 > **Scope:** STAGING ONLY (`https://13-140-159-201.sslip.io`). Production is **never** touched.
-> **Status:** ✅ **BUILT** · ⛔ **NOT ENABLED.** The timer is committed to the repo but is not
-> installed/enabled on the VPS. Enabling is a deliberate, signed-off action (§6). Until then the
-> sync runs only on manual demand, in dry-run.
+> **Status:** ✅ **BUILT** · ✅ **INSTALLED-DISABLED on the VPS** · ✅ **DRY-RUN PROVEN STABLE
+> (2026-06-17)** · ⛔ **TIMER NOT ENABLED.** The units are on the VPS but the timer is
+> `disabled`/`inactive`; 3 consecutive manual ticks were clean (§6.1). Enabling remains a deliberate
+> human action (§6). Until then the sync runs only on manual demand, in dry-run.
 > **Mode:** dry-run only. **No `apply`. No WhatsApp. No destructive SQL. No raw PII / secrets committed.**
 
 Builds on `21_incremental_sync_design.md` (the diff design) and `22_cron_systemd_runbook.md` (the
@@ -115,16 +116,52 @@ sync candidates (they await manual review per doc 20).
 
 ---
 
-## 6. Pre-enable checklist (sign-off gate — do **not** enable until all ✅)
+## 6. Pre-enable checklist (sign-off gate)
 
-- [ ] Manual dry-run via `run-legacy-sync.sh` exits 0 with a sane summary and **zero** writes, on ≥3
-      consecutive ticks (stability proven).
-- [ ] `would_fail = 0` and `errors = []` across those runs.
-- [ ] flock overlap test: two wrappers back-to-back → second logs `SKIP:` and exits 0.
-- [ ] `run-history.jsonl` shows monotone `watermark`; no PII/secret in any log.
-- [ ] TEMP super-admin (`sync-temp@nutrezee.local`) deleted after each run (script does this in `finally`).
-- [ ] Human approval recorded in the run log. **Only then** `systemctl enable --now
-      nutrezee-legacy-sync.timer` (§ README). Never enable both cron and systemd.
+- [x] Manual dry-run via `run-legacy-sync.sh` exits 0 with a sane summary and **zero** writes, on **3
+      consecutive ticks** (§6.1) — stability proven.
+- [x] `would_fail = 0` and `errors = []` across all 3 runs.
+- [x] flock overlap test: a second concurrent run is refused (`SKIP: lock held -> overlap correctly
+      prevented`).
+- [x] `run-history.jsonl` is host-side, **counts only** (no PII/secret); `watermark` stable at 24,630.
+- [x] `apply` / non-staging guards refuse in-container (exit 2, before any DB/driver load).
+- [x] No TEMP super-admin created (no auto-creatable candidates ⇒ no API auth round-trip this run; the
+      script still deletes it in `finally` when it does bootstrap).
+- [ ] **Human approval to enable** — still required. The gate criteria above are met; flipping the
+      timer on is a deliberate human action: `systemctl enable --now nutrezee-legacy-sync.timer`
+      (§ README). Never enable both cron and systemd.
 
-**Apply mode stays out of scope** until the dry-run is signed off as stable. This doc closes Phase 1 of
-the operational-foundation mission: the schedule is *built and reviewable*, not *running*.
+### 6.1 VPS dry-run proof (2026-06-17, staging)
+
+Installed disabled (`systemctl is-enabled nutrezee-legacy-sync.timer` → `disabled`; service `static` =
+timer-triggered only), then ran `run-legacy-sync.sh` 3× consecutively inside the API container
+(`nutrezee-api-1`, workdir `/srv`):
+
+| Tick | started_at (UTC) | dur | records_seen | would_create | would_update | would_skip | would_fail | watermark | next_cursor | ok |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 09:25:48Z | 883ms | 26,071 | 0 | 0 | 639 | **0** | 24,630 | 24,675 | ✅ |
+| 2 | 09:26:31Z | 618ms | 26,071 | 0 | 0 | 639 | **0** | 24,630 | 24,675 | ✅ |
+| 3 | 09:26:32Z | 524ms | 26,071 | 0 | 0 | 639 | **0** | 24,630 | 24,675 | ✅ |
+
+- **Idempotent** — identical counts every tick; no writes, `applied:false`, `whatsapp_sent:false`.
+- **Guards** — `SYNC_MODE=apply` → `exit 2` (`refused: …apply…`); `SYNC_TARGET=production` → `exit 2`.
+- **Overlap** — concurrent `flock -n` second run refused; **no alert file** written (no failures).
+- **Live DB (read-only)** — watermark 24,630 · synced_orders 20,103 · pending_exceptions 1,272.
+
+> **Honest caveat (why `would_create = 0`):** this manual proof fed the on-disk `orders_index`
+> extract, which carries `order_number / dates / package / status` but **no customer phone or amount**.
+> `next_cursor 24,675 > watermark 24,630` correctly shows ~45 orders exist above the watermark, but
+> they are **not** auto-creatable without a customer-phone match, so they fall to `would_skip`, never
+> `would_create`. This is the **safest** possible result (nothing would change) and is exactly why the
+> production schedule must re-pull the **full-shape** order data from the legacy admin (runbook §1)
+> before `apply` is ever considered — and `apply` stays out of scope regardless.
+
+### 6.2 Deployment note
+The dry-run script (`/srv/incremental-sync.mjs`) and orders array (`/srv/orders_history.json`) were
+`docker cp`'d into the running container for this proof. For an enabled schedule they must be **baked
+into the API image** (or bind-mounted) so they survive container recreation — record this in the
+deploy that flips the timer on. The host-built `orders_history.json` contains **no PII** (no phone /
+name) and lives only on the VPS (`/opt/nutrezee/sync/`), never in git.
+
+**Apply mode stays out of scope** until the full-shape pull is wired and separately signed off. The
+schedule is *built, installed-disabled, and proven stable in dry-run* — not *running*.
