@@ -15,6 +15,8 @@ import { SettingsPage } from './pages/Settings';
 import { DashboardPage } from './pages/Dashboard';
 import { StaffPage } from './pages/Staff';
 import { ExceptionsPage } from './pages/Exceptions';
+import { PackingPage } from './pages/Packing';
+import { DeliveryPage } from './pages/Delivery';
 import { AuditPage } from './pages/Audit';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
@@ -61,6 +63,12 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/kitchen':
       page = <KitchenBoardPage />;
+      break;
+    case '/app/packing':
+      page = <PackingPage />;
+      break;
+    case '/app/delivery':
+      page = <DeliveryPage />;
       break;
     case '/app/drafts':
       page = <DraftsPage />;

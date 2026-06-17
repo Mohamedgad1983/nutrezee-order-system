@@ -21,6 +21,8 @@ export const NAV: NavItem[] = [
   { path: '/app/customers', label: 'Customers', live: true, icon: '👥', group: 'Operations' },
   { path: '/app/payments', label: 'Payments', live: true, icon: '💳', group: 'Operations' },
   { path: '/app/kitchen', label: 'Kitchen board', live: true, icon: '🍱', group: 'Operations' },
+  { path: '/app/packing', label: 'Packing', live: true, icon: '📦', group: 'Operations' },
+  { path: '/app/delivery', label: 'Delivery', live: true, icon: '🚚', group: 'Operations' },
   { path: '/app/exceptions', label: 'Exceptions', live: true, icon: '⚠️', group: 'Operations' },
   { path: '/app/catalog', label: 'Catalog', live: true, icon: '📦', group: 'Data' },
   { path: '/app/reports', label: 'Reports', live: true, icon: '📈', group: 'Data' },
