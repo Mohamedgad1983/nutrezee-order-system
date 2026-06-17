@@ -4,14 +4,20 @@
 > `migration/legacy-full-clone-reconciliation`. **No bridge. No UI. No full/last-year/all import. No
 > timer. No production. No PII in logs.**
 
+> **UPDATE — full last-90 now COMPLETE on the VPS.** This report's initial pass closed a 373-order
+> checkpoint; the **full** last-90 scrape (4,922 of 4,927; 6 retryable failures) and apply
+> (`01KVB7NEX9HZ44ZY61PF88FZEB`) subsequently completed on the VPS with **4,922/4,922 raw archived,
+> 0 silent drops**. See `26_full_last_90_completion_vps.md` for the full numbers + VPS execution
+> evidence. DB now: raw 4,982 · clean items 67,836 · exceptions 77.
+
 ## Management-readable summary
-The customer meal-history transfer now lands in the database, not just in files. We scraped real
-last-90 meal grids from the legacy system on the server, loaded them into PostgreSQL through the
+The customer meal-history transfer now lands in the database, not just in files. We scraped the real
+last-90 meal grids from the legacy system **on the server** and loaded them into PostgreSQL through the
 governed pipeline, and **proved that every successfully scraped record is stored** — as a raw archive
 row, a clean meal-history row, or an exception — with **zero silent drops**, and that re-running
 changes nothing (idempotent). The last-90 window is large (4,927 orders, ~2.7 hours of throttled
-scraping); we completed a stable **373-order checkpoint** and proved 100% DB storage of it. The rest
-is queued to resume. The data is now queryable from PostgreSQL by customer, order, and date.
+scraping); the **full** window is now scraped (4,922 success, 6 retryable failures) and applied —
+**100% DB storage**. The data is queryable from PostgreSQL by customer, order, and date.
 
 ## What was completed
 - Full-last-90 scrape **initiated** on the VPS; checkpointed at **373/4,927** (resumable) — doc 20.
