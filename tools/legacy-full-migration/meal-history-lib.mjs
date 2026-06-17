@@ -68,6 +68,42 @@ export function classifyItem({ meal_date, order_id, customer_id }) {
   return 'clean';
 }
 
+/**
+ * Plan a deterministic relink of missing_order_link exceptions. Pure — no I/O.
+ * `exceptions`: [{ legacy_order_id, order_number, meal_date }] (open missing_order_link rows).
+ * `syncMap`: Map(order_number(string) -> { order_id, customer_id }) from the CURRENT sync_record.
+ * Returns the per-order resolution plan + counts. A link promotes ONLY when both order_id and
+ * customer_id resolve from the exact chain — never by name/phone/guess.
+ */
+export function planRelink(exceptions, syncMap) {
+  const byOrder = new Map();
+  for (const e of exceptions) {
+    const key = String(e.legacy_order_id);
+    if (!byOrder.has(key)) byOrder.set(key, { legacy_order_id: key, order_number: e.order_number != null ? String(e.order_number) : null, dates: [] });
+    if (e.meal_date) byOrder.get(key).dates.push(e.meal_date);
+  }
+  const resolvable = [];
+  const unresolved = [];
+  let would_promote_items = 0;
+  let would_mark_resolved = 0;
+  let still_missing_order_link = 0;
+  for (const o of byOrder.values()) {
+    const link = o.order_number ? syncMap.get(o.order_number) : null;
+    if (link && link.order_id && link.customer_id) {
+      resolvable.push({ ...o, order_id: link.order_id, customer_id: link.customer_id });
+      would_promote_items += o.dates.length;
+      would_mark_resolved += o.dates.length;
+    } else {
+      unresolved.push(o);
+      still_missing_order_link += o.dates.length;
+    }
+  }
+  return {
+    exceptions_seen: exceptions.length, orders_seen: byOrder.size,
+    resolvable, unresolved, would_promote_items, would_mark_resolved, still_missing_order_link,
+  };
+}
+
 /** Empty counts object with every required key (so a 0 is always reported, never absent). */
 export function emptyCounts() {
   return {
