@@ -102,6 +102,29 @@ describe('TS-I meal-history schema', () => {
     )).rejects.toThrow(/duplicate key/);
   });
 
+  it('apply is idempotent via ON CONFLICT DO NOTHING (raw + items)', async () => {
+    // mirrors the runner's exact idempotency statements: a re-applied last-30-days import must not
+    // duplicate raw rows or clean meal-day items.
+    const insRaw = `INSERT INTO legacy_meal_history_raw
+        (id, source_system, source_name, source_record_id, payload, raw_sha)
+      VALUES ($1,'nutreeze.com','getMealsDateWiseFilter','30001','{"dates":["2026-06-02"]}','SHA-IDEMP')
+      ON CONFLICT (raw_sha) DO NOTHING RETURNING id`;
+    const r1 = await pool.query(insRaw, [newId()]);
+    const r2 = await pool.query(insRaw, [newId()]);   // re-run
+    expect(r1.rowCount).toBe(1);
+    expect(r2.rowCount).toBe(0);                       // no duplicate raw archived
+
+    const insItem = `INSERT INTO customer_meal_history_items
+        (id, meal_history_id, legacy_order_id, order_id, meal_date)
+      VALUES ($1,$2,'21274',$3,'2026-06-02') ON CONFLICT DO NOTHING RETURNING id`;
+    const i1 = await pool.query(insItem, [newId(), historyId, orderId]);
+    const i2 = await pool.query(insItem, [newId(), historyId, orderId]);   // re-run
+    expect(i1.rowCount).toBe(1);
+    expect(i2.rowCount).toBe(0);                       // no duplicate clean meal-day
+    const total = await pool.query(`SELECT count(*)::int AS n FROM customer_meal_history_items WHERE legacy_order_id='21274' AND meal_date='2026-06-02'`);
+    expect(total.rows[0].n).toBe(1);
+  });
+
   it('stores exceptions separately with a constrained reason and no PII', async () => {
     await pool.query(
       `INSERT INTO customer_meal_history_exceptions (id, import_run_id, legacy_order_id, meal_date, reason, detail)
