@@ -1,0 +1,23 @@
+[Unit]
+Description=Nutrezee m22 meal-history incremental sync (STAGING, DRY-RUN, read-only) — built, DISABLED, manual-run
+Documentation=file:///opt/nutrezee/legacy-meal-history/run-meal-history-sync.sh
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# flock -n: a still-running planner makes a new invocation exit immediately (no overlap)
+ExecStart=/usr/bin/flock -n /tmp/nutrezee-meal-history-sync.lock /opt/nutrezee/legacy-meal-history/run-meal-history-sync.sh
+Nice=15
+TimeoutStartSec=900
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nutrezee/legacy-meal-history /run
+PrivateTmp=false
+
+# NO [Install] section and NO accompanying .timer — there is intentionally no scheduled enablement.
+# This is a read-only DRY-RUN planner; it never applies and never scrapes. Manual `systemctl start`
+# only, and it stays disabled until a deliberate, signed-off decision. Application of any detected new
+# orders is performed by the gated meal-history-scrape-job.mjs + meal-history-import.mjs (each token-gated).

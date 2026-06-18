@@ -37,9 +37,14 @@ if (SCOPE === 'full' && process.env.ALLOW_FULL_HISTORY !== '1') {
   log({ fatal: 'refused: scope=full requires ALLOW_FULL_HISTORY=1 (no whole-history import)' });
   process.exit(2);
 }
-// Gated apply scopes only — last_30_days and last_90_days. full / last_year / all / unknown windows
-// are NOT applyable. Each scope needs its own explicit confirmation token + a VPS-source assertion.
-const APPLY_SCOPES = { last_30_days: 'APPLY_LAST_30_STAGING', last_90_days: 'APPLY_LAST_90_STAGING' };
+// Gated apply scopes only — last_30_days, last_90_days, last_year (Stage 6 widened, controlled
+// historical backfill). full / all / unknown windows are NOT applyable. Each scope needs its own
+// explicit confirmation token + a VPS-source assertion; tokens are never interchangeable.
+const APPLY_SCOPES = {
+  last_30_days: 'APPLY_LAST_30_STAGING',
+  last_90_days: 'APPLY_LAST_90_STAGING',
+  last_year: 'APPLY_LAST_YEAR_STAGING',
+};
 if (APPLY) {
   if (!TARGET) { log({ fatal: 'refused: apply requires --target/SYNC_TARGET=staging' }); process.exit(2); }
   if (TARGET !== 'staging') { log({ fatal: `refused: apply requires SYNC_TARGET=staging (got '${TARGET}') — no production` }); process.exit(2); }
