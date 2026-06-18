@@ -14,7 +14,7 @@ built, gated, and ready.**
 ## 1. Repo state
 - branch: `migration/legacy-full-clone-reconciliation`
 - starting commit: `e90bfc5`
-- ending commit: _(this commit)_
+- ending commit: `23036a7`
 - working tree: clean except known untracked (`CLAUDE.md`, `nutreeze-hr-kuwait-plan/`, `tools/legacy-migration/`)
 
 ## 2. Legacy source discovery
@@ -80,7 +80,7 @@ built, gated, and ready.**
 `09_sample_db_reconciliation` · `10_scaling_plan` · `11_ai_readiness_impact` · `12_…final_report`
 
 ## 12. Commit and push
-- commit hash: _(filled at commit)_ · push: `origin/migration/legacy-full-clone-reconciliation`
+- commit hash: `23036a7` · push: `origin/migration/legacy-full-clone-reconciliation`
 
 ## 13. Next safest step
 After the m22 last-year scrape finishes, run a **tiny live VPS discovery (≤5 orders, GET-only, polite)**
