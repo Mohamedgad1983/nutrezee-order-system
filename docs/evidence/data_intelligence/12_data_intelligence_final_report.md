@@ -5,7 +5,7 @@
 ## 1. Repo state
 - branch: `migration/legacy-full-clone-reconciliation`
 - starting commit: `fd2d5db`
-- ending commit: `5018b55`
+- ending commit: `120ae5f`
 - working tree: clean except known untracked (`CLAUDE.md`, `nutreeze-hr-kuwait-plan/`, `tools/legacy-migration/`)
 
 ## 2. DB baseline
@@ -69,7 +69,7 @@
   monorepo build/tests are unaffected.
 
 ## 12. Commit and push
-- commit hash: `5018b55` (docs-only)
+- commit hash: `120ae5f` (docs-only)
 - push status: pushed to `origin/migration/legacy-full-clone-reconciliation`
 
 ## 13. Next safest step
