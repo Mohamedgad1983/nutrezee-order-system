@@ -1,0 +1,21 @@
+# Daily internal "expiring subscription" email — DISABLED oneshot unit.
+# Deliberately has NO [Install] section and NO accompanying .timer: it does not
+# auto-start and is not scheduled. Run manually only:
+#     systemctl start nutrezee-expiring-subscription-email.service
+# To schedule it later (operator decision, NOT enabled here), create a .timer and
+# `systemctl enable --now` it — see docs/evidence/expiring_subscription_email/04_operational_runbook.md.
+#
+# Dry-run by default. A real send requires the env-file to set
+# EXPIRING_SUBSCRIPTION_EMAIL_ENABLED=true and EXPIRING_SUBSCRIPTION_DRY_RUN=false.
+[Unit]
+Description=Nutrezee daily expiring-subscription internal email (DISABLED; dry-run default)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/ops/systemd/run-expiring-subscription-email.sh
+# Run as a non-root operator user with docker access (adjust to your host).
+User=nutrezee
+Nice=10
+# No [Install] section on purpose — prevents `systemctl enable`.
