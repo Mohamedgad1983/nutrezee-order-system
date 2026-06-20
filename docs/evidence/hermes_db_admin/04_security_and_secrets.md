@@ -7,7 +7,8 @@
 ## Secret handling
 
 - The `hermes_ro` password was generated **on the server** and written only to `/opt/nutrezee/hermes_ro.env` (mode **600**, owner **root**) as `HERMES_RO_DATABASE_URL=postgres://hermes_ro:****@127.0.0.1:5432/nutrezee`.
-- The password **never** appears in: the git repo, this documentation, the agent transcript, or psql stdout.
+- For Hermes to use it, a `hermes`-owned copy was placed at `/home/hermes/.hermes/db_ro.env` (mode **600**), and the connection string is stored in the MCP entry in `/home/hermes/.hermes/config.yaml` (chmod **600**, since the URL is in the server args). All three are **host-only**.
+- The password **never** appears in: the git repo, this documentation, the agent transcript, or psql stdout (it was always passed by sourcing a host file or masked with `sed`).
 - **No secret is committed.** The repo's `gitleaks` pre-commit guard remains the backstop.
 - LLM credentials for Hermes (when the gated install proceeds) must also live in the host secret store, never the repo.
 
@@ -20,8 +21,8 @@
 ## Boundaries / non-goals
 
 - Hermes is a **read-only inspection/admin assistant** on staging. It is **not** wired to send the expiring-subscription email (that is the backend job, Part D) and is **not** a data mutator.
-- No MCP write/exec/filesystem-write/migration tools are configured for Hermes.
-- The agent binary install is **deferred** pending human approval + LLM credentials ([01](01_installation_plan.md)).
+- The configured MCP exposes a **single read-only `query` tool**; no write/exec/filesystem-write/migration tools.
+- The agent binary is **installed but inert** — no LLM credential set; activation is gated ([01](01_installation_plan.md)).
 
 ## Threat-model notes
 

@@ -1,6 +1,16 @@
 # 01 — Hermes Agent Installation Plan
 
-**Date:** 2026-06-20 · **Decision: INSTALL DEFERRED / GATED** (read-only DB user created; agent binary not installed).
+**Date:** 2026-06-20 · **Decision: INSTALLED** — binary installed under a non-root user with `--skip-setup`, read-only DB MCP wired; **LLM activation remains gated** (no key set → agent is inert).
+
+> History: this was initially deferred (see below). On explicit user approval ("Install binary now (no key)"), the binary was installed and the read-only MCP configured. The activation step (adding an LLM credential) is still a separate human decision.
+
+## Installed (2026-06-20)
+
+- **Version:** Hermes Agent **v0.17.0** (2026.6.19), Python 3.11.15, under user `hermes` (uid 1001, home `/home/hermes`).
+- **Command:** `sudo -u hermes -H bash /tmp/hermes-install.sh --skip-setup` (installer sha256 `dbd9d555…`, re-verified before run). Files under `/home/hermes/.hermes/` (`config.yaml`, `.env`, `hermes-agent/`, bundled `uv`/node).
+- **`--skip-setup`** → **no LLM credentials configured**; `~/.hermes/.env` contains only non-secret tool defaults. The agent cannot run autonomously until a key is added.
+- **Read-only DB MCP wired:** server `nutrezee-staging-ro` → `npx -y @modelcontextprotocol/server-postgres <hermes_ro url>`, **enabled**, exposes a single **read-only `query`** tool (`hermes mcp test` → ✓ connected, 1 tool). See [02](02_mcp_config.md).
+- **Browser tools** (bundled Chromium) installed but unused for DB admin; no system libs added (no sudo for `hermes`).
 
 ---
 
@@ -19,14 +29,18 @@
   - Post-install requires `hermes setup --portal` to authenticate an LLM provider.
   - The temp copy was removed after inspection.
 
-## Why the binary install is DEFERRED (blocker)
+## What remains gated: LLM activation
 
-Per the phase rules ("if Hermes installation … requires credentials: do not force it; document the blocker"):
+The binary is installed but **inert** — `--skip-setup` left no LLM credential, so the agent cannot run. Activation is a deliberate, separate human step:
 
-1. **Requires LLM credentials.** Hermes is an LLM agent — `hermes setup --portal` needs an API key / OAuth (Nous Portal, OpenRouter, OpenAI, …). None are available to this run, and provisioning an LLM credential is a human decision.
-2. **Autonomous agent on live staging = gated.** The architecture decision states Hermes "must not become an uncontrolled production data mutator." Running an autonomous agent against the staging DB needs human sign-off and a dedicated non-root user. The **read-only DB user** (created — see [03](03_db_readonly_user.md)) is the enforcement primitive that makes any such agent safe; standing up the agent itself is the gated follow-up.
+1. Choose a provider and add its key to `~/.hermes/.env` (host only, never the repo) — e.g. `OPENROUTER_API_KEY=…` or `hermes login` for Nous Portal.
+2. Start a session (`hermes`) — it will then be able to use the read-only `query` tool against staging.
 
-**What WAS done safely now:** the read-only PostgreSQL user (`hermes_ro`) + secret storage + verification, so that *when* a human approves the agent, it can only ever read.
+The architecture decision ("must not become an uncontrolled production data mutator") is satisfied at every layer: the MCP exposes only a read-only `query` tool, and the underlying `hermes_ro` role is `default_transaction_read_only=on` with no DML grants ([03](03_db_readonly_user.md)). So even once activated, Hermes can only read.
+
+## Original deferral rationale (kept for the record)
+
+Before the explicit approval, the install was deferred because Hermes *functions* only with an LLM credential and running an autonomous agent on live staging warranted sign-off. The approval scoped it to **binary install + read-only MCP, no key** — which is what was done.
 
 ## Approved install procedure (for the gated follow-up)
 

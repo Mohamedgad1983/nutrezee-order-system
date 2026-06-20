@@ -1,6 +1,6 @@
 # 02 — Hermes MCP Configuration (read-only DB)
 
-**Date:** 2026-06-20 · **Status:** config documented; applied only when the gated agent install proceeds ([01](01_installation_plan.md)).
+**Date:** 2026-06-20 · **Status: APPLIED & ENABLED** — read-only postgres MCP `nutrezee-staging-ro` configured on staging (1 read-only `query` tool; `hermes mcp test` ✓).
 
 ---
 
@@ -18,20 +18,28 @@ The connection string comes from the host secret store, never the repo:
 HERMES_RO_DATABASE_URL=postgres://hermes_ro:****@127.0.0.1:5432/nutrezee
 ```
 
-## Hermes MCP entry (illustrative `~/.hermes` config)
+## Actual config applied (2026-06-20)
 
-```jsonc
-{
-  "mcpServers": {
-    "nutrezee-staging-ro": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${HERMES_RO_DATABASE_URL}"],
-      // read-only DB MCP: schema introspection + read-only query tool only
-      "env": { "HERMES_RO_DATABASE_URL": "<injected from /opt/nutrezee/hermes_ro.env>" }
-    }
-  }
-}
+The credential was copied to a `hermes`-owned file and sourced **inside** the `hermes` shell (so the password never transited the agent transcript), then:
+
+```bash
+# hermes-owned copy of the read-only credential (600):
+install -o hermes -g hermes -m 600 /opt/nutrezee/hermes_ro.env /home/hermes/.hermes/db_ro.env
+
+# add the read-only postgres MCP (run as the hermes user, from its home):
+set -a; . ~/.hermes/db_ro.env; set +a
+hermes mcp add nutrezee-staging-ro \
+  --command npx --args -y @modelcontextprotocol/server-postgres "$HERMES_RO_DATABASE_URL"
 ```
+
+Result (verified):
+```
+✓ Connected! Found 1 tool(s): query  (Run a read-only SQL query)   → enabled
+hermes mcp test nutrezee-staging-ro → ✓ Connected (2208ms), 1 tool
+```
+
+- The MCP entry lives in `/home/hermes/.hermes/config.yaml` (chmod **600**, since the connection string is in the args). `@modelcontextprotocol/server-postgres` v0.6.2 exposes a **single read-only `query` tool** running statements in a read-only transaction — no write/DDL/admin tools.
+- Gotchas hit & fixed: run from the `hermes` home (npx fails with `EACCES /root` otherwise); pass the URL by sourcing the hermes-owned file (sudo `--preserve-env` of an unexported var yields an empty URL → `Invalid URL`).
 
 ## Tool exposure policy
 
