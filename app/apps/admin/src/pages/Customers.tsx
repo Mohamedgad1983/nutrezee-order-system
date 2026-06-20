@@ -6,7 +6,21 @@ import { api, ApiError, humanMessage, type ListResponse, type OrderListItem } fr
 // edit core fields, add an address. Replaces legacy /users/list/3 + the customer
 // search inside /orders/create. The merge-review screen waits on WP-API-02 wiring.
 
-interface CustomerHit { id: string; full_name_en?: string; phone_normalized?: string; status?: string; masked?: boolean }
+interface SubscriptionFields {
+  subscription_status?: string;
+  subscription_expire_date?: string | null;
+  days_remaining?: number | null;
+  is_expired?: boolean;
+  is_expiring_soon?: boolean;
+}
+interface CustomerHit extends SubscriptionFields { id: string; full_name_en?: string; phone_normalized?: string; status?: string; masked?: boolean }
+
+// Subscription expiry summary (from fulfillment_day; see subscription_expiry foundation).
+function subscriptionLabel(s: SubscriptionFields): string {
+  if (!s.subscription_expire_date || s.subscription_status === 'unknown' || !s.subscription_status) return '—';
+  const days = typeof s.days_remaining === 'number' ? ` (${s.days_remaining}d)` : '';
+  return `${s.subscription_expire_date} · ${s.subscription_status}${days}`;
+}
 interface CustomerList extends ListResponse<CustomerHit> { page: { limit: number; offset?: number; total?: number } }
 const PAGE = 50;
 interface Phone { phone_normalized?: string; label?: string | null; is_primary?: boolean; whatsapp?: boolean }
@@ -23,19 +37,21 @@ interface Profile {
   phones?: Phone[];
   addresses?: Address[];
   allergies?: Array<{ name_en?: string; severity?: string | null; note?: string | null }>;
+  subscription?: SubscriptionFields & { source_confidence?: string };
   masked?: boolean;
 }
 
 function CustomerTable({ rows, onOpen }: { rows: CustomerHit[]; onOpen: (id: string) => void }): React.JSX.Element {
   return (
     <table className="table">
-      <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Subscription</th><th></th></tr></thead>
       <tbody>
         {rows.map((h) => (
           <tr key={h.id}>
             <td>{h.full_name_en ?? '—'}</td>
             <td className="mono">{h.phone_normalized ?? '—'}</td>
             <td>{h.status ?? '—'}</td>
+            <td>{subscriptionLabel(h)}</td>
             <td><button type="button" onClick={() => onOpen(h.id)}>Open</button></td>
           </tr>
         ))}
@@ -331,6 +347,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
             <div><dt>Email</dt><dd>{profile.email ?? '—'}</dd></div>
             <div><dt>DOB</dt><dd>{profile.dob ?? '—'}</dd></div>
             <div><dt>Status</dt><dd>{profile.status ?? '—'}</dd></div>
+            <div><dt>Subscription expires</dt><dd>{profile.subscription ? subscriptionLabel(profile.subscription) : '—'}</dd></div>
             <div><dt>Notes</dt><dd>{profile.notes ?? '—'}</dd></div>
           </dl>
           <strong>Phones</strong>

@@ -51,6 +51,28 @@ export interface CustomerAddressSnapshot {
   active: boolean;
 }
 
+/** Subscription expiry derived from scheduled fulfillment_day service days.
+ *  Non-PII. Mirrors analytics.customer_subscription_status (migration 0021;
+ *  docs/evidence/subscription_expiry) but customer-scoped — the global view
+ *  seq-scans fulfillment_day (~725ms); the scoped query is index-driven (~15ms). */
+export interface CustomerSubscriptionInfo {
+  subscription_expire_date: string | null;        // YYYY-MM-DD; null ⇒ status 'unknown'
+  days_remaining: number | null;                  // signed; <0 = expired N days ago
+  subscription_status: 'active' | 'expiring_soon' | 'expired' | 'future' | 'unknown';
+  is_expired: boolean;
+  is_expiring_soon: boolean;
+  source_confidence: 'high' | 'low' | 'none';     // 'low' = pick is a cancelled/rejected order
+}
+
+const UNKNOWN_SUBSCRIPTION: CustomerSubscriptionInfo = {
+  subscription_expire_date: null,
+  days_remaining: null,
+  subscription_status: 'unknown',
+  is_expired: false,
+  is_expiring_soon: false,
+  source_confidence: 'none',
+};
+
 // M04 customer profiles: guided create with dup detection (GAP-DQ-01), phone-first
 // search, profile reads logged per visibility class (BR-043 via the read queue).
 export class CustomerService {
@@ -79,7 +101,8 @@ export class CustomerService {
   }
 
   /** Paginated customer list (legacy /users/list parity). PII is masked at the
-   *  controller per the caller's grants — this returns raw rows. */
+   *  controller per the caller's grants — this returns raw rows, enriched with
+   *  non-PII subscription expiry fields (subscription_expiry foundation). */
   async listCustomers(limit: number, offset: number): Promise<Array<Record<string, unknown>>> {
     const { rows } = await this.pool.query(
       `SELECT c.id, c.full_name_en, c.status,
@@ -90,12 +113,77 @@ export class CustomerService {
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     );
-    return rows;
+    const subs = await this.subscriptionForCustomers(rows.map((r) => r.id as string));
+    return rows.map((r) => {
+      const s = subs.get(r.id as string) ?? UNKNOWN_SUBSCRIPTION;
+      return {
+        ...r,
+        subscription_status: s.subscription_status,
+        subscription_expire_date: s.subscription_expire_date,
+        days_remaining: s.days_remaining,
+        is_expired: s.is_expired,
+        is_expiring_soon: s.is_expiring_soon,
+      };
+    });
   }
 
   async countCustomers(): Promise<number> {
     const { rows } = await this.pool.query('SELECT count(*)::int AS n FROM customer');
     return Number(rows[0].n);
+  }
+
+  /** Subscription expiry per customer from scheduled fulfillment_day service days.
+   *  Read-only; non-PII. Customer-scoped equivalent of analytics.customer_subscription_status
+   *  (migration 0021) — kept logically identical (Asia/Kuwait business date, latest-expire
+   *  pick with the same tie-breaker, same status thresholds). Returns a map keyed by
+   *  customer_id; customers with no scheduled days are absent (caller treats as 'unknown'). */
+  async subscriptionForCustomers(ids: string[]): Promise<Map<string, CustomerSubscriptionInfo>> {
+    const out = new Map<string, CustomerSubscriptionInfo>();
+    if (ids.length === 0) return out;
+    const { rows } = await this.pool.query(
+      `WITH today AS (SELECT (now() AT TIME ZONE 'Asia/Kuwait')::date AS d),
+       per AS (
+         SELECT co.customer_id, co.id AS order_id, co.status, co.created_at,
+                MIN(fd.date) AS s, MAX(fd.date) AS e
+         FROM customer_order co
+         JOIN fulfillment_day fd ON fd.order_id = co.id
+         WHERE co.customer_id = ANY($1::text[])
+         GROUP BY co.id
+       ),
+       pick AS (
+         SELECT DISTINCT ON (customer_id)
+           customer_id, status, s, e,
+           (e - (SELECT d FROM today)) AS days_remaining
+         FROM per
+         ORDER BY customer_id, e DESC, created_at DESC NULLS LAST, order_id DESC
+       )
+       SELECT customer_id,
+         to_char(e, 'YYYY-MM-DD') AS subscription_expire_date,
+         days_remaining,
+         CASE
+           WHEN s > (SELECT d FROM today) THEN 'future'
+           WHEN (SELECT d FROM today) BETWEEN s AND e AND days_remaining BETWEEN 0 AND 7 THEN 'expiring_soon'
+           WHEN (SELECT d FROM today) BETWEEN s AND e THEN 'active'
+           WHEN e < (SELECT d FROM today) THEN 'expired'
+           ELSE 'unknown'
+         END AS subscription_status,
+         (e < (SELECT d FROM today)) AS is_expired,
+         ((SELECT d FROM today) BETWEEN s AND e AND days_remaining BETWEEN 0 AND 7) AS is_expiring_soon,
+         CASE WHEN status IN ('cancelled','rejected') THEN 'low' ELSE 'high' END AS source_confidence
+       FROM pick`,
+      [ids],
+    );
+    for (const r of rows) {
+      out.set(r.customer_id as string, {
+        subscription_expire_date: (r.subscription_expire_date as string | null) ?? null,
+        days_remaining: r.days_remaining === null ? null : Number(r.days_remaining),
+        subscription_status: r.subscription_status as CustomerSubscriptionInfo['subscription_status'],
+        is_expired: r.is_expired as boolean,
+        is_expiring_soon: r.is_expiring_soon as boolean,
+        source_confidence: r.source_confidence as CustomerSubscriptionInfo['source_confidence'],
+      });
+    }
+    return out;
   }
 
   /** Guided creation: exact-phone duplicate blocks with a link to the existing
@@ -185,7 +273,9 @@ export class CustomerService {
         entityType: 'customer', entityId: customerId, severity: 'info',
       });
     }
-    return { ...rows[0], phones: phones.rows, addresses: addresses.rows, allergies };
+    const subscription =
+      (await this.subscriptionForCustomers([customerId])).get(customerId) ?? UNKNOWN_SUBSCRIPTION;
+    return { ...rows[0], phones: phones.rows, addresses: addresses.rows, allergies, subscription };
   }
 
   async addAddress(

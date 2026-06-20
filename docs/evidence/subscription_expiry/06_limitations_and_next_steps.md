@@ -18,31 +18,27 @@
 
 6. **`unknown` = 11,573 customers** have no orders/scheduled days (non-buyer leads). Expected, not an error.
 
-## Staging apply — DEFERRED (explain clearly)
+## Staging apply — DONE (Option A: 0021 only)
 
-The migration is **additive and proven to apply cleanly** (applied inside a transaction on staging and rolled back; [04](04_validation_report.md)). It was **not persisted to staging** in this pass because:
+On 2026-06-20, migration **`0021` was applied to staging** (Option A) on explicit instruction, **without** applying `0020`:
 
-- The migrate runner (`app/db/migrate.mjs`) applies **all pending migrations in filename order**. Staging head is `0019`; running it would apply **`0020_wave7_dish_per_day.sql` first** — the dish-per-day foundation that was **deliberately not applied** (no dish data exists). Applying `0021` via the standard runner therefore can't be done without also applying `0020`, which is out of scope and contradicts a prior deliberate decision.
-- Changing the migration ledger out-of-order (apply `0021` only, leave `0020` pending) is a **migration-governance decision for a human**, not an autonomous one, and there is no confirmed staging backup step in this pass.
+- Applied atomically: `BEGIN; <0021 DDL>; INSERT INTO schema_migrations(filename) VALUES ('0021_analytics_subscription_expiry.sql') ON CONFLICT DO NOTHING; COMMIT;` — piping the exact committed file.
+- **Verified post-apply (DB):** both views present; `schema_migrations` `002*` rows = **only `0021`** (so **`0020` remains unapplied**); dish-per-day tables still absent (`to_regclass` NULL); counts match validation exactly (7,903 with expiry; 694 active; 290 expiring_soon; 6,904 expired; 15 future; 11,573 unknown).
+- The migrate runner (`app/db/migrate.mjs`) checks `schema_migrations` per-file, so the ledger being non-contiguous (`0021` present, `0020` absent) is valid; a **future** `node db/migrate.mjs` run would still apply `0020` (empty dish tables) — that decision stays with a human.
 
-**The urgent business value is delivered regardless:** the expiry logic + per-customer validated counts are produced now ([04](04_validation_report.md)), and the durable migration is committed.
-
-### Safe apply options (human decision)
-
-| Option | Command (staging) | Effect |
-|---|---|---|
-| **A. Apply 0021 only, as a read overlay** | `psql … -f 0021_analytics_subscription_expiry.sql` then record it: `INSERT INTO schema_migrations(filename) VALUES ('0021_analytics_subscription_expiry.sql')` | Views live; `0020` stays pending (ledger non-contiguous but valid — runner checks per-file). Idempotent DDL, safe to re-run. |
-| **B. Apply 0020 + 0021 together via the runner** | `DATABASE_URL=… node db/migrate.mjs` | Both apply; creates **empty** dish-per-day tables (0020) + the views. Only if creating empty m23 tables on staging is acceptable. |
-| **C. Defer entirely** | — | Re-run the validated SELECTs ([sql/read_only_validation.sql](sql/read_only_validation.sql) inline block) on demand until a controlled apply window. |
-
-Recommended: **Option A** in a supervised window (take a DB snapshot first per the environment plan), since it delivers live views without forcing the 0020 decision. Whoever applies should confirm the backup convention in `16_Deployment/environment_plan.md`.
+**Rollback (fully reversible — view-only, no business data):**
+```
+DROP SCHEMA analytics CASCADE;
+DELETE FROM schema_migrations WHERE filename = '0021_analytics_subscription_expiry.sql';
+```
+No DB snapshot was required because the change is additive views + one ledger row, with the trivial rollback above.
 
 ## Next steps
 
-1. **Apply `0021` to staging** (Option A) in a supervised window with a snapshot.
-2. **Optional stricter variant:** if the business confirms `cancelled`/`rejected` should be excluded from "current subscription," add `analytics.customer_subscription_status_strict` (same logic, `WHERE order_status NOT IN ('cancelled','rejected')`) as an **additional** view — keep the permissive one for completeness.
-3. **Surface in the admin API/UI** ([05](05_admin_usage.md)) as a follow-up WP once views are live.
-4. **Materialize if needed:** if read latency over 527K fulfillment rows matters, promote `order_subscription_periods` to a materialized view with a **manual, idempotent** refresh (no timer/cron).
+1. ✅ **Done — `0021` applied to staging** (Option A; see above).
+2. ✅ **Done — expiry fields added to the customer list/profile API + admin UI** ([05](05_admin_usage.md)). **Remaining:** rebuild + deploy the API/admin images to staging (gated behind `STAGING_DEPLOY_ENABLED`) so the running endpoints serve the new shape; add a Playwright e2e once deployed.
+3. **Optional stricter variant:** if the business confirms `cancelled`/`rejected` should be excluded from "current subscription," add `analytics.customer_subscription_status_strict` (same logic, `WHERE order_status NOT IN ('cancelled','rejected')`) as an **additional** view — keep the permissive one for completeness.
+4. **Materialize if needed:** if read latency over 527K fulfillment rows matters for reporting use of the global view, promote `order_subscription_periods` to a materialized view with a **manual, idempotent** refresh (no timer/cron). (The API already avoids the global view via a scoped query.)
 5. **Revisit when delivery outcome is captured:** once `fulfillment_day.status` carries real outcomes, add a delivery-completion view distinct from this entitlement view.
 
 ## Guardrails honored
