@@ -6,20 +6,17 @@
 // (NUTRITION_DOCTOR_EMAIL) — an internal staff recipient. NEVER emails customers,
 // never triggers WhatsApp/marketing. Disabled + dry-run by default.
 //
-// Safety contract:
-//   * The ONLY email recipient is NUTRITION_DOCTOR_EMAIL (env). Customer contact
-//     details are never used as recipients and are not included in the report.
-//   * No real send unless: ENABLED=true AND dry-run=false AND recipient set AND
-//     an SMTP transport is configured. Otherwise the report is rendered to logs
-//     and a run row is written to audit_event — nothing leaves the system.
-//   * Report contains internal IDs + non-PII subscription fields only.
-//   * Business date is Asia/Kuwait, computed in SQL to match the view exactly.
+// Report format: a clean HTML table + a CSV (Excel) attachment. When
+// EXPIRING_SUBSCRIPTION_INCLUDE_CONTACT=true (owner-authorized, internal call
+// list) it includes customer Name + Phone so the doctor can follow up; otherwise
+// it stays ID-only (no PII). Customer contact details are NEVER used as the email
+// recipient — the only recipient is NUTRITION_DOCTOR_EMAIL.
 //
+// Business date is Asia/Kuwait, computed in SQL to match the view exactly.
 // Run:  node scripts/expiring-subscription-email.mjs           (dry-run; default)
-//       (configure via env — see app/.env.example and the docs under
-//        docs/evidence/expiring_subscription_email/)
 // ----------------------------------------------------------------------------
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import pg from 'pg';
 
 const EVENT_TYPE = 'report.expiring_subscription_email';
@@ -52,6 +49,13 @@ function readConfig() {
     daysAhead,
     windowMode,
     tz: env('EXPIRING_SUBSCRIPTION_TZ', 'Asia/Kuwait'),
+    // Owner-authorized internal call list: include customer Name + Phone so the
+    // Nutrition Doctor can follow up. Default OFF (ID-only) for PII safety.
+    includeContact: boolEnv('EXPIRING_SUBSCRIPTION_INCLUDE_CONTACT', false),
+    // Manual override to re-send for a target date already marked sent (e.g. a
+    // corrected report). Off by default so the daily run stays idempotent.
+    force: boolEnv('EXPIRING_SUBSCRIPTION_FORCE', false),
+    previewDir: env('EXPIRING_SUBSCRIPTION_PREVIEW_DIR', '/tmp'),
     smtp: {
       host: env('SMTP_HOST', undefined),
       port: Number.parseInt(env('SMTP_PORT', '587'), 10),
@@ -76,6 +80,15 @@ async function fetchReport(client, cfg) {
     cfg.windowMode === 'within'
       ? 'css.subscription_expire_date BETWEEN (t.today + 1) AND (t.today + $2::int)'
       : 'css.subscription_expire_date = (t.today + $2::int)';
+  // Name + phone are only selected when the owner enabled the contact list.
+  const contactSelect = cfg.includeContact
+    ? `, c.full_name_en AS customer_name,
+       c.full_name_ar AS customer_name_ar,
+       (SELECT p.phone_normalized FROM customer_phone p
+         WHERE p.customer_id = css.customer_id
+         ORDER BY p.is_primary DESC NULLS LAST LIMIT 1) AS phone`
+    : `, NULL::text AS customer_name, NULL::text AS customer_name_ar, NULL::text AS phone`;
+  const contactJoin = cfg.includeContact ? 'LEFT JOIN customer c ON c.id = css.customer_id' : '';
   const sql = `
     WITH t AS (SELECT (now() AT TIME ZONE $1)::date AS today)
     SELECT
@@ -83,62 +96,146 @@ async function fetchReport(client, cfg) {
       to_char(t.today + $2::int, 'YYYY-MM-DD')                AS target_expiry,
       css.customer_id,
       css.current_order_id,
-      css.current_package_id,
       css.current_package_name,
       to_char(css.subscription_expire_date, 'YYYY-MM-DD')     AS subscription_expire_date,
       css.days_remaining,
       css.subscription_status,
       css.source_confidence
-    FROM analytics.customer_subscription_status css, t
+      ${contactSelect}
+    FROM analytics.customer_subscription_status css
+    CROSS JOIN t
+    ${contactJoin}
     WHERE ${where}
-    ORDER BY css.current_package_name NULLS LAST, css.subscription_status, css.customer_id`;
+    ORDER BY css.subscription_expire_date,
+             css.current_package_name NULLS LAST,
+             css.customer_id`;
   const { rows } = await client.query(sql, [cfg.tz, cfg.daysAhead]);
   return rows;
 }
 
 function summarize(rows) {
   const byPackage = new Map();
-  const byStatus = new Map();
   let lowConfidence = 0;
   for (const r of rows) {
     const pkg = r.current_package_name ?? '(no package)';
     byPackage.set(pkg, (byPackage.get(pkg) ?? 0) + 1);
-    byStatus.set(r.subscription_status, (byStatus.get(r.subscription_status) ?? 0) + 1);
     if (r.source_confidence === 'low') lowConfidence += 1;
   }
-  return { byPackage, byStatus, lowConfidence };
+  return { byPackage, lowConfidence };
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function csvCell(v) {
+  return '"' + String(v ?? '').replace(/"/g, '""') + '"';
+}
+
+function renderCsv(cfg, rows) {
+  const header = ['#', 'Name', 'Phone', 'Package', 'Expiry date', 'Days left', 'Status', 'Confidence', 'Customer ID', 'Order ID'];
+  const out = [header.map(csvCell).join(',')];
+  rows.forEach((r, i) => {
+    out.push([
+      i + 1,
+      cfg.includeContact ? (r.customer_name ?? '') : '',
+      cfg.includeContact ? (r.phone ?? '') : '',
+      r.current_package_name ?? '',
+      r.subscription_expire_date,
+      r.days_remaining,
+      r.subscription_status,
+      r.source_confidence,
+      r.customer_id,
+      r.current_order_id ?? '',
+    ].map(csvCell).join(','));
+  });
+  // UTF-8 BOM so Excel opens names (incl. Arabic) correctly; CRLF line endings.
+  return '﻿' + out.join('\r\n') + '\r\n';
+}
+
+function renderHtml(cfg, rows, summary, meta) {
+  const td = 'padding:6px 10px;border:1px solid #e2e8e6;font-size:13px;vertical-align:top';
+  const th = 'padding:8px 10px;border:1px solid #0a6b4d;font-size:12px;text-align:left;color:#fff;background:#0a8f5f';
+  const body = rows.map((r, i) => {
+    const low = r.source_confidence === 'low';
+    const bg = low ? '#fff7e6' : (i % 2 ? '#f7faf9' : '#ffffff');
+    const cells = [
+      `<td style="${td};text-align:center;color:#888">${i + 1}</td>`,
+      cfg.includeContact ? `<td style="${td};font-weight:600">${esc(r.customer_name ?? '—')}</td>` : '',
+      cfg.includeContact ? `<td style="${td};font-family:monospace;white-space:nowrap">${esc(r.phone ?? '—')}</td>` : '',
+      `<td style="${td}">${esc(r.current_package_name ?? '—')}</td>`,
+      `<td style="${td};white-space:nowrap">${esc(r.subscription_expire_date)}</td>`,
+      `<td style="${td};text-align:center">${esc(r.days_remaining)}</td>`,
+      `<td style="${td}">${esc(r.subscription_status)}${low ? ' <span title="latest order cancelled/rejected — verify">⚠</span>' : ''}</td>`,
+    ].join('');
+    return `<tr style="background:${bg}">${cells}</tr>`;
+  }).join('');
+  const headCells = [
+    '<th style="' + th + ';text-align:center">#</th>',
+    cfg.includeContact ? '<th style="' + th + '">Name</th>' : '',
+    cfg.includeContact ? '<th style="' + th + '">Phone</th>' : '',
+    '<th style="' + th + '">Package</th>',
+    '<th style="' + th + '">Expiry date</th>',
+    '<th style="' + th + ';text-align:center">Days left</th>',
+    '<th style="' + th + '">Status</th>',
+  ].join('');
+  const pkgList = [...summary.byPackage.entries()].sort((a, b) => b[1] - a[1])
+    .map(([p, n]) => `<li>${esc(p)}: <b>${n}</b></li>`).join('');
+  return `<!doctype html><html><body style="margin:0;background:#f0f4f3;padding:18px">
+  <div style="max-width:920px;margin:auto;background:#fff;border:1px solid #e2e8e6;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1a2b27">
+    <div style="background:#0a8f5f;color:#fff;padding:16px 22px">
+      <div style="font-size:18px;font-weight:700">Nutrezee — Subscriptions Expiring in ${cfg.daysAhead} Days</div>
+      <div style="font-size:12px;opacity:.9">Internal call list for the Nutrition Doctor · staff use only</div>
+    </div>
+    <div style="padding:18px 22px">
+      <table style="font-size:13px;margin-bottom:8px"><tr>
+        <td style="padding:2px 16px 2px 0">Report date (Kuwait): <b>${esc(meta.reportDate)}</b></td>
+        <td style="padding:2px 16px 2px 0">Expiring on: <b>${esc(meta.targetExpiry)}</b></td>
+        <td style="padding:2px 16px 2px 0">Total: <b>${rows.length}</b></td>
+        <td style="padding:2px 0">⚠ low-confidence: <b>${summary.lowConfidence}</b></td>
+      </tr></table>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">By package: <ul style="margin:6px 0">${pkgList}</ul></div>
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${body || `<tr><td style="${td}" colspan="7">No subscriptions match the window.</td></tr>`}</tbody>
+      </table>
+      <p style="font-size:11px;color:#8a9a95;margin-top:14px">
+        ⚠ = latest order is cancelled/rejected (verify before calling). Expiry = scheduled service-schedule end
+        (from fulfillment_day), not confirmed delivery. The full list is attached as a CSV (open in Excel).
+      </p>
+    </div>
+  </div></body></html>`;
+}
+
+function renderText(cfg, rows, summary, meta) {
+  const lines = [];
+  lines.push('Nutrezee — Subscriptions Expiring in ' + cfg.daysAhead + ' Days (internal call list)');
+  lines.push('');
+  lines.push(`Report date (Kuwait): ${meta.reportDate}   Expiring on: ${meta.targetExpiry}   Total: ${rows.length}   Low-confidence: ${summary.lowConfidence}`);
+  lines.push('Full list attached as CSV (open in Excel).');
+  lines.push('');
+  rows.forEach((r, i) => {
+    const who = cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : '';
+    lines.push(`${i + 1}. ${who}${r.current_package_name ?? '—'} | expires ${r.subscription_expire_date} | ${r.days_remaining}d | ${r.subscription_status}${r.source_confidence === 'low' ? ' (!)' : ''}`);
+  });
+  if (rows.length === 0) lines.push('(no subscriptions match the window today)');
+  return lines.join('\n');
 }
 
 function renderEmail(cfg, rows) {
   const reportDate = rows[0]?.report_date ?? '(computed at query time)';
   const targetExpiry = rows[0]?.target_expiry ?? '(none)';
-  const subject = `Nutrezee Subscriptions Expiring in ${cfg.daysAhead} Days - ${reportDate}`;
-  const { byPackage, byStatus, lowConfidence } = summarize(rows);
-
-  const lines = [];
-  lines.push('Nutrezee — Internal Subscription Expiry Report (staff only)');
-  lines.push('');
-  lines.push(`Report date (Asia/Kuwait): ${reportDate}`);
-  lines.push(`Target expiry date:        ${targetExpiry}  (${cfg.windowMode === 'within' ? `within ${cfg.daysAhead} days` : `exactly ${cfg.daysAhead} days ahead`})`);
-  lines.push(`Total customers:           ${rows.length}`);
-  lines.push(`Low-confidence rows:       ${lowConfidence}  (latest order is cancelled/rejected — review)`);
-  lines.push('');
-  lines.push('Expiry = scheduled service-schedule end (fulfillment_day), NOT confirmed delivery.');
-  lines.push('');
-  lines.push('By package:');
-  for (const [pkg, n] of [...byPackage.entries()].sort((a, b) => b[1] - a[1])) lines.push(`  - ${pkg}: ${n}`);
-  lines.push('By status:');
-  for (const [st, n] of [...byStatus.entries()].sort((a, b) => b[1] - a[1])) lines.push(`  - ${st}: ${n}`);
-  lines.push('');
-  lines.push('Customers (internal IDs — no PII):');
-  lines.push('customer_id | current_order_id | package | expire | days_left | status | confidence');
-  for (const r of rows) {
-    lines.push(
-      `${r.customer_id} | ${r.current_order_id ?? '—'} | ${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_remaining} | ${r.subscription_status} | ${r.source_confidence}`,
-    );
-  }
-  if (rows.length === 0) lines.push('  (no subscriptions match the window today)');
-  return { subject, text: lines.join('\n'), targetExpiry, reportDate };
+  const subject = `Nutrezee — ${rows.length} subscriptions expiring ${targetExpiry} (in ${cfg.daysAhead} days)`;
+  const summary = summarize(rows);
+  const meta = { reportDate, targetExpiry };
+  return {
+    subject,
+    text: renderText(cfg, rows, summary, meta),
+    html: renderHtml(cfg, rows, summary, meta),
+    csv: renderCsv(cfg, rows),
+    csvName: `nutrezee_expiring_${targetExpiry}.csv`,
+    targetExpiry,
+    reportDate,
+  };
 }
 
 async function alreadySent(client, entityId) {
@@ -168,9 +265,6 @@ async function recordRun(client, entityId, after) {
 }
 
 async function sendEmail(cfg, email) {
-  // SMTP transport is optional. nodemailer is NOT a declared dependency; a real
-  // send requires the operator to install it (npm i nodemailer) — see docs. Until
-  // then this throws and the job stays effectively dry-run.
   let nodemailer;
   try {
     nodemailer = (await import('nodemailer')).default;
@@ -189,6 +283,8 @@ async function sendEmail(cfg, email) {
     to: cfg.recipient, // ONLY the internal Nutrition Doctor address
     subject: email.subject,
     text: email.text,
+    html: email.html,
+    attachments: [{ filename: email.csvName, content: email.csv, contentType: 'text/csv; charset=utf-8' }],
   });
 }
 
@@ -199,8 +295,8 @@ async function main() {
     process.exit(1);
   }
   log('info', 'starting', {
-    enabled: cfg.enabled, dryRun: cfg.dryRun, daysAhead: cfg.daysAhead,
-    windowMode: cfg.windowMode, tz: cfg.tz, recipientSet: Boolean(cfg.recipient),
+    enabled: cfg.enabled, dryRun: cfg.dryRun, daysAhead: cfg.daysAhead, windowMode: cfg.windowMode,
+    tz: cfg.tz, includeContact: cfg.includeContact, recipientSet: Boolean(cfg.recipient),
   });
 
   const client = new pg.Client({ connectionString: cfg.databaseUrl });
@@ -209,9 +305,8 @@ async function main() {
     const rows = await fetchReport(client, cfg);
     const email = renderEmail(cfg, rows);
     const entityId = `expiring-subscription-${email.targetExpiry}`;
-    log('info', 'report built', { subject: email.subject, total: rows.length });
+    log('info', 'report built', { subject: email.subject, total: rows.length, includeContact: cfg.includeContact });
 
-    // Decide whether a real send is permitted.
     const wantSend = cfg.enabled && !cfg.dryRun;
     let sent = false;
     let sendBlockedReason = null;
@@ -219,9 +314,9 @@ async function main() {
     if (!wantSend) {
       sendBlockedReason = cfg.enabled ? 'dry_run' : 'disabled';
     } else if (!cfg.recipient) {
-      sendBlockedReason = 'no_recipient'; // NUTRITION_DOCTOR_EMAIL not set
-    } else if (await alreadySent(client, entityId)) {
-      sendBlockedReason = 'already_sent'; // idempotent per target date
+      sendBlockedReason = 'no_recipient';
+    } else if (!cfg.force && await alreadySent(client, entityId)) {
+      sendBlockedReason = 'already_sent';
     } else {
       try {
         await sendEmail(cfg, email);
@@ -234,8 +329,20 @@ async function main() {
     }
 
     if (!sent) {
-      log('info', `NOT sent (${sendBlockedReason}). Rendered report below:`);
-      console.log('\n----- BEGIN REPORT -----\n' + email.text + '\n----- END REPORT -----\n');
+      // Dry-run / preview: write the full HTML + CSV to files so they can be reviewed
+      // without dumping the whole PII list to the console.
+      try {
+        const base = `${cfg.previewDir}/expiring_${email.targetExpiry}`;
+        writeFileSync(`${base}.html`, email.html);
+        writeFileSync(`${base}.csv`, email.csv);
+        log('info', `NOT sent (${sendBlockedReason}). Preview written: ${base}.html , ${base}.csv`);
+      } catch (e) {
+        log('warn', `could not write preview files: ${e.message}`);
+      }
+      // Small console sample only (first 6 rows) — full list is in the files/email.
+      const sample = rows.slice(0, 6).map((r, i) =>
+        `${i + 1}. ${cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : ''}${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_remaining}d | ${r.subscription_status}`).join('\n');
+      console.log(`\n----- PREVIEW (first ${Math.min(6, rows.length)} of ${rows.length}) -----\n${sample}\n----- END PREVIEW -----\n`);
     }
 
     await recordRun(client, entityId, {
@@ -248,6 +355,7 @@ async function main() {
       window_mode: cfg.windowMode,
       tz: cfg.tz,
       total: rows.length,
+      include_contact: cfg.includeContact,
       recipient_present: Boolean(cfg.recipient),
     });
     log('info', 'run recorded in audit_event', { entityId, sent, total: rows.length });

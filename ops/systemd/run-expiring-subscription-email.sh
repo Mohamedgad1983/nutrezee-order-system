@@ -1,35 +1,20 @@
 #!/usr/bin/env bash
-# ----------------------------------------------------------------------------
-# Wrapper for the daily internal "expiring subscription" email job.
-# DISABLED template — staging/ops only. Defaults to DRY-RUN. There is NO timer
-# installed; this is invoked manually (or by an operator-created timer) only.
+# Wrapper for the daily internal "expiring subscription" email job (driven by the
+# .timer). Stages the script into the api container (which has node + pg +
+# DATABASE_URL), ensures the optional `nodemailer` transport is present, then runs
+# the job with the host env-file.
 #
 # Safety: emails ONE internal recipient (NUTRITION_DOCTOR_EMAIL). Never customers.
-# A real send requires EXPIRING_SUBSCRIPTION_EMAIL_ENABLED=true AND
-# EXPIRING_SUBSCRIPTION_DRY_RUN=false in the env-file AND an SMTP transport.
-#
-# Prerequisite: the script app/scripts/expiring-subscription-email.mjs must be
-# available to a node runtime that has `pg` + DATABASE_URL. The reference run
-# uses the api container (node + pg + DATABASE_URL already present). Adjust the
-# CONTAINER / paths for your deployment, or ship scripts/ in the api image.
-# ----------------------------------------------------------------------------
+# A real send requires the env-file to set EXPIRING_SUBSCRIPTION_EMAIL_ENABLED=true
+# AND EXPIRING_SUBSCRIPTION_DRY_RUN=false. EXPIRING_SUBSCRIPTION_INCLUDE_CONTACT=true
+# adds the customer Name + Phone call-list (internal PII) — owner-authorized.
 set -euo pipefail
+C="${EXPIRING_SUBSCRIPTION_CONTAINER:-nutrezee-api-1}"
+ENVF="${EXPIRING_SUBSCRIPTION_ENV_FILE:-/opt/nutrezee/expiring-subscription.env}"
+SCRIPT="${EXPIRING_SUBSCRIPTION_SCRIPT:-/opt/nutrezee/expiring-subscription-email.mjs}"
 
-CONTAINER="${EXPIRING_SUBSCRIPTION_CONTAINER:-nutrezee-api-1}"
-ENV_FILE="${EXPIRING_SUBSCRIPTION_ENV_FILE:-/opt/nutrezee/expiring-subscription.env}"
-SCRIPT_LOCAL="${EXPIRING_SUBSCRIPTION_SCRIPT:-/opt/nutrezee/app/scripts/expiring-subscription-email.mjs}"
-SCRIPT_IN_CONTAINER="/srv/scripts/expiring-subscription-email.mjs"
-
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "env-file $ENV_FILE not found — create it (see docs/evidence/expiring_subscription_email/02_env_and_config.md). Refusing to run." >&2
-  exit 1
-fi
-
-# Make the script available inside the container (no image rebuild required).
-if [[ -f "$SCRIPT_LOCAL" ]]; then
-  docker exec "$CONTAINER" mkdir -p /srv/scripts
-  docker cp "$SCRIPT_LOCAL" "$CONTAINER:$SCRIPT_IN_CONTAINER"
-fi
-
-# DATABASE_URL is taken from the container env; report/flags from the env-file.
-docker exec --env-file "$ENV_FILE" "$CONTAINER" node "$SCRIPT_IN_CONTAINER"
+docker exec "$C" mkdir -p /srv/scripts
+docker cp "$SCRIPT" "$C:/srv/scripts/expiring-subscription-email.mjs"
+# nodemailer is an optional transport, not baked into the image — ensure it once.
+docker exec "$C" sh -c 'cd /srv && (node -e "require.resolve(\"nodemailer\")" 2>/dev/null || npm i nodemailer --no-save --no-audit --no-fund >/dev/null 2>&1)'
+exec docker exec --env-file "$ENVF" "$C" node /srv/scripts/expiring-subscription-email.mjs

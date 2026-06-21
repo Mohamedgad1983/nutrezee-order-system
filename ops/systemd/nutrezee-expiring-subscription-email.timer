@@ -1,0 +1,18 @@
+# Daily timer for the expiring-subscription email — DISABLED by default.
+# Fires the .service every day at 08:00 Asia/Kuwait (systemd >= 252 honours the
+# timezone suffix regardless of the server's own timezone). Persistent=true runs a
+# missed occurrence once the host is back up.
+#
+# Go-live (operator, after confirming recipient + flipping DRY_RUN=false in the
+# env file): systemctl enable --now nutrezee-expiring-subscription-email.timer
+# Verify:    systemctl list-timers nutrezee-expiring-subscription-email.timer
+[Unit]
+Description=Daily 08:00 Asia/Kuwait — Nutrezee expiring-subscription email
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 Asia/Kuwait
+Persistent=true
+Unit=nutrezee-expiring-subscription-email.service
+
+[Install]
+WantedBy=timers.target
