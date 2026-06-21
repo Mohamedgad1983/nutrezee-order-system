@@ -39,6 +39,8 @@ The M19 `customer` importer is live and unblocked: `POST /imports/customer/dry-r
 - **~26** orders with no phone on their page; **~18** with junk/malformed prefixes (`+123…`, `+003…`); **1** invalid Kuwait mobile.
 These belong in a manual-exception review, not an automated link. Order_numbers are reproducible from `extract-missing-customers.mjs` (quarantine list) + the planner's `would_skip`.
 
+**Owner decision (PM, 2026-06-21): leave the 364-order shared/test phone (and the no-phone/junk-prefix orders) QUARANTINED — do not import.** The evidence (20 names incl. "Test") indicates test/shared data; the order-sync line is considered closed for this pass. Revisit only if business confirms a real subset.
+
 ## 6. Artifacts
 - `ops/sync/extract-missing-customers.mjs`, `ops/sync/apply-customer-import.mjs` (repo).
 - VPS: `customers_missing.json`; snapshot `pre-customer-import-20260621-144923.dump`.
