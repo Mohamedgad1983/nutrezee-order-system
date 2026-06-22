@@ -34,7 +34,7 @@ function boolEnv(name, fallback) {
   return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
 }
 
-function readConfig() {
+export function readConfig() {
   const daysAhead = Number.parseInt(env('EXPIRING_SUBSCRIPTION_DAYS_AHEAD', '3'), 10);
   if (!Number.isInteger(daysAhead) || daysAhead < 0 || daysAhead > 90) {
     throw new Error(`EXPIRING_SUBSCRIPTION_DAYS_AHEAD must be an integer 0..90 (got ${env('EXPIRING_SUBSCRIPTION_DAYS_AHEAD', '3')})`);
@@ -43,6 +43,18 @@ function readConfig() {
   if (!['exact', 'within'].includes(windowMode)) {
     throw new Error(`EXPIRING_SUBSCRIPTION_WINDOW_MODE must be 'exact' or 'within' (got ${windowMode})`);
   }
+  // Report grain. per_order = one row per expiring ORDER (matches the call-centre Excel; a
+  // customer with an old order expiring in-window appears even if they renewed later).
+  // per_customer = one row per customer using their latest subscription (suppresses renewed).
+  // Default per_order: the call-centre/Excel workflow is the primary business mode.
+  const reportMode = env('EXPIRY_REPORT_MODE', 'per_order');
+  if (!['per_order', 'per_customer'].includes(reportMode)) {
+    throw new Error(`EXPIRY_REPORT_MODE must be 'per_order' or 'per_customer' (got ${reportMode})`);
+  }
+  // Order statuses excluded in per_order mode. The call-centre Excel omits 'rejected' orders
+  // (never a real subscription) but keeps 'cancelled'. Comma-separated; '' disables filtering.
+  const excludeStatuses = env('EXPIRING_SUBSCRIPTION_EXCLUDE_STATUSES', 'rejected')
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   return {
     databaseUrl: env('DATABASE_URL', undefined),
     enabled: boolEnv('EXPIRING_SUBSCRIPTION_EMAIL_ENABLED', false),
@@ -51,6 +63,8 @@ function readConfig() {
     recipient: env('NUTRITION_DOCTOR_EMAIL', undefined),
     daysAhead,
     windowMode,
+    reportMode,
+    excludeStatuses,
     // Inclusive day-counting (default true): "N days left" counts today as day 1, so a
     // customer with N days left expires on today + (N-1) — matching the legacy/call-centre
     // "Days Left" report. Set false for exclusive counting (expire == today + N).
@@ -80,44 +94,68 @@ function log(level, msg, extra) {
   else console.log(line);
 }
 
-async function fetchReport(client, cfg) {
+export function buildReportSql(cfg) {
   // Business date + target computed in SQL (Asia/Kuwait) so the cut matches the
   // view's own (now() AT TIME ZONE 'Asia/Kuwait')::date anchor exactly.
   // Inclusive counting: "N days left" => expires today + (N-1). hiOff is the farthest
   // expiry offset in the window, loOff the nearest; exact => single day (loOff == hiOff).
   const hiOff = cfg.inclusive ? cfg.daysAhead - 1 : cfg.daysAhead;
   const loOff = cfg.windowMode === 'within' ? (cfg.inclusive ? 0 : 1) : hiOff;
-  const where = 'css.subscription_expire_date BETWEEN (t.today + $2::int) AND (t.today + $3::int)';
+  // Source view + column aliases per report grain. per_order reads the one-row-per-order view
+  // (matches the call-centre Excel — lists the specific expiring order even if the customer
+  // renewed later); per_customer reads the one-row-per-customer latest-subscription view.
+  // Both views expose subscription_start_date/_expire_date, days_remaining, source_confidence.
+  const perOrder = cfg.reportMode === 'per_order';
+  const src = perOrder ? 'osp' : 'css';
+  const view = perOrder ? 'analytics.order_subscription_periods' : 'analytics.customer_subscription_status';
+  const orderId = perOrder ? 'osp.order_id' : 'css.current_order_id';
+  const pkg = perOrder ? 'osp.package_name' : 'css.current_package_name';
+  const status = perOrder ? 'osp.order_status' : 'css.subscription_status';
   // Name + phone are only selected when the owner enabled the contact list.
   const contactSelect = cfg.includeContact
     ? `, c.full_name_en AS customer_name,
        c.full_name_ar AS customer_name_ar,
        (SELECT p.phone_normalized FROM customer_phone p
-         WHERE p.customer_id = css.customer_id
+         WHERE p.customer_id = ${src}.customer_id
          ORDER BY p.is_primary DESC NULLS LAST LIMIT 1) AS phone`
     : `, NULL::text AS customer_name, NULL::text AS customer_name_ar, NULL::text AS phone`;
-  const contactJoin = cfg.includeContact ? 'LEFT JOIN customer c ON c.id = css.customer_id' : '';
+  const contactJoin = cfg.includeContact ? `LEFT JOIN customer c ON c.id = ${src}.customer_id` : '';
+  // per_order: exclude configured order statuses (default 'rejected') to match the call-centre
+  // report scope. per_customer's view exposes a derived status (not raw order_status), so the
+  // exclusion applies to per_order only.
+  const params = [cfg.tz, loOff, hiOff];
+  let statusFilter = '';
+  if (perOrder && cfg.excludeStatuses.length) {
+    params.push(cfg.excludeStatuses);
+    statusFilter = ` AND osp.order_status <> ALL($${params.length}::text[])`;
+  }
   const sql = `
     WITH t AS (SELECT (now() AT TIME ZONE $1)::date AS today)
     SELECT
       to_char(t.today, 'YYYY-MM-DD')                          AS report_date,
       to_char(t.today + $3::int, 'YYYY-MM-DD')                AS target_expiry,
-      css.customer_id,
-      css.current_order_id,
-      css.current_package_name,
-      to_char(css.subscription_expire_date, 'YYYY-MM-DD')     AS subscription_expire_date,
-      css.days_remaining,
-      css.subscription_status,
-      css.source_confidence
+      ${src}.customer_id,
+      ${orderId}                                              AS current_order_id,
+      sr.legacy_key                                           AS legacy_order_number,
+      ${pkg}                                                  AS current_package_name,
+      to_char(${src}.subscription_start_date, 'YYYY-MM-DD')   AS subscription_start_date,
+      to_char(${src}.subscription_expire_date, 'YYYY-MM-DD')  AS subscription_expire_date,
+      ${src}.days_remaining,
+      ${status}                                               AS subscription_status,
+      ${src}.source_confidence
       ${contactSelect}
-    FROM analytics.customer_subscription_status css
+    FROM ${view} ${src}
     CROSS JOIN t
+    LEFT JOIN sync_record sr ON sr.new_ref = ${orderId} AND sr.object_type = 'order'
     ${contactJoin}
-    WHERE ${where}
-    ORDER BY css.subscription_expire_date,
-             css.current_package_name NULLS LAST,
-             css.customer_id`;
-  const { rows } = await client.query(sql, [cfg.tz, loOff, hiOff]);
+    WHERE ${src}.subscription_expire_date BETWEEN (t.today + $2::int) AND (t.today + $3::int)${statusFilter}
+    ORDER BY ${src}.subscription_expire_date, sr.legacy_key NULLS LAST, ${src}.customer_id`;
+  return { sql, params };
+}
+
+async function fetchReport(client, cfg) {
+  const { sql, params } = buildReportSql(cfg);
+  const { rows } = await client.query(sql, params);
   // Display "Days Left" inclusively (today = day 1) to match the call-centre report.
   for (const r of rows) r.days_left = cfg.inclusive ? Number(r.days_remaining) + 1 : Number(r.days_remaining);
   return rows;
@@ -142,14 +180,16 @@ function csvCell(v) {
 }
 
 function renderCsv(cfg, rows) {
-  const header = ['#', 'Name', 'Phone', 'Package', 'Expiry date', 'Days left', 'Status', 'Confidence', 'Customer ID', 'Order ID'];
+  const header = ['#', 'Order', 'Name', 'Phone', 'Package', 'Start date', 'Expiry date', 'Days left', 'Status', 'Confidence', 'Customer ID', 'Order UUID'];
   const out = [header.map(csvCell).join(',')];
   rows.forEach((r, i) => {
     out.push([
       i + 1,
+      r.legacy_order_number ?? '',
       cfg.includeContact ? (r.customer_name ?? '') : '',
       cfg.includeContact ? (r.phone ?? '') : '',
       r.current_package_name ?? '',
+      r.subscription_start_date ?? '',
       r.subscription_expire_date,
       r.days_left,
       r.subscription_status,
@@ -170,9 +210,11 @@ function renderHtml(cfg, rows, summary, meta) {
     const bg = low ? '#fff7e6' : (i % 2 ? '#f7faf9' : '#ffffff');
     const cells = [
       `<td style="${td};text-align:center;color:#888">${i + 1}</td>`,
+      `<td style="${td};font-family:monospace;white-space:nowrap">${esc(r.legacy_order_number ?? '—')}</td>`,
       cfg.includeContact ? `<td style="${td};font-weight:600">${esc(r.customer_name ?? '—')}</td>` : '',
       cfg.includeContact ? `<td style="${td};font-family:monospace;white-space:nowrap">${esc(r.phone ?? '—')}</td>` : '',
       `<td style="${td}">${esc(r.current_package_name ?? '—')}</td>`,
+      `<td style="${td};white-space:nowrap">${esc(r.subscription_start_date ?? '—')}</td>`,
       `<td style="${td};white-space:nowrap">${esc(r.subscription_expire_date)}</td>`,
       `<td style="${td};text-align:center">${esc(r.days_left)}</td>`,
       `<td style="${td}">${esc(r.subscription_status)}${low ? ' <span title="latest order cancelled/rejected — verify">⚠</span>' : ''}</td>`,
@@ -181,9 +223,11 @@ function renderHtml(cfg, rows, summary, meta) {
   }).join('');
   const headCells = [
     '<th style="' + th + ';text-align:center">#</th>',
+    '<th style="' + th + '">Order</th>',
     cfg.includeContact ? '<th style="' + th + '">Name</th>' : '',
     cfg.includeContact ? '<th style="' + th + '">Phone</th>' : '',
     '<th style="' + th + '">Package</th>',
+    '<th style="' + th + '">Start date</th>',
     '<th style="' + th + '">Expiry date</th>',
     '<th style="' + th + ';text-align:center">Days left</th>',
     '<th style="' + th + '">Status</th>',
@@ -193,7 +237,7 @@ function renderHtml(cfg, rows, summary, meta) {
   return `<!doctype html><html><body style="margin:0;background:#f0f4f3;padding:18px">
   <div style="max-width:920px;margin:auto;background:#fff;border:1px solid #e2e8e6;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1a2b27">
     <div style="background:#0a8f5f;color:#fff;padding:16px 22px">
-      <div style="font-size:18px;font-weight:700">Nutrezee — Subscriptions Expiring in ${cfg.daysAhead} Days</div>
+      <div style="font-size:18px;font-weight:700">Nutrezee — ${cfg.reportMode === 'per_order' ? 'Orders' : 'Subscriptions'} Expiring in ${cfg.daysAhead} Days</div>
       <div style="font-size:12px;opacity:.9">Internal call list for the Nutrition Doctor · staff use only</div>
     </div>
     <div style="padding:18px 22px">
@@ -206,7 +250,7 @@ function renderHtml(cfg, rows, summary, meta) {
       <div style="font-size:12px;color:#666;margin-bottom:14px">By package: <ul style="margin:6px 0">${pkgList}</ul></div>
       <table style="border-collapse:collapse;width:100%">
         <thead><tr>${headCells}</tr></thead>
-        <tbody>${body || `<tr><td style="${td}" colspan="7">No subscriptions match the window.</td></tr>`}</tbody>
+        <tbody>${body || `<tr><td style="${td}" colspan="9">No ${cfg.reportMode === 'per_order' ? 'orders' : 'subscriptions'} match the window.</td></tr>`}</tbody>
       </table>
       <p style="font-size:11px;color:#8a9a95;margin-top:14px">
         ⚠ = latest order is cancelled/rejected (verify before calling). Expiry = scheduled service-schedule end
@@ -217,15 +261,17 @@ function renderHtml(cfg, rows, summary, meta) {
 }
 
 function renderText(cfg, rows, summary, meta) {
+  const grain = cfg.reportMode === 'per_order' ? 'Orders' : 'Subscriptions';
   const lines = [];
-  lines.push('Nutrezee — Subscriptions Expiring in ' + cfg.daysAhead + ' Days (internal call list)');
+  lines.push('Nutrezee — ' + grain + ' Expiring in ' + cfg.daysAhead + ' Days (internal call list)');
   lines.push('');
   lines.push(`Report date (Kuwait): ${meta.reportDate}   Expiring on: ${meta.targetExpiry}   Total: ${rows.length}   Low-confidence: ${summary.lowConfidence}`);
   lines.push('Full list attached as CSV (open in Excel).');
   lines.push('');
   rows.forEach((r, i) => {
+    const ord = r.legacy_order_number ? `#${r.legacy_order_number} | ` : '';
     const who = cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : '';
-    lines.push(`${i + 1}. ${who}${r.current_package_name ?? '—'} | expires ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}${r.source_confidence === 'low' ? ' (!)' : ''}`);
+    lines.push(`${i + 1}. ${ord}${who}${r.current_package_name ?? '—'} | expires ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}${r.source_confidence === 'low' ? ' (!)' : ''}`);
   });
   if (rows.length === 0) lines.push('(no subscriptions match the window today)');
   return lines.join('\n');
@@ -234,7 +280,7 @@ function renderText(cfg, rows, summary, meta) {
 function renderEmail(cfg, rows) {
   const reportDate = rows[0]?.report_date ?? '(computed at query time)';
   const targetExpiry = rows[0]?.target_expiry ?? '(none)';
-  const subject = `Nutrezee — ${rows.length} subscriptions expiring ${targetExpiry} (in ${cfg.daysAhead} days)`;
+  const subject = `Nutrezee — ${rows.length} ${cfg.reportMode === 'per_order' ? 'orders' : 'subscriptions'} expiring ${targetExpiry} (in ${cfg.daysAhead} days)`;
   const summary = summarize(rows);
   const meta = { reportDate, targetExpiry };
   return {
@@ -306,6 +352,7 @@ async function main() {
   }
   log('info', 'starting', {
     enabled: cfg.enabled, dryRun: cfg.dryRun, daysAhead: cfg.daysAhead, windowMode: cfg.windowMode,
+    reportMode: cfg.reportMode, inclusive: cfg.inclusive,
     tz: cfg.tz, includeContact: cfg.includeContact, recipientSet: Boolean(cfg.recipient),
   });
 
@@ -351,7 +398,7 @@ async function main() {
       }
       // Small console sample only (first 6 rows) — full list is in the files/email.
       const sample = rows.slice(0, 6).map((r, i) =>
-        `${i + 1}. ${cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : ''}${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}`).join('\n');
+        `${i + 1}. ${r.legacy_order_number ? `#${r.legacy_order_number} | ` : ''}${cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : ''}${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}`).join('\n');
       console.log(`\n----- PREVIEW (first ${Math.min(6, rows.length)} of ${rows.length}) -----\n${sample}\n----- END PREVIEW -----\n`);
     }
 
@@ -363,6 +410,9 @@ async function main() {
       target_expiry: email.targetExpiry,
       days_ahead: cfg.daysAhead,
       window_mode: cfg.windowMode,
+      report_mode: cfg.reportMode,
+      inclusive: cfg.inclusive,
+      exclude_statuses: cfg.excludeStatuses,
       tz: cfg.tz,
       total: rows.length,
       include_contact: cfg.includeContact,
@@ -374,7 +424,10 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  log('error', e.message);
-  process.exit(1);
-});
+// Run only when executed directly (not when imported by tests).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((e) => {
+    log('error', e.message);
+    process.exit(1);
+  });
+}
