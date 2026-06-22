@@ -1,7 +1,10 @@
 // expiring-subscription-email.mjs
 // ----------------------------------------------------------------------------
-// Daily INTERNAL report: customers whose subscription expires in exactly N days
-// (default 3) from the Asia/Kuwait business date. Reads analytics.customer_
+// Daily INTERNAL report: customers whose subscription expires within N "days left"
+// (default 3) from the Asia/Kuwait business date. Day-counting is INCLUSIVE by default
+// (today = day 1, so "3 days left" => expires today + 2) to match the legacy/call-centre
+// "Days Left" report — set EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE=false for exclusive.
+// Reads analytics.customer_
 // subscription_status (migration 0021). Sends ONE email to the Nutrition Doctor
 // (NUTRITION_DOCTOR_EMAIL) — an internal staff recipient. NEVER emails customers,
 // never triggers WhatsApp/marketing. Disabled + dry-run by default.
@@ -48,6 +51,10 @@ function readConfig() {
     recipient: env('NUTRITION_DOCTOR_EMAIL', undefined),
     daysAhead,
     windowMode,
+    // Inclusive day-counting (default true): "N days left" counts today as day 1, so a
+    // customer with N days left expires on today + (N-1) — matching the legacy/call-centre
+    // "Days Left" report. Set false for exclusive counting (expire == today + N).
+    inclusive: boolEnv('EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE', true),
     tz: env('EXPIRING_SUBSCRIPTION_TZ', 'Asia/Kuwait'),
     // Owner-authorized internal call list: include customer Name + Phone so the
     // Nutrition Doctor can follow up. Default OFF (ID-only) for PII safety.
@@ -76,10 +83,11 @@ function log(level, msg, extra) {
 async function fetchReport(client, cfg) {
   // Business date + target computed in SQL (Asia/Kuwait) so the cut matches the
   // view's own (now() AT TIME ZONE 'Asia/Kuwait')::date anchor exactly.
-  const where =
-    cfg.windowMode === 'within'
-      ? 'css.subscription_expire_date BETWEEN (t.today + 1) AND (t.today + $2::int)'
-      : 'css.subscription_expire_date = (t.today + $2::int)';
+  // Inclusive counting: "N days left" => expires today + (N-1). hiOff is the farthest
+  // expiry offset in the window, loOff the nearest; exact => single day (loOff == hiOff).
+  const hiOff = cfg.inclusive ? cfg.daysAhead - 1 : cfg.daysAhead;
+  const loOff = cfg.windowMode === 'within' ? (cfg.inclusive ? 0 : 1) : hiOff;
+  const where = 'css.subscription_expire_date BETWEEN (t.today + $2::int) AND (t.today + $3::int)';
   // Name + phone are only selected when the owner enabled the contact list.
   const contactSelect = cfg.includeContact
     ? `, c.full_name_en AS customer_name,
@@ -93,7 +101,7 @@ async function fetchReport(client, cfg) {
     WITH t AS (SELECT (now() AT TIME ZONE $1)::date AS today)
     SELECT
       to_char(t.today, 'YYYY-MM-DD')                          AS report_date,
-      to_char(t.today + $2::int, 'YYYY-MM-DD')                AS target_expiry,
+      to_char(t.today + $3::int, 'YYYY-MM-DD')                AS target_expiry,
       css.customer_id,
       css.current_order_id,
       css.current_package_name,
@@ -109,7 +117,9 @@ async function fetchReport(client, cfg) {
     ORDER BY css.subscription_expire_date,
              css.current_package_name NULLS LAST,
              css.customer_id`;
-  const { rows } = await client.query(sql, [cfg.tz, cfg.daysAhead]);
+  const { rows } = await client.query(sql, [cfg.tz, loOff, hiOff]);
+  // Display "Days Left" inclusively (today = day 1) to match the call-centre report.
+  for (const r of rows) r.days_left = cfg.inclusive ? Number(r.days_remaining) + 1 : Number(r.days_remaining);
   return rows;
 }
 
@@ -141,7 +151,7 @@ function renderCsv(cfg, rows) {
       cfg.includeContact ? (r.phone ?? '') : '',
       r.current_package_name ?? '',
       r.subscription_expire_date,
-      r.days_remaining,
+      r.days_left,
       r.subscription_status,
       r.source_confidence,
       r.customer_id,
@@ -164,7 +174,7 @@ function renderHtml(cfg, rows, summary, meta) {
       cfg.includeContact ? `<td style="${td};font-family:monospace;white-space:nowrap">${esc(r.phone ?? '—')}</td>` : '',
       `<td style="${td}">${esc(r.current_package_name ?? '—')}</td>`,
       `<td style="${td};white-space:nowrap">${esc(r.subscription_expire_date)}</td>`,
-      `<td style="${td};text-align:center">${esc(r.days_remaining)}</td>`,
+      `<td style="${td};text-align:center">${esc(r.days_left)}</td>`,
       `<td style="${td}">${esc(r.subscription_status)}${low ? ' <span title="latest order cancelled/rejected — verify">⚠</span>' : ''}</td>`,
     ].join('');
     return `<tr style="background:${bg}">${cells}</tr>`;
@@ -215,7 +225,7 @@ function renderText(cfg, rows, summary, meta) {
   lines.push('');
   rows.forEach((r, i) => {
     const who = cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : '';
-    lines.push(`${i + 1}. ${who}${r.current_package_name ?? '—'} | expires ${r.subscription_expire_date} | ${r.days_remaining}d | ${r.subscription_status}${r.source_confidence === 'low' ? ' (!)' : ''}`);
+    lines.push(`${i + 1}. ${who}${r.current_package_name ?? '—'} | expires ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}${r.source_confidence === 'low' ? ' (!)' : ''}`);
   });
   if (rows.length === 0) lines.push('(no subscriptions match the window today)');
   return lines.join('\n');
@@ -341,7 +351,7 @@ async function main() {
       }
       // Small console sample only (first 6 rows) — full list is in the files/email.
       const sample = rows.slice(0, 6).map((r, i) =>
-        `${i + 1}. ${cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : ''}${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_remaining}d | ${r.subscription_status}`).join('\n');
+        `${i + 1}. ${cfg.includeContact ? `${r.customer_name ?? '—'} | ${r.phone ?? '—'} | ` : ''}${r.current_package_name ?? '—'} | ${r.subscription_expire_date} | ${r.days_left}d | ${r.subscription_status}`).join('\n');
       console.log(`\n----- PREVIEW (first ${Math.min(6, rows.length)} of ${rows.length}) -----\n${sample}\n----- END PREVIEW -----\n`);
     }
 
