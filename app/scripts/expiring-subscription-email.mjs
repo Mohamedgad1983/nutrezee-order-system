@@ -43,11 +43,12 @@ export function readConfig() {
   if (!['exact', 'within'].includes(windowMode)) {
     throw new Error(`EXPIRING_SUBSCRIPTION_WINDOW_MODE must be 'exact' or 'within' (got ${windowMode})`);
   }
-  // Report grain. per_order = one row per expiring ORDER (matches the call-centre Excel; a
-  // customer with an old order expiring in-window appears even if they renewed later).
-  // per_customer = one row per customer using their latest subscription (suppresses renewed).
-  // Default per_order: the call-centre/Excel workflow is the primary business mode.
-  const reportMode = env('EXPIRY_REPORT_MODE', 'per_order');
+  // Report grain. per_customer = one row per customer using their latest subscription
+  // (suppresses already-renewed customers) — the doctor's report; confirmed correct, the
+  // live default. per_order = one row per expiring ORDER (matches the call-centre Excel, which
+  // was found unreliable: it re-lists renewed customers, has date errors, and misses valid
+  // orders). Kept available behind the flag for ad-hoc per-order pulls.
+  const reportMode = env('EXPIRY_REPORT_MODE', 'per_customer');
   if (!['per_order', 'per_customer'].includes(reportMode)) {
     throw new Error(`EXPIRY_REPORT_MODE must be 'per_order' or 'per_customer' (got ${reportMode})`);
   }

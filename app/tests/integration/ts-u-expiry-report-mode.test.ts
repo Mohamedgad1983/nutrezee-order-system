@@ -58,9 +58,11 @@ describe('TS-U unit — expiry report mode (per-order vs per-customer)', () => {
     }
   });
 
-  it('readConfig defaults to per_order and rejects an invalid mode', () => {
+  it('readConfig defaults to per_customer (the doctor report) and rejects an invalid mode', () => {
     delete process.env.EXPIRY_REPORT_MODE;
-    expect(readConfig().reportMode).toBe('per_order');
+    expect(readConfig().reportMode).toBe('per_customer');
+    process.env.EXPIRY_REPORT_MODE = 'per_order';
+    expect(readConfig().reportMode).toBe('per_order'); // still selectable for ad-hoc per-order pulls
     process.env.EXPIRY_REPORT_MODE = 'bogus';
     expect(() => readConfig()).toThrow(/EXPIRY_REPORT_MODE/);
   });

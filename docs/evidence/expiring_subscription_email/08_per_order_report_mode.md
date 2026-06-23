@@ -53,3 +53,6 @@ docker exec --env-file /opt/nutrezee/expiring-subscription.env -e EXPIRING_SUBSC
   -e EXPIRY_REPORT_MODE=per_customer ...                                                                # -> 36 (suppresses renewed)
 ```
 No real email sent. No production. Timer unchanged (next scheduled run uses per_order via the env-file).
+
+## 9. Owner decision (2026-06-23) — reverted to per_customer
+On review, the owner confirmed the **call-centre Excel is the unreliable source** (it re-lists already-renewed customers, carries the date errors on عبدالرحمن/Nour, and omits valid orders 23063/23211) and the **per_customer "doctor's report" is correct**. The live mode was reverted: staging env `EXPIRY_REPORT_MODE=per_customer` and the code default changed to `per_customer`. `per_order` remains available behind the flag for ad-hoc per-order pulls. The investigation stands as the record of *why* the two disagree.
