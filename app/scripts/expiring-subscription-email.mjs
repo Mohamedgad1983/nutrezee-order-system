@@ -1,9 +1,8 @@
 // expiring-subscription-email.mjs
 // ----------------------------------------------------------------------------
-// Daily INTERNAL report: customers whose subscription expires within N "days left"
-// (default 3) from the Asia/Kuwait business date. Day-counting is INCLUSIVE by default
-// (today = day 1, so "3 days left" => expires today + 2) to match the legacy/call-centre
-// "Days Left" report — set EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE=false for exclusive.
+// Daily INTERNAL report: customers whose subscription expires in exactly N days (default 3)
+// from the Asia/Kuwait business date — i.e. expire == today + N (the original exclusive rule).
+// (An inclusive variant exists behind EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE=true but is off.)
 // Reads analytics.customer_
 // subscription_status (migration 0021). Sends ONE email to the Nutrition Doctor
 // (NUTRITION_DOCTOR_EMAIL) — an internal staff recipient. NEVER emails customers,
@@ -66,10 +65,10 @@ export function readConfig() {
     windowMode,
     reportMode,
     excludeStatuses,
-    // Inclusive day-counting (default true): "N days left" counts today as day 1, so a
-    // customer with N days left expires on today + (N-1) — matching the legacy/call-centre
-    // "Days Left" report. Set false for exclusive counting (expire == today + N).
-    inclusive: boolEnv('EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE', true),
+    // Day-counting. Default EXCLUSIVE — the original rule: "expiring in N days" => expire == today + N.
+    // Inclusive (today = day 1 => expire == today + N-1) was used only briefly to match the
+    // call-centre Excel, which the owner determined is unreliable; reverted to exclusive 2026-06-23.
+    inclusive: boolEnv('EXPIRING_SUBSCRIPTION_DAYS_INCLUSIVE', false),
     tz: env('EXPIRING_SUBSCRIPTION_TZ', 'Asia/Kuwait'),
     // Owner-authorized internal call list: include customer Name + Phone so the
     // Nutrition Doctor can follow up. Default OFF (ID-only) for PII safety.
