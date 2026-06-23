@@ -30,7 +30,10 @@ const toIso = (s) => {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : undefined;
 };
 const phoneRe = /Contact\s*no\s*:?\s*([+0-9][0-9 \-]{6,})/i;
-const normPhone = (raw) => { const d = String(raw).replace(/\D/g, ''); return d.length === 8 ? '+965' + d : (d.length >= 8 ? '+' + d : null); };
+// Kuwait "Contact no" is exactly 8 digits -> +965XXXXXXXX (the customer keyspace). Anything else
+// (9+ digits, malformed) -> null, so the order is skipped, never linked on a guessed number. This
+// matches the orchestrator's correctness probe and the customer-import normalization exactly.
+const normPhone = (raw) => { const d = String(raw).replace(/\D/g, ''); return d.length === 8 ? '+965' + d : null; };
 const parsePhone = (internalId) => {
   const f = path.join(RAW, `view_${internalId}.html.gz`);
   if (!internalId || !fs.existsSync(f)) return null;

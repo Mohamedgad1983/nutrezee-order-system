@@ -59,6 +59,7 @@ log({ rows_to_import: rows.length, mode: APPLY ? 'apply' : 'dry-run' });
 
 const dry = { created: 0, matched: 0, merge_review: 0, error: 0, skipped: 0 };
 const app = { created: 0, matched: 0, merge_review: 0, error: 0, skipped: 0 };
+let hadError = false; // any chunk HTTP failure OR row-level error => non-zero exit (no silent partials)
 try {
   await bootstrapTemp();
   let ci = 0;
@@ -71,13 +72,20 @@ try {
     if (APPLY) {
       const a = await fetch(`${API}/imports/customer/apply`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ rows: ch }) });
       const ab = await a.json().catch(() => ({}));
-      if (!a.ok) log({ chunk: ci, apply_http: a.status, body: JSON.stringify(ab).slice(0, 300) });
-      else { for (const k in app) app[k] += ab.counts?.[k] || 0; log({ chunk: ci, apply_counts: ab.counts }); }
+      if (!a.ok) { hadError = true; log({ chunk: ci, apply_http: a.status, body: JSON.stringify(ab).slice(0, 300) }); }
+      else {
+        for (const k in app) app[k] += ab.counts?.[k] || 0;
+        if ((ab.counts?.error || 0) > 0) hadError = true;
+        log({ chunk: ci, apply_counts: ab.counts });
+      }
     }
   }
+} catch (e) {
+  hadError = true; log({ fatal: String(e.message || e) });
 } finally {
   await deleteTemp().catch(() => {});
   await client.end().catch(() => {});
 }
-log({ DRY_RUN_TOTAL: dry, APPLY_TOTAL: APPLY ? app : null, applied: APPLY });
-console.log('CUSTOMER_IMPORT_SUMMARY ' + JSON.stringify({ dry, apply: APPLY ? app : null, applied: APPLY }));
+log({ DRY_RUN_TOTAL: dry, APPLY_TOTAL: APPLY ? app : null, applied: APPLY, hadError });
+console.log('CUSTOMER_IMPORT_SUMMARY ' + JSON.stringify({ dry, apply: APPLY ? app : null, applied: APPLY, hadError }));
+if (hadError) process.exit(1); // fail-fast: never report success on a partial/errored apply

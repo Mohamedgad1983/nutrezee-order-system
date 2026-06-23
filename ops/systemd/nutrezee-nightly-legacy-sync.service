@@ -1,0 +1,14 @@
+# Nightly legacy -> staging sync (incremental fetch -> governed, correctness-probed apply).
+# Driven by the .timer. Reads legacy read-only; writes only the STAGING DB; snapshot-first;
+# never production, never WhatsApp, never customer email. See ops/sync/README-nightly-sync.md.
+[Unit]
+Description=Nutrezee nightly legacy->staging sync (incremental, governed apply)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/sync/run-nightly-legacy-sync.sh
+TimeoutStartSec=3600
+Nice=10
