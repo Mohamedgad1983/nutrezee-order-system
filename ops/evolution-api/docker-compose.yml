@@ -1,0 +1,97 @@
+# Evolution API v2 — isolated WhatsApp gateway stack for the Nutreeze VPS.
+# Single source of truth: PLAN.md (repo root). Deployed to /opt/evolution on the VPS.
+#
+# Image PINNED to v2.3.7 (current stable as of 2026-06).  NOT ":latest":
+#   - ":latest" on evoapicloud tracks the 2.4.0-rc line, which adds a MANDATORY
+#     Evolution Foundation license-activation gate (endpoints return HTTP 503
+#     LICENSE_REQUIRED until activated).  2.3.x has no such gate.
+#   - The legacy "atendai/evolution-api" namespace is deprecated (frozen at v2.2.3);
+#     the current official image is "evoapicloud/evolution-api".
+#
+# Isolation:
+#   - evolution_internal is `internal: true` (no internet egress, no host ports).
+#     evolution-postgres + evolution-redis live ONLY here -> unreachable from the
+#     internet, from the host, and from the existing nutrezee/ERPNext services.
+#   - evolution-api is dual-homed: evolution_internal (to reach its DB/Redis) +
+#     the existing external nutrezee_default (for internet egress to WhatsApp AND
+#     so the existing Caddy can reverse_proxy to it by name). No host port published.
+name: evolution
+
+services:
+  evolution-postgres:
+    image: postgres:16-alpine
+    container_name: evolution-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - listen_addresses=*
+    volumes:
+      - evolution_pgdata:/var/lib/postgresql/data
+    networks:
+      - evolution_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - evolution_store:/data
+    networks:
+      - evolution_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: evolution-api
+    restart: unless-stopped
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evolution_internal
+      - nutrezee_default
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8080/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  evolution_pgdata:
+  evolution_store:
+  evolution_instances:
+
+networks:
+  evolution_internal:
+    name: evolution_internal
+    internal: true
+  nutrezee_default:
+    external: true
