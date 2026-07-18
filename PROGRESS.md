@@ -293,6 +293,9 @@ Then: graceful `octane:reload` → config verify → ONE live OTP test (Steps 5�
 - Browser reached the Fleetbase sign-in screen but had no active admin session or autofill.
 - No default/empty-password login succeeded. No vendor source or `/legacy` file changed.
 - Private manifest/import material was removed from the VPS/container after the stop.
+- `SMS_AUTH_BYPASS_CODE` is removed and proven dead: no environment copy or DB settings row
+  remains, runtime config is unset after restart, the application is healthy, and a direct
+  bypass-style verification probe returns HTTP 400.
 - Resume point: Mohamed signs into `https://ops.nutreeze.com` in the connected browser; Codex
   continues with console password reset, 11/11 verification, app implementation, S1–S9,
   A/B/C gallery, then bypass removal.
