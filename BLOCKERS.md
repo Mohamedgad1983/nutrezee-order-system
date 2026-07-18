@@ -27,6 +27,25 @@ password logins, and continues the approved app/emulator/documentation work. Ven
 direct DB password writes remain forbidden. See the private app repo `BLOCKERS.md` #6 for full
 runtime evidence.
 
+### Follow-up — console password-reset email is broken
+
+Read-only diagnosis on 2026-07-18 confirmed four password-reset requests for
+`it@nutreeze.com` were accepted but never sent:
+
+- `UserForgotPassword` implements `ShouldQueue`; all four notification jobs remain pending
+  in Redis alongside 109 other jobs.
+- The application writes to Redis prefix `nutreeze_database_`, while
+  `fleetbase-queue-1` listens on `fleetbase_database_` and therefore sees no jobs.
+- The application has working `smtp` mail configuration, but the queue container does not
+  mount `/opt/fleetbase/api/.env`; it defaults to `ses` with no SES key or secret.
+- Result: no mail-send attempt and no SMTP error occurred. Even after the queue-prefix issue
+  is fixed, the worker must receive the same SMTP configuration before queued mail can work.
+
+**Operational requirement:** repair the queue prefix and worker mail configuration, then
+prove the console forgot-password flow delivers end-to-end. This is a follow-up blocker for
+real administration; it does not authorize a live queue/config change in the current
+read-only recovery task.
+
 ## Structural gaps (schema deltas the feed may force)
 1. **[NC] Order ↔ address linkage.** Partner `orders` pairs an address + `location_pin` *per
    order*, but the DB has **no `customer_order.address_id`** — addresses attach to the
