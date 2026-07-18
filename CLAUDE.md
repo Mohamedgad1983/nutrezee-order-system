@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Driver-authentication source amendment
+
+AMENDMENT 2026-07-18 — Mohamed authorized modifying Navigator app source (/src) for the
+driver-authentication feature ONLY. Scope: login screen(s), auth service calls, secure
+credential storage, biometric unlock. AGPL-3.0 compliance: modified source provided to app
+users (Nutreeze staff) on request; fork lives in the private repo. Everything else in /src
+and all of /legacy remains OFF-LIMITS. Config-only rule still applies outside this scope.
+
 ## What this repo is
 
 Two things live in one repo:

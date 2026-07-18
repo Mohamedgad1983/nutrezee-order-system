@@ -2,6 +2,14 @@
 
 Main instruction file for AI agents (Claude Code / Codex) working in this repository. **Read this first, every session.** Companion docs: `00_AGENT_OPERATING_SYSTEM.md` (how agents operate), `19_Roadmap/AUTO_EXECUTION_RULES.md` (the autonomous rulebook), `19_Roadmap/SPRINT_MODE.md` (the six modes + sprint loop), `19_Roadmap/NEXT_ACTION_QUEUE.md` (the live next-work cursor), `03_EXECUTION_MODES.md` (original modes), `05_TEST_COMMANDS.md` (commands), `07_BLOCKERS_AND_DECISIONS.md` (live blockers).
 
+## Driver-authentication source amendment
+
+AMENDMENT 2026-07-18 — Mohamed authorized modifying Navigator app source (/src) for the
+driver-authentication feature ONLY. Scope: login screen(s), auth service calls, secure
+credential storage, biometric unlock. AGPL-3.0 compliance: modified source provided to app
+users (Nutreeze staff) on request; fork lives in the private repo. Everything else in /src
+and all of /legacy remains OFF-LIMITS. Config-only rule still applies outside this scope.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:
