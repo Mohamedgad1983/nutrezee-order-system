@@ -280,3 +280,19 @@ Then: graceful `octane:reload` → config verify → ONE live OTP test (Steps 5�
 - Test driver ARMED for the test day: drivers 63ce6f7f active, user 93f7572d phone=+96551447806 (revert values recorded above).
 - Rollback/cleanup after test phase: remove SMS_AUTH_BYPASS_CODE line from /opt/fleetbase/api/.env + `docker restart fleetbase-application-1`; re-soft-delete demo driver (deleted_at='2026-07-12 07:13:29', phone +96560000010). To resume WhatsApp OTP later: set DB row system.sms.default_provider back to custom_http (tinker updateOrCreate) + reload.
 - WhatsApp 463 track unchanged: v2.4.0 licensed+healthy, account restriction pending 24-48h organic-activity wait.
+## 2026-07-18 — Driver password import blocked on Fleetbase admin session
+
+- Workbook: 2 sheets, 20 source rows, 11 unique drivers after 9 cross-sheet phone merges;
+  all phone cells normalized to `+965` E.164; zero invalid rows.
+- Generated 20-character passwords remain private and mode 600; none was printed.
+- Standard Fleetbase API created 11/11 driver records; all read back `available`.
+- Password verification is 0/11. Runtime root cause: public driver CRUD ignores the guarded
+  `password` attribute; driver self-service change-password returns HTTP 401 due the upstream
+  users-resource create-user permission; the admin reset endpoint requires a real console
+  admin session.
+- Browser reached the Fleetbase sign-in screen but had no active admin session or autofill.
+- No default/empty-password login succeeded. No vendor source or `/legacy` file changed.
+- Private manifest/import material was removed from the VPS/container after the stop.
+- Resume point: Mohamed signs into `https://ops.nutreeze.com` in the connected browser; Codex
+  continues with console password reset, 11/11 verification, app implementation, S1–S9,
+  A/B/C gallery, then bypass removal.

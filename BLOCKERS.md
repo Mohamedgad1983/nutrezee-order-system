@@ -4,6 +4,29 @@ Raised during read-only DB discovery on 2026-07-09. These need owner/design deci
 any integration work. Nothing here was resolved; discovery was read-only. Labels: [NC] = Needs
 Confirmation, [RISK] = safety/correctness hazard.
 
+## Driver password + biometric authentication — admin session required (2026-07-18)
+
+**[BLOCKS] Driver password import, app implementation, S1–S9, and A/B/C evidence.**
+Eleven unique workbook drivers were created through the standard Fleetbase API and are
+`available`, but 0/11 generated passwords were set:
+
+- Public `POST/PUT /v1/drivers` silently drops `password` because the upstream
+  `Fleetbase\Models\User` model guards it from mass assignment.
+- A valid driver bearer token receives HTTP 401
+  `User is not authorized to create user` from
+  `POST /int/v1/users/change-password`; Fleetbase's generic users-resource middleware blocks
+  the route before the password controller runs.
+- The correct admin endpoint, `POST /int/v1/auth/change-user-password`, rejects the company
+  API credential as unauthenticated and requires an admin console session.
+- The connected Chrome profile reaches `https://ops.nutreeze.com/auth` but has no active
+  Fleetbase session or autofilled credentials.
+
+**Unblock:** Mohamed signs into `https://ops.nutreeze.com` in the connected browser and leaves
+the session open. Codex then resumes at the existing console reset flow, verifies 11/11
+password logins, and continues the approved app/emulator/documentation work. Vendor code and
+direct DB password writes remain forbidden. See the private app repo `BLOCKERS.md` #6 for full
+runtime evidence.
+
 ## Structural gaps (schema deltas the feed may force)
 1. **[NC] Order ↔ address linkage.** Partner `orders` pairs an address + `location_pin` *per
    order*, but the DB has **no `customer_order.address_id`** — addresses attach to the
