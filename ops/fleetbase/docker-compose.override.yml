@@ -1,0 +1,54 @@
+# Nutrezee isolation override for Fleetbase v0.7.48 — added 2026-06-26.
+# - Pins application/queue/scheduler to the v0.7.48 API image (base uses :latest).
+# - Removes ALL published host ports (reachable only via Caddy on nutrezee_default).
+# - Dual-homes the 3 proxy-facing services (console/httpd/socket) on the EXISTING
+#   nutrezee_default network so Caddy resolves them by alias — exactly like evolution-api.
+#   DB/Redis/API stay on Fleetbase's own default (fleetbase_default) network only.
+services:
+  application:
+    image: fleetbase/fleetbase-api:v0.7.48
+    environment:
+      CONSOLE_HOST: https://fleet.13-140-159-201.sslip.io
+      APP_URL: https://fleetapi.13-140-159-201.sslip.io
+      SESSION_DOMAIN: .13-140-159-201.sslip.io
+      TRUSTED_PROXIES: "*"
+
+  queue:
+    image: fleetbase/fleetbase-api:v0.7.48
+
+  scheduler:
+    image: fleetbase/fleetbase-api:v0.7.48
+
+  database:
+    ports: !reset null
+
+  socket:
+    ports: !reset null
+    environment:
+      SOCKETCLUSTER_OPTIONS: '{"origins":"https://fleet.13-140-159-201.sslip.io:*,wss://fleetapi.13-140-159-201.sslip.io:*,https://fleetapi.13-140-159-201.sslip.io:*"}'
+    networks:
+      default: {}
+      shared:
+        aliases:
+          - fleetbase-socket
+
+  console:
+    ports: !reset null
+    networks:
+      default: {}
+      shared:
+        aliases:
+          - fleetbase-console
+
+  httpd:
+    ports: !reset null
+    networks:
+      default: {}
+      shared:
+        aliases:
+          - fleetbase-httpd
+
+networks:
+  shared:
+    external: true
+    name: nutrezee_default

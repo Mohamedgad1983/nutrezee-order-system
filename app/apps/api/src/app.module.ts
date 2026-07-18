@@ -45,6 +45,8 @@ import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
 import { BatchRunner } from './modules/m19-migration/batch-runner';
 import { MigrationController } from './modules/m19-migration/migration.controller';
 import { MigrationService } from './modules/m19-migration/migration.service';
+import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controller';
+import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
 import { PackingController } from './modules/m20-packing/packing.controller';
 import { PackingService } from './modules/m20-packing/packing.service';
 import { DeliveryController } from './modules/m21-delivery/delivery.controller';
@@ -62,6 +64,7 @@ export const POOL = 'POOL';
     NotificationController, ReportController,
     BridgeController, MigrationController,
     PackingController, DeliveryController,
+    FleetbaseController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -255,6 +258,13 @@ export const POOL = 'POOL';
       provide: DeliveryService,
       useFactory: (pool: Pool, audit: AuditService) => new DeliveryService(pool, audit),
       inject: [POOL, AuditService],
+    },
+    {
+      // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).
+      provide: FleetbaseService,
+      useFactory: (pool: Pool, audit: AuditService, settings: SettingsReader) =>
+        new FleetbaseService(pool, audit, settings),
+      inject: [POOL, AuditService, SettingsReader],
     },
   ],
 })

@@ -1,0 +1,38 @@
+{
+  "_comment": "Calibrated against the real nutreeze.com legacy admin (Symfony/PHP). Login at /admin posts to /logincheck. Credentials come from ENV VARS ONLY. Entity paths are evidence-based; rowSelector/columns + calibrated:true are set after DOM inspection.",
+  "legacy": {
+    "baseUrlEnv": "LEGACY_BASE_URL",
+    "emailEnv": "LEGACY_ADMIN_EMAIL",
+    "passwordEnv": "LEGACY_ADMIN_PASSWORD",
+    "loginPath": "/admin",
+    "authPostAllowlist": ["/logincheck"],
+    "readOnlyGetAllowlist": [],
+    "emailSelector": "input[name='email_address']",
+    "passwordSelector": "input[name='password']",
+    "submitSelector": "form[action='/logincheck'] input[type='submit']",
+    "loggedInSelector": "text=Logout"
+  },
+  "newSystem": {
+    "baseUrlEnv": "NEW_STAGING_URL",
+    "emailEnv": "NEW_ADMIN_EMAIL",
+    "passwordEnv": "NEW_ADMIN_PASSWORD"
+  },
+  "throttleMs": 1500,
+  "navTimeoutMs": 25000,
+  "retries": 2,
+  "retryBackoffMs": 1500,
+  "entities": {
+    "customers": { "path": "/users/list/3", "calibrated": false, "rowSelector": "table tbody tr", "nextPageSelector": "a[rel='next']", "maxPages": 50, "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)", "phone": "td:nth-child(3)", "email": "td:nth-child(4)", "dob": "td:nth-child(5)" } },
+    "orders": { "path": "/orders/list/Active", "calibrated": false, "rowSelector": "table tbody tr", "nextPageSelector": "a[rel='next']", "maxPages": 100, "columns": { "id": "td:nth-child(1)", "customer_name": "td:nth-child(2)", "package": "td:nth-child(3)", "status": "td:nth-child(4)", "start_date": "td:nth-child(5)", "end_date": "td:nth-child(6)", "payment_status": "td:nth-child(7)" } },
+    "subscriptions": { "path": "/subscribers", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)", "phone": "td:nth-child(3)", "status": "td:nth-child(4)" } },
+    "products": { "path": "/products", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)", "price": "td:nth-child(3)" } },
+    "packages": { "path": "/packages", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)", "duration": "td:nth-child(3)", "meals_per_day": "td:nth-child(4)", "price": "td:nth-child(5)", "parent": "td:nth-child(6)" } },
+    "areas": { "path": "/areas/slots/methods", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)", "code": "td:nth-child(3)" } },
+    "delivery_slots": { "path": "/slots/methods", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)" } },
+    "delivery_methods": { "path": "/deliveryMethod", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)" } },
+    "payment_methods": { "path": "/settings", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "name": "td:nth-child(2)" } },
+    "coupons": { "path": "/coupons", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "id": "td:nth-child(1)", "code": "td:nth-child(2)", "discount": "td:nth-child(3)" } },
+    "settings": { "path": "/settings", "calibrated": false, "rowSelector": "form .setting-row", "columns": { "key": ".setting-key", "value": ".setting-value" } },
+    "reports": { "path": "/summary", "calibrated": false, "rowSelector": "table tbody tr", "columns": { "metric": "td:nth-child(1)", "value": "td:nth-child(2)" } }
+  }
+}

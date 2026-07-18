@@ -1,0 +1,16 @@
+# Fleetbase (Driver-App backend) — APPEND-ONLY to /opt/nutrezee/repo/docker/Caddyfile.
+# Own isolated stack (fleetbase_default network + own MySQL/Redis, NO host ports).
+# console/httpd/socket dual-homed on nutrezee_default so Caddy resolves them by alias.
+# Existing blocks above are UNCHANGED. Apply: append, `caddy validate`, graceful `caddy reload`.
+fleet.13-140-159-201.sslip.io {
+	reverse_proxy fleetbase-console:4200
+}
+
+fleetapi.13-140-159-201.sslip.io {
+	handle /socketcluster/* {
+		reverse_proxy fleetbase-socket:8000
+	}
+	handle {
+		reverse_proxy fleetbase-httpd:80
+	}
+}
