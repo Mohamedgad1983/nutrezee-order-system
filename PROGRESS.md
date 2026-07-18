@@ -299,3 +299,21 @@ Then: graceful `octane:reload` → config verify → ONE live OTP test (Steps 5�
 - Resume point: Mohamed signs into `https://ops.nutreeze.com` in the connected browser; Codex
   continues with console password reset, 11/11 verification, app implementation, S1–S9,
   A/B/C gallery, then bypass removal.
+
+## 2026-07-18 — Driver password import unblocked and verified
+
+- Mohamed restored access to the Fleetbase Administrator account and signed into the canonical
+  console at `https://ops.nutreeze.com`.
+- Fleetbase IAM's standard **Change user password... → Reset User Credentials** flow set the
+  generated password for all 11 imported drivers. Credential-email delivery was disabled for
+  every final reset.
+- A server-side, value-silent verification found 11/11 users, 11/11 matching password hashes,
+  11/11 matching phones, and 11/11 driver records in `available` status.
+- A controlled reset proof verified the previous password is rejected and the final password is
+  accepted. Private verification files were deleted from the workstation, VPS, and application
+  container immediately afterward.
+- The credential-safe A1–A4, B1–B3, and C1–C2 operating gallery is at
+  `docs/evidence/driver-password-guide/README.md`.
+- Fleetbase vendor files and `/legacy` remain unchanged. The console password-reset email queue
+  defect remains a separate operational follow-up.
+- **MANDATORY: Mohamed must rotate all 11 driver passwords using the B1–B3 guide.**

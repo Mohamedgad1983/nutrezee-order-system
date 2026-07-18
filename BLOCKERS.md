@@ -4,9 +4,16 @@ Raised during read-only DB discovery on 2026-07-09. These need owner/design deci
 any integration work. Nothing here was resolved; discovery was read-only. Labels: [NC] = Needs
 Confirmation, [RISK] = safety/correctness hazard.
 
-## Driver password + biometric authentication — admin session required (2026-07-18)
+## RESOLVED — Driver password import required an admin session (2026-07-18)
 
-**[BLOCKS] Driver password import, app implementation, S1–S9, and A/B/C evidence.**
+**Resolved 2026-07-18.** Mohamed restored the Administrator account and signed into the
+canonical console. Fleetbase IAM reset all 11 driver passwords through the standard admin
+flow; server-side checks found 11/11 password matches, 11/11 matching phones, and 11/11
+drivers in `available` status. The credential-safe guide is
+`docs/evidence/driver-password-guide/README.md`.
+
+Historical blocker evidence follows.
+
 Eleven unique workbook drivers were created through the standard Fleetbase API and are
 `available`, but 0/11 generated passwords were set:
 

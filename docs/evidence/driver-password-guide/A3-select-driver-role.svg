@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+  <rect width="1200" height="650" fill="#f4f1ed"/>
+  <rect x="70" y="65" width="1060" height="520" rx="34" fill="#ffffff" stroke="#d8cec5" stroke-width="3"/>
+  <text x="130" y="145" fill="#946031" font-family="Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="2">
+    CREATE A DRIVER USER · A3
+  </text>
+  <text x="130" y="220" fill="#2d241f" font-family="Arial, sans-serif" font-size="48" font-weight="700">
+    Complete the form, then confirm
+  </text>
+  <circle cx="155" cy="300" r="25" fill="#946031"/>
+  <text x="147" y="310" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">1</text>
+  <text x="205" y="311" fill="#2d241f" font-family="Arial, sans-serif" font-size="29">
+    Enter the driver name, email, and Kuwait phone number.
+  </text>
+  <circle cx="155" cy="375" r="25" fill="#946031"/>
+  <text x="147" y="385" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">2</text>
+  <text x="205" y="386" fill="#2d241f" font-family="Arial, sans-serif" font-size="29">
+    Select Country: Kuwait and Role: Driver.
+  </text>
+  <circle cx="155" cy="450" r="25" fill="#946031"/>
+  <text x="147" y="460" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">3</text>
+  <text x="205" y="461" fill="#2d241f" font-family="Arial, sans-serif" font-size="29">
+    Leave extra policies and permissions empty unless required.
+  </text>
+  <circle cx="155" cy="525" r="25" fill="#946031"/>
+  <text x="147" y="535" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">4</text>
+  <text x="205" y="536" fill="#2d241f" font-family="Arial, sans-serif" font-size="29">
+    Click Confirm, then continue to A4 to set the password.
+  </text>
+</svg>
