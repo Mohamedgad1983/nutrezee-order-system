@@ -63,6 +63,7 @@ Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`
 - ✅ **Customer merge UI — DONE** (PR #33 `0e3cd53`).
 - ✅ **Per-order payment actions — DONE** (PR #35 `5b5a0fb`).
 - ✅ **WP-14 restore drill — DONE** (2026-06-14): latest nightly dump restored to a throwaway DB, schema 13/13 + 62/62 tables + data intact, dropped; live untouched. Backups proven recoverable.
+- ⛔ **WP-OPS-01 Partner daily Fleetbase dispatch — BLOCKED on upstream reconciliation after verified July 19 API handover (A18):** **Verified:** the complete API cursor exposed 954 deliveries; all 954 are reconciled in Fleetbase, with 735 valid-pin deliveries assigned across the fixed 11-driver roster and 219 visibly held/unassigned (212 missing pins, 7 invalid pins). All 11 password logins returned HTTP 200 with a token, and Navigator showed driver `60005678` its 142 July 19 assignments after logout/relogin. **Needs Confirmation:** the manager dashboard reports 981, leaving 27 deliveries absent from the Partner API result. The unattended timer remains disabled until the Partner owner reconciles that gap or supplies an authoritative daily total. Driver phones and unit/SIM scope remain untouched.
 
 ### 🛑 ENGINEERING FRONTIER EXHAUSTED — what the OS is now waiting on (sponsor/workshop)
 The OS has built every unit that does not require external inputs. To proceed, **the sponsor/workshop must supply** (see `Legacy_Core_Gap_To_Cutover.md` §3 and `wp14_blocker_report.md`):

@@ -11,7 +11,7 @@
 3. Every assumption is sponsor-review-required.
 4. Implementation must keep assumptions config-driven where the Phase 1-4 architecture says values are workshop-owned.
 5. If a later signed decision contradicts an assumption, update this register, log the impact in `19_Roadmap/build_progress_register.md`, and implement the smallest corrective migration/code change in the owning WP/fix branch.
-6. Assumptions do not permit forbidden scope: no dormant dispatch/driver app, cart/checkout, refunds, WhatsApp webhook, customer notifications, labels/packing module, production write-back, or real legacy apply without required access/export.
+6. Assumptions do not permit forbidden scope unless a numbered sponsor amendment explicitly lifts it: no dormant dispatch/driver app, cart/checkout, refunds, WhatsApp webhook, customer notifications, labels/packing module, production write-back, or real legacy apply without required access/export. ASM-051 operates only inside A18.
 
 Risk scale:
 - **Critical:** wrong assumption can block pilot, require data migration, or violate MVP boundary/security/privacy.
@@ -73,6 +73,7 @@ Risk scale:
 | ASM-048 | Packed confirmation override | WP-10 requires all tickets for a fulfillment day to be `prepared` before Kitchen User can mark the day `packed`. Ops Manager override-to-packed is deferred until sponsor signs override role/reason rules and transition config. | High | Yes | WP-10 | Kitchen workflow signoff. |
 | ASM-049 | Payment record creation timing | WP-11 creates `payment_record` on the first payment write action (link sent, status-review request, or legacy unmapped-status queue), not during WP-09 order conversion. `GET /orders/:id/payments` stays non-mutating and returns no payment when none exists. | Medium | Yes | WP-11, WP-13 | DEC-009 / finance workflow signoff. |
 | ASM-050 | Active-plan address and slot import gaps | WP-13 active-plan synthetic imports may create fulfillment days with `address_unverified=true` and null slot when legacy export rows do not provide a clean address/slot mapping; these rows stay reviewable before pilot use. | High | Yes | WP-13 | Legacy export mapping / delivery ops review. |
+| ASM-051 | Daily driver allocation before an operations-owned map exists | For the A18 handover bridge only, keep each exact-pin routing area together and assign it by stable rendezvous hashing over the fixed 11-driver roster. This prevents unrelated source-count changes from reshuffling already-dispatched areas. Never assign a source row lacking a real pin or an approved source status. This is a reversible staging/handover default, not a signed permanent route plan. | High | Yes | WP-OPS-01 Partner daily dispatch | Replace the roster/allocation config when operations signs an area-to-driver map. |
 
 ## Revision log
 
@@ -84,3 +85,4 @@ Risk scale:
 | 2026-06-10 | Added WP-11 assumption ASM-049 for payment record creation timing and non-mutating payment reads. |
 | 2026-06-10 | Added WP-13 assumption ASM-050 for active-plan address/slot import gaps and reviewable unverified fulfillment-day data. |
 | 2026-06-11 | ASM-034 clarification (independent review, amendment A15): the "dormant-role grant" entry cannot be a notification trigger — security-family events are audit-only and never reach the outbox (event_catalog rule), so the seeded trigger could never fire. The alert remains the HIGH audit event written by M13 on dormant grants (WP-02). Trigger-map seed corrected in migration 0013; the rest of ASM-034's trigger list is unchanged and now fully wired (the queue-SLA emitter was added in the same review). |
+| 2026-07-19 | Added and exercised ASM-051 for the reversible A18 daily handover allocation: 735 valid-pin deliveries were assigned across all 11 drivers and 219 were held/unassigned (212 missing pins, 7 invalid). The permanent operations-owned driver-area map remains unsigned. The manager/API 981-versus-954 gap is still `[NC]`; no assumption equates those totals, and the unattended timer remains disabled. |

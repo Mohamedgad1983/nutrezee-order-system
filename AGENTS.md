@@ -10,6 +10,16 @@ credential storage, biometric unlock. AGPL-3.0 compliance: modified source provi
 users (Nutreeze staff) on request; fork lives in the private repo. Everything else in /src
 and all of /legacy remains OFF-LIMITS. Config-only rule still applies outside this scope.
 
+## Partner daily dispatch amendment
+
+AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →
+Fleetbase → Navigator daily-delivery bridge for the 11 existing drivers. Scope is limited
+to `ops/fleetbase/` integration scripts/configuration, date-scoped integration-owned
+Fleetbase records, assignment verification, and Navigator evidence. Partner and legacy
+systems remain read-only; `/legacy`, Fleetbase vendor source, driver phone numbers, and
+the deferred unit/SIM redesign remain OFF-LIMITS. Source rows without a real location pin
+must stay visibly held and unassigned.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

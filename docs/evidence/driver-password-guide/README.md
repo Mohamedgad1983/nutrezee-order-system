@@ -53,4 +53,5 @@ The C checks were performed server-side with Fleetbase `Hash::check`. The contro
 value failed, the final value passed, and all 11 final driver passwords matched. All temporary
 proof files were deleted from the workstation, VPS, and application container.
 
-**MANDATORY: Mohamed must rotate all 11 driver passwords now using B1–B3.**
+Mohamed may rotate any or all 11 passwords later using B1–B3. The current simple
+passwords can remain in place for today's app handover.

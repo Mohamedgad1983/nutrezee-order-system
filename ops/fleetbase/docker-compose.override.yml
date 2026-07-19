@@ -18,6 +18,12 @@ services:
 
   scheduler:
     image: fleetbase/fleetbase-api:v0.7.48
+    healthcheck:
+      test: ["CMD-SHELL", "tr '\\0' ' ' < /proc/1/cmdline | grep -q 'go-crond'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   database:
     ports: !reset null
