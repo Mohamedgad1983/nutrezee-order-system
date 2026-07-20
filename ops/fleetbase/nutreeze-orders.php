@@ -53,17 +53,85 @@ const ADDRESS_CALL_PLACE_PREFIX = 'CALL CUSTOMER FIRST / اتصل بالعميل
 
 // Approximate area-level centroids (lat, lng) used ONLY when the vendor feed has no
 // location_pin. Fleetbase service_areas/zones were checked first (2026-07-12): the only
-// geometry present is soft-deleted DEMO data, so a minimal in-script lookup is used,
-// covering exactly the areas observed in null-pin vendor rows. 'farwaniya' matches the
-// demo "Zone - Farwaniya" centroid as a cross-check. Places created from this map are
-// ALWAYS flagged meta.pin_source = 'area_fallback' and the original null pin is
-// preserved in payload meta.source_location_pin — a driver drop-pin is still required.
+// geometry present is soft-deleted DEMO data. The expanded one-day A19 map covers the
+// textual routing areas observed in the complete July 19 source manifest plus the two
+// new July 20 labels (Abbasiya and Qadsiya); area-name searches were cross-checked
+// against OpenStreetMap Nominatim on 2026-07-20 without sending customer addresses or
+// any other customer data. Places created from this map are ALWAYS flagged
+// meta.pin_source = 'area_fallback', the original null pin is preserved in payload
+// meta.source_location_pin, and the driver must call the customer before navigating.
+// These points are not customer pins or a permanent routing map.
 const AREA_FALLBACK_CENTROIDS = [
+    'abbasiya' => [29.2601314, 47.93219],
+    'abdullah al mubarak' => [29.2411046, 47.9045486],
+    'abu ftaira' => [29.1976228, 48.1019956],
+    'adailiya' => [29.3262544, 47.9818435],
+    'adan' => [29.2327916, 48.0681642],
+    'al masayel' => [29.238148, 48.0893252],
+    'al qurain' => [29.2253933, 48.0730744],
+    'al qusour' => [29.2160646, 48.0734748],
+    'al-mutlaa' => [29.4832981, 47.59663],
+    'andalous' => [29.3031016, 47.8852021],
     'ardhiya' => [29.3006, 47.8964],
     'bayan' => [29.3033, 48.0489],
+    'bneid alqar' => [29.3741685, 48.0013984],
+    'dasma' => [29.3656988, 48.0019243],
+    'doha' => [29.32388, 47.7932659],
+    'egaila' => [29.170925, 48.1025734],
+    'fahad al ahmed' => [29.1273334, 48.1040492],
+    'fahaheel' => [29.081324, 48.1275121],
     'farwaniya' => [29.2775, 47.9586],
-    'fahad al ahmed' => [29.0839, 48.1289],
+    'ferdous' => [29.283319, 47.874774],
+    'fintas' => [29.1717715, 48.117815],
+    'fnaitess' => [29.2210847, 48.0935826],
+    'hadiya' => [29.1445758, 48.0919391],
+    'hateen' => [29.2835228, 48.020395],
+    'hawally' => [29.3378678, 48.0235507],
+    'ishbiliya' => [29.2731164, 47.9384941],
+    'jaber al ahmad' => [29.3424579, 47.7600225],
+    'jaber al-ali' => [29.1677169, 48.0830369],
+    'jabriya' => [29.3189243, 48.0322381],
+    'jahra' => [29.3375, 47.658056],
+    'kaifan' => [29.340629, 47.9592011],
+    'khairan' => [28.6614324, 48.3890963],
+    'khairan city' => [28.6614324, 48.3890963],
+    'khaldiya' => [29.3251501, 47.9650989],
+    'mahboula' => [29.1490219, 48.1210101],
+    'mangaf' => [29.1059112, 48.1281441],
+    'mishrif' => [29.2793048, 48.0698414],
+    'mubarak al kabeer' => [29.2173735, 48.0393468],
+    'naseem' => [29.3207054, 47.6765013],
+    'north west al sulaibikhat' => [29.328167, 47.8068916],
+    'nuzha' => [29.3416311, 47.9915104],
+    'omariya' => [29.2955133, 47.9558023],
+    'oyoun' => [29.3283623, 47.655147],
+    'qadsiya' => [29.3486319, 48.0038777],
+    'qairawan' => [29.3074997, 47.7928931],
+    'qasr' => [29.3427924, 47.6937154],
+    'qortuba' => [29.3134043, 47.9862685],
+    'rabiya' => [29.2956997, 47.9372931],
+    'rawda' => [29.3300697, 47.9984022],
+    'riqqa' => [29.1473639, 48.1056933],
+    'rumaithiya' => [29.3151348, 48.0705355],
+    'saad al abdullah' => [29.3099502, 47.720734],
+    'sabah al nasser' => [29.271254, 47.8859774],
+    'sabah al salem' => [29.2538763, 48.0677454],
+    'sabahiya' => [29.1071132, 48.1069544],
+    'salam' => [29.2967818, 48.0145815],
+    'salmiya' => [29.3327834, 48.0684884],
+    'salwa' => [29.2892859, 48.0807358],
+    'shaab' => [29.3512891, 48.0251526],
+    'shamiya' => [29.3515574, 47.9658095],
+    'shuhada' => [29.2721192, 48.0307198],
+    'siddiq' => [29.2946228, 47.9924653],
     'south abdullah al mubarak' => [29.2280, 47.8770],
+    'sulaibikhat' => [29.3165445, 47.8457816],
+    'surra' => [29.3144991, 48.0069616],
+    'wafra residential' => [28.6076787, 48.0208426],
+    'west abdullah al mubarak' => [29.2484185, 47.8580244],
+    'yarmouk' => [29.3112015, 47.9694907],
+    'zahra' => [29.2755879, 47.9997683],
+    'jleeb alshuyokh' => [29.2596016, 47.9336667],
 ];
 // Last resort for areas not in the map (logged so operators can extend the map):
 // Kuwait City centroid, flagged fallback_scope = 'country'.
@@ -3380,6 +3448,14 @@ function runSelfTest(): array
         || abs($areaPin['lat'] - AREA_FALLBACK_CENTROIDS['farwaniya'][0]) > 0.000001) {
         throw new RuntimeException('self_test_area_fallback');
     }
+    if (count(AREA_FALLBACK_CENTROIDS) !== 70) {
+        throw new RuntimeException('self_test_area_fallback_manifest');
+    }
+    foreach (AREA_FALLBACK_CENTROIDS as $area => [$lat, $lng]) {
+        if ($area === '' || parsePin($lat . ',' . $lng) === null) {
+            throw new RuntimeException('self_test_area_fallback_coordinate');
+        }
+    }
     $countryPin = resolveEffectivePin($a);
     if ($countryPin['pin_source'] !== 'area_fallback' || $countryPin['fallback_scope'] !== 'country') {
         throw new RuntimeException('self_test_country_fallback');
@@ -3757,6 +3833,17 @@ try {
             )
                 && resolveEffectivePin($row)['fallback_scope'] === 'country',
         ));
+        $locationCountryFallbackAreas = [];
+        foreach ($dailyRows as $dailyRow) {
+            if (in_array(
+                dailyHoldReason($dailyRow),
+                ['no_real_location_pin', 'invalid_source_location_pin'],
+                true,
+            ) && resolveEffectivePin($dailyRow)['fallback_scope'] === 'country') {
+                $locationCountryFallbackAreas[mb_strtolower(trim((string) $dailyRow['routing_area']))] = true;
+            }
+        }
+        ksort($locationCountryFallbackAreas);
         $heldMissingPinCount = count(array_filter(
             $dailyRows,
             fn (array $row): bool => dailyHoldReason($row) === 'no_real_location_pin'
@@ -3795,6 +3882,9 @@ try {
             'source_orders_invalid_pin' => $sourceInvalidPinCount,
             'orders_location_area_fallback' => $locationAreaFallbackCount,
             'orders_location_country_fallback_held' => $locationCountryFallbackCount,
+            // General routing-area labels only; no customer identity, phone, or
+            // detailed address is written to the operational log.
+            'orders_location_country_fallback_areas' => array_keys($locationCountryFallbackAreas),
             'orders_held_missing_pin' => $heldMissingPinCount,
             'orders_held_invalid_pin' => $heldInvalidPinCount,
             'orders_held_unapproved_meal_status' => $unapprovedStatusCount,
@@ -3827,6 +3917,9 @@ try {
             ]);
             releaseLock($lockName);
             exit(0);
+        }
+        if ($allowAddressCall && $locationCountryFallbackCount > 0) {
+            throw new RuntimeException('daily_address_call_unknown_area');
         }
         if (!isset($options['confirm-daily-sync'])
             || !hash_equals($deliveryDate, (string) $options['confirm-daily-sync'])) {

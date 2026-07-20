@@ -38,6 +38,16 @@ write to the Partner API or the legacy application.
   customer pin. Unknown-area country fallbacks remain held. The unattended
   daily script does not contain this option, and the program rejects it for
   every other date.
+- The 70-entry A19 area lookup was built from the textual routing-area names in
+  the complete July 19 source manifest plus the July 20-only Abbasiya and
+  Qadsiya labels. Area names alone (no customer names, phones, detailed
+  addresses, or Partner credentials) were cross-checked against the
+  OpenStreetMap Nominatim Search API on 2026-07-20 under its public usage
+  policy. OpenStreetMap contributors are the source of those approximate area
+  points. They are operational grouping aids only, never customer pins or
+  evidence of live-nearest-driver routing:
+  <https://nominatim.org/release-docs/latest/api/Search/> and
+  <https://operations.osmfoundation.org/policies/nominatim/>.
 - Pickup, dropoff, driver, tracking, source count, and duplicate reconciliation
   are checked inside the write path. Any unexplained order aborts the transaction.
 - Existing orders outside the governed `created`/`dispatched`/`canceled` states
