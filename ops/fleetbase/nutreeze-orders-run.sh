@@ -27,7 +27,7 @@ fi
 DAILY=0
 for ARG in "$@"; do
   case "$ARG" in
-    --limit=*|--verify|--dry-run|--meal-since=*|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*) ;;
+    --limit=*|--verify|--dry-run|--meal-since=*|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*|--confirm-address-call-dispatch=*) ;;
     --delivery-date=*) DAILY=1 ;;
     *)
       printf '%s\n' 'unsupported runtime option' >&2

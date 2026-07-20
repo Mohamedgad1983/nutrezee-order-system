@@ -20,6 +20,17 @@ systems remain read-only; `/legacy`, Fleetbase vendor source, driver phone numbe
 the deferred unit/SIM redesign remain OFF-LIMITS. Source rows without a real location pin
 must stay visibly held and unassigned.
 
+## July 20 address-and-call dispatch amendment
+
+AMENDMENT 2026-07-20 — Mohamed authorized a one-day exception for delivery date
+2026-07-20 only: otherwise-approved Partner rows without a valid customer pin may be
+assigned by their known routing area when the source address and customer phone are
+present, with a visible warning that the driver must call the customer for the exact
+location. The area centroid must remain labeled as a fallback, never as a customer pin.
+The exception requires an exact manual runtime confirmation, must reject unknown-area
+country fallbacks, and must not be added to the unattended timer or reused for any other
+date. All other A18 boundaries remain in force.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

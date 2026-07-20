@@ -8,6 +8,10 @@ write to the Partner API or the legacy application.
 
 - The source of truth is `GET /integration/meal-history`, joined to
   `GET /integration/orders` by the source order number.
+- The Partner contract defines meal-history as one row per meal item per delivery
+  date. `meal_id` references the catalog and is not a unique row key, so repeated
+  catalog IDs are counted as separate source meal rows. Customer/status conflicts
+  still abort the manifest.
 - A stable date-scoped Fleetbase prefix makes an unchanged source snapshot
   idempotent. Once a job is dispatched, source and driver hashes are immutable;
   a changed snapshot fails before it can alter the live job.
@@ -22,9 +26,18 @@ write to the Partner API or the legacy application.
   from a later complete manifest, becomes a canceled, unassigned, unscheduled
   integration-owned tombstone if it has not started. An advanced job fails closed
   for operator intervention.
-- Rows with a missing, malformed, transposed, zero, or outside-Kuwait pin remain
-  `created`, unassigned, **unscheduled**, and explicitly held. The display-only
-  fallback centroid is never dispatched to a driver or used as the real pin.
+- By default, rows with a missing, malformed, transposed, zero, or outside-Kuwait
+  pin remain `created`, unassigned, **unscheduled**, and explicitly held.
+- Sponsor amendment A19 permits one exception for delivery date **2026-07-20**
+  only: a manual run with the exact matching
+  `--confirm-address-call-dispatch=2026-07-20` may assign an otherwise-approved
+  location-held row when its address, customer phone, and a known area centroid
+  are all present. Such an order is visibly labeled “NO EXACT PIN - CALL
+  CUSTOMER / لا يوجد موقع دقيق - اتصل بالعميل”; the dropoff phone is populated
+  for one-tap calling, and metadata preserves that the centroid is not the
+  customer pin. Unknown-area country fallbacks remain held. The unattended
+  daily script does not contain this option, and the program rejects it for
+  every other date.
 - Pickup, dropoff, driver, tracking, source count, and duplicate reconciliation
   are checked inside the write path. Any unexplained order aborts the transaction.
 - Existing orders outside the governed `created`/`dispatched`/`canceled` states
@@ -85,6 +98,17 @@ The write command is valid only when `daily_verification.passed=true`,
 A zero-row API snapshot fails closed; a confirmed no-delivery day additionally
 requires `--confirm-zero-day=YYYY-MM-DD`.
 
+For the sponsor-approved A19 run only, append the same exact date confirmation
+to both the manifest dry-run and the write:
+
+```sh
+--confirm-address-call-dispatch=2026-07-20
+```
+
+The source summary must show `orders_location_country_fallback_held=0` before
+claiming that every otherwise-approved July 20 delivery was assigned. Do not
+add this option to `nutreeze-daily-sync.sh`.
+
 ## Timer (installed, deliberately disabled)
 
 The supplied timer targets 07:00 Kuwait (04:00 UTC), after the documented 06:00
@@ -94,13 +118,13 @@ and performs two independent API passes whose count and digest must match.
 
 Do **not** enable unattended execution yet. The Partner envelopes expose a
 per-page `count`, not an authoritative total for a delivery date; two matching
-passes therefore prove snapshot stability but cannot independently prove that
-the source published every expected delivery. The complete July 19 cursor walk
-exposed 954 deliveries, while the manager dashboard reports 981; the 27-row
-upstream discrepancy remains unresolved. Future dates require an authoritative
-Partner daily total (or an operations-approved expected-count manifest) before
-enabling the timer. The 2026 scan also uses the independently tested
-`2026-01-01T00:00:00+03:00` history floor and must be revisited before 2027.
+passes prove snapshot stability but cannot independently prove that the source
+published every expected delivery. Mohamed confirmed that the complete July 19
+cursor result of 954 was the correct operational total, resolving the earlier
+981 report for that date. Future dates still require an operations-approved
+expected-count manifest before enabling the timer. The 2026 scan also uses the
+independently tested `2026-01-01T00:00:00+03:00` history floor and must be
+revisited before 2027.
 
 Confirm it remains disabled with:
 

@@ -43,6 +43,13 @@ const INTEGRATION_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config'
 const DAILY_DISPATCHABLE_MEAL_STATUSES = ['ordered', 'driver_assigned'];
 const DAILY_DISPATCHABLE_ORDER_STATUSES = ['success'];
 const DAILY_PROVEN_HISTORY_FLOOR = '2026-01-01T00:00:00+03:00';
+// Sponsor amendment A19 authorizes address/area fallback dispatch for this
+// delivery date only. A matching runtime confirmation is still mandatory, and
+// the unattended timer deliberately never supplies it.
+const ADDRESS_CALL_AUTHORIZED_DATES = ['2026-07-20'];
+const ADDRESS_CALL_AUTHORIZATION = 'A19';
+const ADDRESS_CALL_INSTRUCTION = 'NO EXACT PIN - CALL CUSTOMER / لا يوجد موقع دقيق - اتصل بالعميل';
+const ADDRESS_CALL_PLACE_PREFIX = 'CALL CUSTOMER FIRST / اتصل بالعميل أولا - ';
 
 // Approximate area-level centroids (lat, lng) used ONLY when the vendor feed has no
 // location_pin. Fleetbase service_areas/zones were checked first (2026-07-12): the only
@@ -97,6 +104,28 @@ function resolveEffectivePin(array $row): array
         'pin_source' => 'area_fallback',
         'fallback_scope' => 'country',
     ];
+}
+
+function addressCallInstruction(array $row, bool $allowAddressCall = false): ?string
+{
+    return rowRequiresCustomerCall($row, $allowAddressCall)
+        ? ADDRESS_CALL_INSTRUCTION
+        : null;
+}
+
+function sourceOrderNotes(array $row, bool $allowAddressCall = false): string
+{
+    $notes = 'Vendor order ' . $row['order_number'] . ' | Area (AR): ' . ($row['area_ar'] ?? '');
+    $instruction = addressCallInstruction($row, $allowAddressCall);
+    return $instruction === null ? $notes : $notes . ' | ' . $instruction;
+}
+
+function sourcePlaceName(array $row, bool $allowAddressCall = false): string
+{
+    $name = 'Vendor Order ' . $row['order_number'] . ' - ' . $row['routing_area'];
+    return rowRequiresCustomerCall($row, $allowAddressCall)
+        ? ADDRESS_CALL_PLACE_PREFIX . $name
+        : $name;
 }
 
 function safeLog(string $event, array $fields = []): void
@@ -368,9 +397,46 @@ function dailyHoldReason(array $row): ?string
     return pinHoldReason($row);
 }
 
-function rowIsDailyRoutable(array $row): bool
+function rowHasAddressCallContext(array $row): bool
 {
-    return dailyHoldReason($row) === null;
+    return is_string($row['address_text'] ?? null)
+        && trim($row['address_text']) !== ''
+        && is_string($row['customer_phone'] ?? null)
+        && trim($row['customer_phone']) !== '';
+}
+
+function rowRequiresCustomerCall(array $row, bool $allowAddressCall = false): bool
+{
+    if (!$allowAddressCall
+        || !in_array((string) ($row['delivery_date'] ?? ''), ADDRESS_CALL_AUTHORIZED_DATES, true)
+        || !in_array(dailyHoldReason($row), ['no_real_location_pin', 'invalid_source_location_pin'], true)
+        || !rowHasAddressCallContext($row)) {
+        return false;
+    }
+    $effectivePin = resolveEffectivePin($row);
+    return $effectivePin['pin_source'] === 'area_fallback'
+        && $effectivePin['fallback_scope'] === 'area';
+}
+
+function rowIsDailyRoutable(array $row, bool $allowAddressCall = false): bool
+{
+    return dailyHoldReason($row) === null || rowRequiresCustomerCall($row, $allowAddressCall);
+}
+
+function resolveAddressCallAuthorization(?string $deliveryDate, mixed $confirmation): bool
+{
+    if ($confirmation === null) {
+        return false;
+    }
+    if ($deliveryDate === null
+        || !is_string($confirmation)
+        || !hash_equals($deliveryDate, $confirmation)) {
+        throw new RuntimeException('daily_address_call_confirmation_guard');
+    }
+    if (!in_array($deliveryDate, ADDRESS_CALL_AUTHORIZED_DATES, true)) {
+        throw new RuntimeException('daily_address_call_date_not_authorized');
+    }
+    return true;
 }
 
 function dailyHeldOrderStatus(?string $holdReason): string
@@ -557,7 +623,6 @@ function buildDailyRows(array $rawMeals, array $rawOrders, string $deliveryDate)
                 'status' => $meal['status'],
                 'meal_item_count' => 0,
                 'meal_qty' => 0,
-                'meal_ids' => [],
                 'updated_at' => $meal['updated_at'],
                 '_updated_time' => $meal['_updated_time'],
             ];
@@ -567,10 +632,9 @@ function buildDailyRows(array $rawMeals, array $rawOrders, string $deliveryDate)
             || $group['status'] !== $meal['status']) {
             throw new RuntimeException('contract_daily_group_conflict');
         }
-        if (isset($group['meal_ids'][$meal['meal_id']])) {
-            throw new RuntimeException('contract_daily_duplicate_meal');
-        }
-        $group['meal_ids'][$meal['meal_id']] = true;
+        // The documented feed is one row per meal item per delivery date.
+        // meal_id is a catalog reference, not a row identity, so the same meal
+        // may legitimately appear more than once for an order/date.
         $group['meal_item_count']++;
         $group['meal_qty'] += $meal['qty'];
         if ($meal['_updated_time'] > $group['_updated_time']) {
@@ -779,14 +843,14 @@ function loadPickupConfig(string $path): array
  * missing row cannot reshuffle another area's already-dispatched driver. This is
  * a staging handover default until operations supplies a signed area-to-driver map.
  */
-function allocateDailyDrivers(array $dailyRows, array $drivers): array
+function allocateDailyDrivers(array $dailyRows, array $drivers, bool $allowAddressCall = false): array
 {
     if ($drivers === []) {
         throw new RuntimeException('driver_roster_empty');
     }
     $areas = [];
     foreach ($dailyRows as $row) {
-        if (!rowIsDailyRoutable($row)) {
+        if (!rowIsDailyRoutable($row, $allowAddressCall)) {
             continue;
         }
         $area = mb_strtolower(trim((string) $row['routing_area']));
@@ -857,13 +921,19 @@ function dailySourceDigest(array $dailyRows): string
  * immutable. This preflight runs before FleetbaseWriter so a changed feed cannot
  * modify a live job even transiently; the outer transaction is the second guard.
  */
-function guardDailyOperationalRows(string $prefix, array $dailyRows, array $drivers, string $companyUuid): void
+function guardDailyOperationalRows(
+    string $prefix,
+    array $dailyRows,
+    array $drivers,
+    string $companyUuid,
+    bool $allowAddressCall = false,
+): void
 {
     $byInternalId = [];
     foreach ($dailyRows as $row) {
         $byInternalId[$prefix . '-ORDER-' . $row['order_id']] = $row;
     }
-    $allocation = allocateDailyDrivers($dailyRows, $drivers);
+    $allocation = allocateDailyDrivers($dailyRows, $drivers, $allowAddressCall);
     $existing = Order::withoutGlobalScopes()
         ->where('company_uuid', $companyUuid)
         ->where('internal_id', 'like', $prefix . '-ORDER-%')
@@ -917,8 +987,17 @@ function guardDailyOperationalRows(string $prefix, array $dailyRows, array $driv
             throw new RuntimeException('daily_operational_state_guard');
         }
         $meta = metaArray($order->meta);
+        if (($meta['call_customer_required'] ?? false) === true
+            && !$allowAddressCall
+            && in_array(
+                dailyHoldReason($row),
+                ['no_real_location_pin', 'invalid_source_location_pin'],
+                true,
+            )) {
+            throw new RuntimeException('daily_address_call_confirmation_required');
+        }
         $expectedDriver = $allocation['assignments'][(string) $row['order_id']] ?? null;
-        if (!rowIsDailyRoutable($row)) {
+        if (!rowIsDailyRoutable($row, $allowAddressCall)) {
             if ((bool) $order->started || $order->started_at !== null) {
                 throw new RuntimeException('daily_started_snapshot_changed');
             }
@@ -1473,7 +1552,10 @@ final class FleetbaseWriter
     ];
     private string $trackingNumberPrefix;
 
-    public function __construct(private string $prefix)
+    public function __construct(
+        private string $prefix,
+        private bool $allowAddressCall = false,
+    )
     {
         $this->companyUuid = resolveCompanyUuid();
         // Native tracking numbers are prefixed with the first 3 letters of the company
@@ -1735,7 +1817,8 @@ final class FleetbaseWriter
         if (!$orderCreated && !$payloadCreated) {
             $orderMeta = metaArray($order->meta);
             $payloadMeta = metaArray($payload->meta);
-            $expectedNotes = 'Vendor order ' . $row['order_number'] . ' | Area (AR): ' . ($row['area_ar'] ?? '');
+            $expectedNotes = sourceOrderNotes($row, $this->allowAddressCall);
+            $expectedStreet2 = addressCallInstruction($row, $this->allowAddressCall);
             $mappingCurrent = $order->deleted_at === null
                 && $payload->deleted_at === null
                 && $order->order_config_uuid === $this->orderConfigUuid
@@ -1774,12 +1857,14 @@ final class FleetbaseWriter
                 $mappingCurrent = $mappingCurrent
                     && $existingPlace->deleted_at === null
                     && $existingPlace->owner_type === Contact::class
-                    && $existingPlace->name === 'Vendor Order ' . $row['order_number'] . ' - ' . $row['routing_area']
+                    && $existingPlace->name === sourcePlaceName($row, $this->allowAddressCall)
                     && $existingPlace->street1 === $row['address_text']
+                    && $existingPlace->street2 === $expectedStreet2
                     && $existingPlace->city === $row['routing_area']
                     && $existingPlace->district === $row['routing_area']
                     && $existingPlace->neighborhood === $row['area_ar']
                     && $existingPlace->country === 'KW'
+                    && $existingPlace->phone === $row['customer_phone']
                     && $existingPlace->location instanceof Point
                     && abs($existingPlace->location->getLat() - $effectivePin['lat']) <= 0.000001
                     && abs($existingPlace->location->getLng() - $effectivePin['lng']) <= 0.000001
@@ -1841,12 +1926,14 @@ final class FleetbaseWriter
             'company_uuid' => $this->companyUuid,
             'owner_uuid' => $customer->uuid,
             'owner_type' => Contact::class,
-            'name' => 'Vendor Order ' . $row['order_number'] . ' - ' . $row['routing_area'],
+            'name' => sourcePlaceName($row, $this->allowAddressCall),
             'street1' => $row['address_text'],
+            'street2' => addressCallInstruction($row, $this->allowAddressCall),
             'city' => $row['routing_area'],
             'district' => $row['routing_area'],
             'neighborhood' => $row['area_ar'],
             'country' => 'KW',
+            'phone' => $row['customer_phone'],
             'location' => new Point($effectivePin['lat'], $effectivePin['lng']),
             'meta' => array_replace(metaArray($place->meta), [
                 'integration_owner' => 'nutreeze_partner_orders',
@@ -1883,7 +1970,7 @@ final class FleetbaseWriter
             'payload_uuid' => $payload->uuid,
             'type' => 'transport',
             'status' => $orderCreated ? 'created' : $order->status,
-            'notes' => 'Vendor order ' . $row['order_number'] . ' | Area (AR): ' . ($row['area_ar'] ?? ''),
+            'notes' => sourceOrderNotes($row, $this->allowAddressCall),
             'meta' => array_replace($orderMeta, [
                 'integration_owner' => 'nutreeze_partner_orders',
                 'integration_prefix' => $this->prefix,
@@ -2213,6 +2300,12 @@ final class FleetbaseWriter
             if ($place->street1 !== $row['address_text']) {
                 throw new RuntimeException('verify_place_address');
             }
+            if ($place->street2 !== addressCallInstruction($row, $this->allowAddressCall)
+                || $place->phone !== $row['customer_phone']
+                || $place->name !== sourcePlaceName($row, $this->allowAddressCall)
+                || $order->notes !== sourceOrderNotes($row, $this->allowAddressCall)) {
+                throw new RuntimeException('verify_address_call_display');
+            }
             $verifiedPlaceUuids[$place->uuid] = true;
         }
         foreach ($canceled as $row) {
@@ -2389,6 +2482,8 @@ final class DailyDispatchWriter
         'pickup_places_updated' => 0,
         'pickup_places_unchanged' => 0,
         'orders_dispatched' => 0,
+        'orders_dispatched_real_pin' => 0,
+        'orders_dispatched_call_required' => 0,
         'orders_held_no_pin' => 0,
         'orders_held_invalid_pin' => 0,
         'orders_held_unapproved_order_status' => 0,
@@ -2404,12 +2499,14 @@ final class DailyDispatchWriter
         'tracking_hold_statuses_unchanged' => 0,
         'tracking_cancel_statuses_created' => 0,
         'tracking_cancel_statuses_unchanged' => 0,
+        'address_call_artifacts_cleared' => 0,
     ];
 
     public function __construct(
         private string $prefix,
         private array $pickup,
         private array $drivers,
+        private bool $allowAddressCall = false,
     ) {
         $this->companyUuid = resolveCompanyUuid();
         if ($this->drivers === []) {
@@ -2422,10 +2519,10 @@ final class DailyDispatchWriter
         if ($dailyRows === []) {
             throw new RuntimeException('daily_source_empty');
         }
-        $allocation = allocateDailyDrivers($dailyRows, $this->drivers);
+        $allocation = allocateDailyDrivers($dailyRows, $this->drivers, $this->allowAddressCall);
         $expectedAssigned = count(array_filter(
             $dailyRows,
-            fn (array $row): bool => rowIsDailyRoutable($row),
+            fn (array $row): bool => rowIsDailyRoutable($row, $this->allowAddressCall),
         ));
         if (count($allocation['assignments']) !== $expectedAssigned
             || array_sum($allocation['loads']) !== $expectedAssigned) {
@@ -2567,21 +2664,80 @@ final class DailyDispatchWriter
                 throw new RuntimeException('daily_missing_source_state_guard');
             }
             $holdReason = 'source_row_missing';
+            $wasCallRequired = ($meta['call_customer_required'] ?? false) === true;
             $order->fill([
                 'driver_assigned_uuid' => null,
                 'scheduled_at' => null,
                 'status' => dailyHeldOrderStatus($holdReason),
                 'dispatched' => false,
                 'dispatched_at' => null,
+                'notes' => str_replace(
+                    ' | ' . ADDRESS_CALL_INSTRUCTION,
+                    '',
+                    (string) $order->notes,
+                ),
                 'meta' => array_replace($meta, [
                     'assignment_mode' => 'none',
                     'dispatch_state' => 'held_' . $holdReason,
                     'hold_reason' => $holdReason,
+                    'source_location_exception' => null,
+                    'call_customer_required' => false,
+                    'navigation_mode' => 'held',
+                    'location_accuracy' => 'not_routable',
+                    'address_call_authorization' => null,
                     'source_missing_detected_at' => $meta['source_missing_detected_at'] ?? kuwaitNow(),
                 ]),
             ]);
             $changed = saveWithoutActivity($order);
             $this->touchedSubjectIds['order'][] = $order->getKey();
+            $payload = Payload::withoutGlobalScopes()
+                ->where('company_uuid', $this->companyUuid)
+                ->where('uuid', $order->payload_uuid)
+                ->lockForUpdate()
+                ->first();
+            if (!$payload) {
+                throw new RuntimeException('daily_payload_resolution');
+            }
+            $payloadMeta = metaArray($payload->meta);
+            if (($payloadMeta['integration_owner'] ?? null) !== 'nutreeze_partner_orders'
+                || ($payloadMeta['integration_prefix'] ?? null) !== $this->prefix) {
+                throw new RuntimeException('daily_foreign_payload');
+            }
+            $payload->fill([
+                'meta' => array_replace($payloadMeta, [
+                    'source_location_exception' => null,
+                    'call_customer_required' => false,
+                    'navigation_mode' => 'held',
+                    'location_accuracy' => 'not_routable',
+                    'address_call_authorization' => null,
+                ]),
+            ]);
+            saveWithoutActivity($payload);
+            $this->touchedSubjectIds['payload'][] = $payload->getKey();
+
+            $place = Place::withoutGlobalScopes()
+                ->where('company_uuid', $this->companyUuid)
+                ->where('uuid', $payload->dropoff_uuid)
+                ->lockForUpdate()
+                ->first();
+            if (!$place) {
+                throw new RuntimeException('daily_verify_dropoff');
+            }
+            $placeMeta = metaArray($place->meta);
+            if (($placeMeta['integration_owner'] ?? null) !== 'nutreeze_partner_orders'
+                || ($placeMeta['integration_prefix'] ?? null) !== $this->prefix) {
+                throw new RuntimeException('daily_foreign_place');
+            }
+            $placeName = (string) $place->name;
+            if (str_starts_with($placeName, ADDRESS_CALL_PLACE_PREFIX)) {
+                $placeName = substr($placeName, strlen(ADDRESS_CALL_PLACE_PREFIX));
+            }
+            $place->fill(['name' => $placeName, 'street2' => null]);
+            saveWithoutActivity($place);
+            $this->touchedSubjectIds['place'][] = $place->getKey();
+            if ($wasCallRequired) {
+                $this->stats['address_call_artifacts_cleared']++;
+            }
             $this->ensureHeldTracking($order, $holdReason);
             $this->stats['orders_held_source_missing']++;
             if (!$changed) {
@@ -2609,9 +2765,12 @@ final class DailyDispatchWriter
             || ($orderMeta['source_order_id'] ?? null) !== $row['order_id']) {
             throw new RuntimeException('daily_foreign_order');
         }
-        $holdReason = dailyHoldReason($row);
+        $sourceHoldReason = dailyHoldReason($row);
+        $routable = rowIsDailyRoutable($row, $this->allowAddressCall);
+        $callCustomerRequired = rowRequiresCustomerCall($row, $this->allowAddressCall);
+        $holdReason = $routable ? null : $sourceHoldReason;
         $allowedStates = ['created', 'dispatched'];
-        if ($holdReason === 'source_order_canceled') {
+        if ($sourceHoldReason === 'source_order_canceled') {
             $allowedStates[] = 'canceled';
         }
         if (!in_array((string) $order->status, $allowedStates, true)) {
@@ -2647,6 +2806,15 @@ final class DailyDispatchWriter
                 'daily_source_hash' => $row['_source_hash'],
                 'daily_meal_hash' => dailyMealHash($row),
                 'pickup_coordinate_source' => $this->pickup['coordinate_source'],
+                'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
+                'call_customer_required' => $callCustomerRequired,
+                'navigation_mode' => $callCustomerRequired
+                    ? 'address_then_call_customer'
+                    : ($routable ? 'verified_customer_pin' : 'held'),
+                'location_accuracy' => $callCustomerRequired
+                    ? 'area_fallback_not_customer_pin'
+                    : ($routable ? 'customer_pin' : 'not_routable'),
+                'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
             ]),
         ]);
         $payloadChanged = saveWithoutActivity($payload);
@@ -2654,7 +2822,6 @@ final class DailyDispatchWriter
         $this->stats[$payloadChanged ? 'payloads_updated' : 'payloads_unchanged']++;
 
         $assignment = $assignments[(string) $row['order_id']] ?? null;
-        $routable = rowIsDailyRoutable($row);
         // Immediate bridge-owned dispatch is deliberate. Fleetbase's native
         // scheduler completes lifecycle work through a queue whose deployed
         // Redis prefix is currently mismatched; relying on it would leave
@@ -2665,7 +2832,7 @@ final class DailyDispatchWriter
         }
         $scheduledAt = $this->scheduledAtUtc($row['delivery_date']);
         $dispatchState = $shouldDispatch
-            ? 'dispatched'
+            ? ($callCustomerRequired ? 'dispatched_call_customer_required' : 'dispatched')
             : 'held_' . $holdReason;
         $expectedDriver = $routable ? $assignment : null;
         if ($order->driver_assigned_uuid !== null
@@ -2701,9 +2868,20 @@ final class DailyDispatchWriter
                 'source_order_status' => $row['source_order_status'],
                 'daily_source_hash' => $row['_source_hash'],
                 'daily_meal_hash' => dailyMealHash($row),
-                'assignment_mode' => $routable ? 'routing_area_rendezvous_v1' : 'none',
+                'assignment_mode' => $callCustomerRequired
+                    ? 'routing_area_rendezvous_call_required_v1'
+                    : ($routable ? 'routing_area_rendezvous_v1' : 'none'),
                 'dispatch_state' => $dispatchState,
                 'hold_reason' => $holdReason,
+                'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
+                'call_customer_required' => $callCustomerRequired,
+                'navigation_mode' => $callCustomerRequired
+                    ? 'address_then_call_customer'
+                    : ($routable ? 'verified_customer_pin' : 'held'),
+                'location_accuracy' => $callCustomerRequired
+                    ? 'area_fallback_not_customer_pin'
+                    : ($routable ? 'customer_pin' : 'not_routable'),
+                'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
                 'dispatch_time_local' => $this->pickup['dispatch_time'],
                 'dispatch_timezone' => 'Asia/Kuwait',
                 'pickup_coordinate_source' => $this->pickup['coordinate_source'],
@@ -2714,6 +2892,9 @@ final class DailyDispatchWriter
         if ($shouldDispatch) {
             $this->ensureDispatchedTracking($order);
             $this->stats['orders_dispatched']++;
+            $this->stats[$callCustomerRequired
+                ? 'orders_dispatched_call_required'
+                : 'orders_dispatched_real_pin']++;
         } else {
             $this->ensureHeldTracking($order, $holdReason);
             $holdStat = match ($holdReason) {
@@ -2889,6 +3070,12 @@ final class DailyDispatchWriter
                 || ($meta['integration_prefix'] ?? null) !== $this->prefix
                 || ($meta['dispatch_state'] ?? null) !== 'held_source_row_missing'
                 || ($meta['hold_reason'] ?? null) !== 'source_row_missing'
+                || ($meta['call_customer_required'] ?? false) !== false
+                || ($meta['address_call_authorization'] ?? null) !== null
+                || ($meta['source_location_exception'] ?? null) !== null
+                || ($meta['navigation_mode'] ?? null) !== 'held'
+                || ($meta['location_accuracy'] ?? null) !== 'not_routable'
+                || str_contains((string) $order->notes, ADDRESS_CALL_INSTRUCTION)
                 || (string) $order->status !== 'canceled'
                 || (bool) $order->dispatched
                 || (bool) $order->started
@@ -2905,6 +3092,28 @@ final class DailyDispatchWriter
                     ->exists()) {
                 throw new RuntimeException('daily_verify_missing_tombstone');
             }
+            $payload = Payload::withoutGlobalScopes()
+                ->where('company_uuid', $this->companyUuid)
+                ->where('uuid', $order->payload_uuid)
+                ->first();
+            $payloadMeta = $payload ? metaArray($payload->meta) : [];
+            $dropoff = $payload
+                ? Place::withoutGlobalScopes()
+                    ->where('company_uuid', $this->companyUuid)
+                    ->where('uuid', $payload->dropoff_uuid)
+                    ->first()
+                : null;
+            if (!$payload
+                || !$dropoff
+                || ($payloadMeta['call_customer_required'] ?? false) !== false
+                || ($payloadMeta['address_call_authorization'] ?? null) !== null
+                || ($payloadMeta['source_location_exception'] ?? null) !== null
+                || ($payloadMeta['navigation_mode'] ?? null) !== 'held'
+                || ($payloadMeta['location_accuracy'] ?? null) !== 'not_routable'
+                || str_starts_with((string) $dropoff->name, ADDRESS_CALL_PLACE_PREFIX)
+                || $dropoff->street2 === ADDRESS_CALL_INSTRUCTION) {
+                throw new RuntimeException('daily_verify_missing_tombstone_policy');
+            }
         }
         $orders = $prefixOrders->keyBy('internal_id');
         $pickupMeta = metaArray($pickup->meta);
@@ -2917,6 +3126,8 @@ final class DailyDispatchWriter
         $expectedDriverUuids = array_fill_keys(array_column($this->drivers, 'uuid'), true);
         $actualLoads = array_fill_keys(array_column($this->drivers, 'uuid'), 0);
         $assigned = 0;
+        $assignedRealPin = 0;
+        $assignedCallRequired = 0;
         $held = 0;
         foreach ($dailyRows as $row) {
             $order = $orders->get($this->prefix . '-ORDER-' . $row['order_id']);
@@ -2925,6 +3136,14 @@ final class DailyDispatchWriter
             }
             $meta = metaArray($order->meta);
             $scheduledRaw = (string) $order->getRawOriginal('scheduled_at');
+            $expectedRoutable = rowIsDailyRoutable($row, $this->allowAddressCall);
+            $expectedCallRequired = rowRequiresCustomerCall($row, $this->allowAddressCall);
+            $expectedNavigationMode = $expectedCallRequired
+                ? 'address_then_call_customer'
+                : ($expectedRoutable ? 'verified_customer_pin' : 'held');
+            $expectedLocationAccuracy = $expectedCallRequired
+                ? 'area_fallback_not_customer_pin'
+                : ($expectedRoutable ? 'customer_pin' : 'not_routable');
             if (($meta['daily_mapping_version'] ?? null) !== DAILY_MAPPING_VERSION
                 || ($meta['delivery_date'] ?? null) !== $row['delivery_date']
                 || ($meta['meal_status'] ?? null) !== $row['meal_status']
@@ -2932,7 +3151,16 @@ final class DailyDispatchWriter
                 || ($meta['meal_qty'] ?? null) !== $row['meal_qty']
                 || ($meta['source_order_status'] ?? null) !== $row['source_order_status']
                 || ($meta['daily_source_hash'] ?? null) !== $row['_source_hash']
-                || ($meta['daily_meal_hash'] ?? null) !== dailyMealHash($row)) {
+                || ($meta['daily_meal_hash'] ?? null) !== dailyMealHash($row)
+                || ($meta['call_customer_required'] ?? null) !== $expectedCallRequired
+                || ($meta['navigation_mode'] ?? null) !== $expectedNavigationMode
+                || ($meta['location_accuracy'] ?? null) !== $expectedLocationAccuracy
+                || ($meta['source_location_exception'] ?? null) !== (
+                    $expectedCallRequired ? dailyHoldReason($row) : null
+                )
+                || ($meta['address_call_authorization'] ?? null) !== (
+                    $expectedCallRequired ? ADDRESS_CALL_AUTHORIZATION : null
+                )) {
                 throw new RuntimeException('daily_verify_order_mapping');
             }
             $payload = Payload::withoutGlobalScopes()
@@ -2949,22 +3177,38 @@ final class DailyDispatchWriter
                 || ($payloadMeta['meal_qty'] ?? null) !== $row['meal_qty']
                 || ($payloadMeta['source_order_status'] ?? null) !== $row['source_order_status']
                 || ($payloadMeta['daily_source_hash'] ?? null) !== $row['_source_hash']
-                || ($payloadMeta['daily_meal_hash'] ?? null) !== dailyMealHash($row)) {
+                || ($payloadMeta['daily_meal_hash'] ?? null) !== dailyMealHash($row)
+                || ($payloadMeta['call_customer_required'] ?? null) !== $expectedCallRequired
+                || ($payloadMeta['navigation_mode'] ?? null) !== $expectedNavigationMode
+                || ($payloadMeta['location_accuracy'] ?? null) !== $expectedLocationAccuracy
+                || ($payloadMeta['source_location_exception'] ?? null) !== (
+                    $expectedCallRequired ? dailyHoldReason($row) : null
+                )
+                || ($payloadMeta['address_call_authorization'] ?? null) !== (
+                    $expectedCallRequired ? ADDRESS_CALL_AUTHORIZATION : null
+                )) {
                 throw new RuntimeException('daily_verify_payload_mapping');
             }
             $expectedDriver = $allocation['assignments'][(string) $row['order_id']] ?? null;
-            if (rowIsDailyRoutable($row)) {
+            if ($expectedRoutable) {
                 if ($expectedDriver === null
                     || !isset($expectedDriverUuids[$expectedDriver])
                     || $order->driver_assigned_uuid !== $expectedDriver
                     || ($meta['hold_reason'] ?? null) !== null
+                    || ($meta['assignment_mode'] ?? null) !== (
+                        $expectedCallRequired
+                            ? 'routing_area_rendezvous_call_required_v1'
+                            : 'routing_area_rendezvous_v1'
+                    )
                     || $scheduledRaw !== $this->scheduledAtUtc($row['delivery_date'])) {
                     throw new RuntimeException('daily_verify_dispatch');
                 }
                 if ((string) $order->status !== 'dispatched'
                     || !(bool) $order->dispatched
                     || $order->dispatched_at === null
-                    || ($meta['dispatch_state'] ?? null) !== 'dispatched') {
+                    || ($meta['dispatch_state'] ?? null) !== (
+                        $expectedCallRequired ? 'dispatched_call_customer_required' : 'dispatched'
+                    )) {
                     throw new RuntimeException('daily_verify_dispatch');
                 }
                 $trackingNumber = DB::table('tracking_numbers')
@@ -2984,14 +3228,28 @@ final class DailyDispatchWriter
                     throw new RuntimeException('daily_verify_tracking');
                 }
                 $dropoff = Place::withoutGlobalScopes()->where('uuid', $payload->dropoff_uuid)->first();
+                $expectedPin = resolveEffectivePin($row);
+                $dropoffMeta = $dropoff ? metaArray($dropoff->meta) : [];
                 if (!$dropoff
                     || !$dropoff->location instanceof Point
-                    || abs($dropoff->location->getLat() - $row['pin']['lat']) > 0.000001
-                    || abs($dropoff->location->getLng() - $row['pin']['lng']) > 0.000001) {
+                    || abs($dropoff->location->getLat() - $expectedPin['lat']) > 0.000001
+                    || abs($dropoff->location->getLng() - $expectedPin['lng']) > 0.000001
+                    || ($dropoffMeta['pin_source'] ?? null) !== $expectedPin['pin_source']
+                    || ($dropoffMeta['fallback_scope'] ?? null) !== $expectedPin['fallback_scope']
+                    || $dropoff->name !== sourcePlaceName($row, $this->allowAddressCall)
+                    || $dropoff->street1 !== $row['address_text']
+                    || $dropoff->street2 !== addressCallInstruction($row, $this->allowAddressCall)
+                    || $dropoff->phone !== $row['customer_phone']
+                    || $order->notes !== sourceOrderNotes($row, $this->allowAddressCall)) {
                     throw new RuntimeException('daily_verify_dropoff');
                 }
                 $actualLoads[$expectedDriver]++;
                 $assigned++;
+                if ($expectedCallRequired) {
+                    $assignedCallRequired++;
+                } else {
+                    $assignedRealPin++;
+                }
             } else {
                 $expectedHoldReason = dailyHoldReason($row);
                 if ($expectedDriver !== null
@@ -3037,7 +3295,9 @@ final class DailyDispatchWriter
             'source_orders' => count($dailyRows),
             'fleetbase_orders' => $prefixOrders->count(),
             'source_missing_tombstones' => $missingTombstones->count(),
-            'assigned_real_pin' => $assigned,
+            'assigned_orders' => $assigned,
+            'assigned_real_pin' => $assignedRealPin,
+            'assigned_call_required' => $assignedCallRequired,
             'held_unroutable' => $held,
             'pickup_places' => 1,
             'scheduled_orders' => $assigned,
@@ -3199,14 +3459,67 @@ function runSelfTest(): array
         || rowIsDailyRoutable($pendingOrderDaily[0])) {
         throw new RuntimeException('self_test_daily_status_allowlist');
     }
-    $duplicateMealRejected = false;
-    try {
-        buildDailyRows([$mealBase, $mealBase], $dailyOrders, '2026-07-19');
-    } catch (RuntimeException $exception) {
-        $duplicateMealRejected = $exception->getMessage() === 'contract_daily_duplicate_meal';
+    $authorizedRealPin = $daily[0];
+    $authorizedRealPin['delivery_date'] = '2026-07-20';
+    $authorizedFallback = $daily[1];
+    $authorizedFallback['delivery_date'] = '2026-07-20';
+    $authorizedFallback['area_en'] = 'Farwaniya';
+    $authorizedFallback['routing_area'] = 'Farwaniya';
+    $authorizedInvalid = $authorizedFallback;
+    $authorizedInvalid['order_id'] = 13;
+    $authorizedInvalid['location_pin'] = '999,999';
+    $authorizedCountryFallback = $daily[1];
+    $authorizedCountryFallback['delivery_date'] = '2026-07-20';
+    $authorizedUnapproved = $unknownStatusDaily[0];
+    $authorizedUnapproved['delivery_date'] = '2026-07-20';
+    $authorizedUnapproved['area_en'] = 'Farwaniya';
+    $authorizedUnapproved['routing_area'] = 'Farwaniya';
+    if (rowIsDailyRoutable($authorizedFallback)
+        || !rowRequiresCustomerCall($authorizedFallback, true)
+        || !rowRequiresCustomerCall($authorizedInvalid, true)
+        || !rowIsDailyRoutable($authorizedFallback, true)
+        || rowRequiresCustomerCall($authorizedRealPin, true)
+        || rowRequiresCustomerCall($authorizedCountryFallback, true)
+        || rowRequiresCustomerCall($authorizedUnapproved, true)
+        || rowRequiresCustomerCall(['address_text' => ''] + $authorizedFallback, true)
+        || rowRequiresCustomerCall(['customer_phone' => ''] + $authorizedFallback, true)
+        || rowRequiresCustomerCall(['delivery_date' => '2026-07-21'] + $authorizedFallback, true)) {
+        throw new RuntimeException('self_test_daily_address_call_policy');
     }
-    if (!$duplicateMealRejected) {
-        throw new RuntimeException('self_test_daily_duplicate_meal');
+    $authorizedAllocation = allocateDailyDrivers(
+        [$authorizedRealPin, $authorizedFallback, $authorizedInvalid],
+        $syntheticDrivers,
+        true,
+    );
+    if (count($authorizedAllocation['assignments']) !== 3
+        || array_sum($authorizedAllocation['loads']) !== 3
+        || addressCallInstruction($authorizedFallback, true) === null
+        || !str_starts_with(sourcePlaceName($authorizedFallback, true), 'CALL CUSTOMER FIRST')
+        || !str_contains(sourceOrderNotes($authorizedFallback, true), 'CALL CUSTOMER')) {
+        throw new RuntimeException('self_test_daily_address_call_allocation');
+    }
+    if (!resolveAddressCallAuthorization('2026-07-20', '2026-07-20')
+        || resolveAddressCallAuthorization('2026-07-20', null)) {
+        throw new RuntimeException('self_test_daily_address_call_confirmation');
+    }
+    foreach ([
+        ['2026-07-20', '2026-07-19', 'daily_address_call_confirmation_guard'],
+        ['2026-07-21', '2026-07-21', 'daily_address_call_date_not_authorized'],
+    ] as [$date, $confirmation, $expectedError]) {
+        try {
+            resolveAddressCallAuthorization($date, $confirmation);
+            throw new RuntimeException('self_test_daily_address_call_confirmation_not_rejected');
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== $expectedError) {
+                throw $exception;
+            }
+        }
+    }
+    $repeatedMealItems = buildDailyRows([$mealBase, $mealBase], $dailyOrders, '2026-07-19');
+    if (count($repeatedMealItems) !== 1
+        || $repeatedMealItems[0]['meal_item_count'] !== 2
+        || $repeatedMealItems[0]['meal_qty'] !== 4) {
+        throw new RuntimeException('self_test_daily_repeated_meal_item');
     }
     $missingContextRejected = false;
     try {
@@ -3249,7 +3562,7 @@ function runSelfTest(): array
     if (buildDailyRows([], [], '2026-07-19') !== []) {
         throw new RuntimeException('self_test_daily_zero');
     }
-    return ['passed' => 19, 'total' => 19];
+    return ['passed' => 22, 'total' => 22];
 }
 
 $stage = 'startup';
@@ -3263,6 +3576,7 @@ try {
         'confirm-since-override:', 'backfill-display', 'confirm-backfill:',
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
+        'confirm-address-call-dispatch:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -3274,6 +3588,10 @@ try {
     $deliveryDate = isset($options['delivery-date'])
         ? validateDeliveryDate((string) $options['delivery-date'])
         : null;
+    $allowAddressCall = resolveAddressCallAuthorization(
+        $deliveryDate,
+        $options['confirm-address-call-dispatch'] ?? null,
+    );
     $dailyPrefix = $deliveryDate === null
         ? null
         : DEFAULT_DAILY_PREFIX . '-' . str_replace('-', '', $deliveryDate);
@@ -3403,16 +3721,51 @@ try {
             }
         }
         $sourceRealPinCount = count(array_filter($dailyRows, fn (array $row): bool => $row['pin'] !== null));
-        $routableCount = count(array_filter($dailyRows, fn (array $row): bool => rowIsDailyRoutable($row)));
+        $routableCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => rowIsDailyRoutable($row, $allowAddressCall),
+        ));
         $heldCount = count($dailyRows) - $routableCount;
         $sourceDigest = dailySourceDigest($dailyRows);
-        $missingPinCount = count(array_filter(
+        $sourceMissingPinCount = count(array_filter(
             $dailyRows,
-            fn (array $row): bool => dailyHoldReason($row) === 'no_real_location_pin',
+            fn (array $row): bool => pinHoldReason($row) === 'no_real_location_pin',
         ));
-        $invalidPinCount = count(array_filter(
+        $sourceInvalidPinCount = count(array_filter(
             $dailyRows,
-            fn (array $row): bool => dailyHoldReason($row) === 'invalid_source_location_pin',
+            fn (array $row): bool => pinHoldReason($row) === 'invalid_source_location_pin',
+        ));
+        $addressCallCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => rowRequiresCustomerCall($row, $allowAddressCall),
+        ));
+        $locationAreaFallbackCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => in_array(
+                dailyHoldReason($row),
+                ['no_real_location_pin', 'invalid_source_location_pin'],
+                true,
+            )
+                && resolveEffectivePin($row)['fallback_scope'] === 'area',
+        ));
+        $locationCountryFallbackCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => in_array(
+                dailyHoldReason($row),
+                ['no_real_location_pin', 'invalid_source_location_pin'],
+                true,
+            )
+                && resolveEffectivePin($row)['fallback_scope'] === 'country',
+        ));
+        $heldMissingPinCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => dailyHoldReason($row) === 'no_real_location_pin'
+                && !rowIsDailyRoutable($row, $allowAddressCall),
+        ));
+        $heldInvalidPinCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => dailyHoldReason($row) === 'invalid_source_location_pin'
+                && !rowIsDailyRoutable($row, $allowAddressCall),
         ));
         $unapprovedStatusCount = count(array_filter(
             $dailyRows,
@@ -3436,11 +3789,19 @@ try {
             'daily_orders' => count($dailyRows),
             'orders_with_real_pin' => $sourceRealPinCount,
             'orders_dispatchable' => $routableCount,
-            'orders_held_missing_pin' => $missingPinCount,
-            'orders_held_invalid_pin' => $invalidPinCount,
+            'orders_dispatchable_real_pin' => $routableCount - $addressCallCount,
+            'orders_dispatchable_address_call' => $addressCallCount,
+            'source_orders_missing_pin' => $sourceMissingPinCount,
+            'source_orders_invalid_pin' => $sourceInvalidPinCount,
+            'orders_location_area_fallback' => $locationAreaFallbackCount,
+            'orders_location_country_fallback_held' => $locationCountryFallbackCount,
+            'orders_held_missing_pin' => $heldMissingPinCount,
+            'orders_held_invalid_pin' => $heldInvalidPinCount,
             'orders_held_unapproved_meal_status' => $unapprovedStatusCount,
             'orders_held_unapproved_order_status' => $unapprovedOrderStatusCount,
             'orders_held_source_canceled' => $sourceCanceledCount,
+            'address_call_override' => $allowAddressCall,
+            'address_call_authorization' => $allowAddressCall ? ADDRESS_CALL_AUTHORIZATION : null,
             'expected_count' => $expectedCount,
             'source_digest' => $sourceDigest,
             'expected_digest' => $expectedDigest,
@@ -3513,7 +3874,7 @@ try {
         }
         $drivers = loadDriverRoster($driverRosterPath, $companyUuid);
         $pickup = loadPickupConfig($pickupConfigPath);
-        guardDailyOperationalRows($prefix, $dailyRows, $drivers, $companyUuid);
+        guardDailyOperationalRows($prefix, $dailyRows, $drivers, $companyUuid, $allowAddressCall);
         $baseRows = dailyRowsForBaseWriter($dailyRows);
 
         $stage = 'daily_fleetbase_transaction';
@@ -3524,13 +3885,14 @@ try {
             $baseRows,
             $pickup,
             $drivers,
+            $allowAddressCall,
         ): array {
             $stage = 'daily_fleetbase_upsert';
-            $writer = new FleetbaseWriter($prefix);
+            $writer = new FleetbaseWriter($prefix, $allowAddressCall);
             $writeStats = $writer->upsert($baseRows, $baseRows);
 
             $stage = 'daily_dispatch';
-            $dispatchWriter = new DailyDispatchWriter($prefix, $pickup, $drivers);
+            $dispatchWriter = new DailyDispatchWriter($prefix, $pickup, $drivers, $allowAddressCall);
             $dispatchStats = $dispatchWriter->apply($dailyRows, true);
             return [
                 'write_stats' => $writeStats,
