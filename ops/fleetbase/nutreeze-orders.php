@@ -222,6 +222,21 @@ function metaArray(mixed $value): array
     return [];
 }
 
+/**
+ * Fleetbase's meta attributes compare the serialized JSON representation, so assigning
+ * a semantically identical decoded array marks an existing model dirty (key ordering and
+ * encoding differ). Only assign when the decoded value actually changes.
+ */
+function applyMetaUpdates(object $model, array $updates): array
+{
+    $current = metaArray($model->meta ?? null);
+    $next = array_replace($current, $updates);
+    if ($next !== $current) {
+        $model->setAttribute('meta', $next);
+    }
+    return $next;
+}
+
 function saveWithoutActivity(object $model): bool
 {
     if (method_exists($model, 'getActivitylogOptions') && !method_exists($model, 'disableLogging')) {
@@ -2662,12 +2677,30 @@ final class DailyDispatchWriter
         $place = $query->lockForUpdate()->first();
         $created = $place === null;
         $place ??= new Place();
+        $meta = metaArray($place->meta);
         if (!$created) {
-            $meta = metaArray($place->meta);
             if (($meta['integration_owner'] ?? null) !== 'nutreeze_partner_orders'
                 || ($meta['integration_prefix'] ?? null) !== $this->prefix
                 || ($place->company_uuid ?? null) !== $this->companyUuid) {
                 throw new RuntimeException('daily_foreign_pickup');
+            }
+            if ($place->deleted_at === null
+                && $place->owner_uuid === null
+                && $place->owner_type === null
+                && $place->name === $this->pickup['name']
+                && $place->street1 === $this->pickup['street1']
+                && $place->city === $this->pickup['city']
+                && $place->district === $this->pickup['city']
+                && $place->country === $this->pickup['country']
+                && $place->location instanceof Point
+                && abs($place->location->getLat() - $this->pickup['lat']) <= 0.000001
+                && abs($place->location->getLng() - $this->pickup['lng']) <= 0.000001
+                && ($meta['integration_key'] ?? null) === $integrationKey
+                && ($meta['daily_mapping_version'] ?? null) === DAILY_MAPPING_VERSION
+                && ($meta['coordinate_source'] ?? null) === $this->pickup['coordinate_source']
+                && ($meta['shared_pickup'] ?? null) === true) {
+                $this->stats['pickup_places_unchanged']++;
+                return $place;
             }
         }
         $place->fill([
@@ -2679,15 +2712,19 @@ final class DailyDispatchWriter
             'city' => $this->pickup['city'],
             'district' => $this->pickup['city'],
             'country' => $this->pickup['country'],
-            'location' => new Point($this->pickup['lat'], $this->pickup['lng']),
-            'meta' => array_replace(metaArray($place->meta), [
-                'integration_owner' => 'nutreeze_partner_orders',
-                'integration_prefix' => $this->prefix,
-                'integration_key' => $integrationKey,
-                'daily_mapping_version' => DAILY_MAPPING_VERSION,
-                'coordinate_source' => $this->pickup['coordinate_source'],
-                'shared_pickup' => true,
-            ]),
+        ]);
+        if (!($place->location instanceof Point)
+            || abs($place->location->getLat() - $this->pickup['lat']) > 0.000001
+            || abs($place->location->getLng() - $this->pickup['lng']) > 0.000001) {
+            $place->setAttribute('location', new Point($this->pickup['lat'], $this->pickup['lng']));
+        }
+        applyMetaUpdates($place, [
+            'integration_owner' => 'nutreeze_partner_orders',
+            'integration_prefix' => $this->prefix,
+            'integration_key' => $integrationKey,
+            'daily_mapping_version' => DAILY_MAPPING_VERSION,
+            'coordinate_source' => $this->pickup['coordinate_source'],
+            'shared_pickup' => true,
         ]);
         $place->setAttribute('deleted_at', null);
         $changed = saveWithoutActivity($place);
@@ -2744,17 +2781,17 @@ final class DailyDispatchWriter
                     '',
                     (string) $order->notes,
                 ),
-                'meta' => array_replace($meta, [
-                    'assignment_mode' => 'none',
-                    'dispatch_state' => 'held_' . $holdReason,
-                    'hold_reason' => $holdReason,
-                    'source_location_exception' => null,
-                    'call_customer_required' => false,
-                    'navigation_mode' => 'held',
-                    'location_accuracy' => 'not_routable',
-                    'address_call_authorization' => null,
-                    'source_missing_detected_at' => $meta['source_missing_detected_at'] ?? kuwaitNow(),
-                ]),
+            ]);
+            applyMetaUpdates($order, [
+                'assignment_mode' => 'none',
+                'dispatch_state' => 'held_' . $holdReason,
+                'hold_reason' => $holdReason,
+                'source_location_exception' => null,
+                'call_customer_required' => false,
+                'navigation_mode' => 'held',
+                'location_accuracy' => 'not_routable',
+                'address_call_authorization' => null,
+                'source_missing_detected_at' => $meta['source_missing_detected_at'] ?? kuwaitNow(),
             ]);
             $changed = saveWithoutActivity($order);
             $this->touchedSubjectIds['order'][] = $order->getKey();
@@ -2771,14 +2808,12 @@ final class DailyDispatchWriter
                 || ($payloadMeta['integration_prefix'] ?? null) !== $this->prefix) {
                 throw new RuntimeException('daily_foreign_payload');
             }
-            $payload->fill([
-                'meta' => array_replace($payloadMeta, [
-                    'source_location_exception' => null,
-                    'call_customer_required' => false,
-                    'navigation_mode' => 'held',
-                    'location_accuracy' => 'not_routable',
-                    'address_call_authorization' => null,
-                ]),
+            applyMetaUpdates($payload, [
+                'source_location_exception' => null,
+                'call_customer_required' => false,
+                'navigation_mode' => 'held',
+                'location_accuracy' => 'not_routable',
+                'address_call_authorization' => null,
             ]);
             saveWithoutActivity($payload);
             $this->touchedSubjectIds['payload'][] = $payload->getKey();
@@ -2861,29 +2896,27 @@ final class DailyDispatchWriter
             throw new RuntimeException('daily_foreign_payload');
         }
 
-        $payload->fill([
-            'pickup_uuid' => $pickup->uuid,
-            'meta' => array_replace($payloadMeta, [
-                'daily_mapping_version' => DAILY_MAPPING_VERSION,
-                'delivery_date' => $row['delivery_date'],
-                'meal_status' => $row['meal_status'],
-                'meal_item_count' => $row['meal_item_count'],
-                'meal_qty' => $row['meal_qty'],
-                'meal_updated_at' => $row['meal_updated_at'],
-                'source_order_status' => $row['source_order_status'],
-                'daily_source_hash' => $row['_source_hash'],
-                'daily_meal_hash' => dailyMealHash($row),
-                'pickup_coordinate_source' => $this->pickup['coordinate_source'],
-                'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
-                'call_customer_required' => $callCustomerRequired,
-                'navigation_mode' => $callCustomerRequired
-                    ? 'address_then_call_customer'
-                    : ($routable ? 'verified_customer_pin' : 'held'),
-                'location_accuracy' => $callCustomerRequired
-                    ? 'area_fallback_not_customer_pin'
-                    : ($routable ? 'customer_pin' : 'not_routable'),
-                'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
-            ]),
+        $payload->fill(['pickup_uuid' => $pickup->uuid]);
+        applyMetaUpdates($payload, [
+            'daily_mapping_version' => DAILY_MAPPING_VERSION,
+            'delivery_date' => $row['delivery_date'],
+            'meal_status' => $row['meal_status'],
+            'meal_item_count' => $row['meal_item_count'],
+            'meal_qty' => $row['meal_qty'],
+            'meal_updated_at' => $row['meal_updated_at'],
+            'source_order_status' => $row['source_order_status'],
+            'daily_source_hash' => $row['_source_hash'],
+            'daily_meal_hash' => dailyMealHash($row),
+            'pickup_coordinate_source' => $this->pickup['coordinate_source'],
+            'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
+            'call_customer_required' => $callCustomerRequired,
+            'navigation_mode' => $callCustomerRequired
+                ? 'address_then_call_customer'
+                : ($routable ? 'verified_customer_pin' : 'held'),
+            'location_accuracy' => $callCustomerRequired
+                ? 'area_fallback_not_customer_pin'
+                : ($routable ? 'customer_pin' : 'not_routable'),
+            'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
         ]);
         $payloadChanged = saveWithoutActivity($payload);
         $this->touchedSubjectIds['payload'][] = $payload->getKey();
@@ -2926,34 +2959,34 @@ final class DailyDispatchWriter
             'dispatched_at' => $shouldDispatch
                 ? ($order->dispatched_at ?? gmdate('Y-m-d H:i:s'))
                 : null,
-            'meta' => array_replace($orderMeta, [
-                'daily_mapping_version' => DAILY_MAPPING_VERSION,
-                'delivery_date' => $row['delivery_date'],
-                'meal_status' => $row['meal_status'],
-                'meal_item_count' => $row['meal_item_count'],
-                'meal_qty' => $row['meal_qty'],
-                'meal_updated_at' => $row['meal_updated_at'],
-                'source_order_status' => $row['source_order_status'],
-                'daily_source_hash' => $row['_source_hash'],
-                'daily_meal_hash' => dailyMealHash($row),
-                'assignment_mode' => $callCustomerRequired
-                    ? 'routing_area_rendezvous_call_required_v1'
-                    : ($routable ? 'routing_area_rendezvous_v1' : 'none'),
-                'dispatch_state' => $dispatchState,
-                'hold_reason' => $holdReason,
-                'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
-                'call_customer_required' => $callCustomerRequired,
-                'navigation_mode' => $callCustomerRequired
-                    ? 'address_then_call_customer'
-                    : ($routable ? 'verified_customer_pin' : 'held'),
-                'location_accuracy' => $callCustomerRequired
-                    ? 'area_fallback_not_customer_pin'
-                    : ($routable ? 'customer_pin' : 'not_routable'),
-                'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
-                'dispatch_time_local' => $this->pickup['dispatch_time'],
-                'dispatch_timezone' => 'Asia/Kuwait',
-                'pickup_coordinate_source' => $this->pickup['coordinate_source'],
-            ]),
+        ]);
+        applyMetaUpdates($order, [
+            'daily_mapping_version' => DAILY_MAPPING_VERSION,
+            'delivery_date' => $row['delivery_date'],
+            'meal_status' => $row['meal_status'],
+            'meal_item_count' => $row['meal_item_count'],
+            'meal_qty' => $row['meal_qty'],
+            'meal_updated_at' => $row['meal_updated_at'],
+            'source_order_status' => $row['source_order_status'],
+            'daily_source_hash' => $row['_source_hash'],
+            'daily_meal_hash' => dailyMealHash($row),
+            'assignment_mode' => $callCustomerRequired
+                ? 'routing_area_rendezvous_call_required_v1'
+                : ($routable ? 'routing_area_rendezvous_v1' : 'none'),
+            'dispatch_state' => $dispatchState,
+            'hold_reason' => $holdReason,
+            'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
+            'call_customer_required' => $callCustomerRequired,
+            'navigation_mode' => $callCustomerRequired
+                ? 'address_then_call_customer'
+                : ($routable ? 'verified_customer_pin' : 'held'),
+            'location_accuracy' => $callCustomerRequired
+                ? 'area_fallback_not_customer_pin'
+                : ($routable ? 'customer_pin' : 'not_routable'),
+            'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
+            'dispatch_time_local' => $this->pickup['dispatch_time'],
+            'dispatch_timezone' => 'Asia/Kuwait',
+            'pickup_coordinate_source' => $this->pickup['coordinate_source'],
         ]);
         $orderChanged = saveWithoutActivity($order);
         $this->touchedSubjectIds['order'][] = $order->getKey();
@@ -3396,6 +3429,24 @@ function releaseLock(?string $name): void
 
 function runSelfTest(): array
 {
+    $semanticMetaModel = new class {
+        public mixed $meta = '{"stable":true}';
+        public array $assigned = [];
+
+        public function setAttribute(string $key, mixed $value): void
+        {
+            $this->assigned[$key] = $value;
+            $this->{$key} = $value;
+        }
+    };
+    applyMetaUpdates($semanticMetaModel, ['stable' => true]);
+    if ($semanticMetaModel->assigned !== []) {
+        throw new RuntimeException('self_test_semantic_meta_noop');
+    }
+    applyMetaUpdates($semanticMetaModel, ['new_value' => 1]);
+    if (($semanticMetaModel->assigned['meta']['new_value'] ?? null) !== 1) {
+        throw new RuntimeException('self_test_semantic_meta_update');
+    }
     $base = [
         'order_number' => 'SAME-DISPLAY',
         'status' => 'success',
@@ -3638,7 +3689,7 @@ function runSelfTest(): array
     if (buildDailyRows([], [], '2026-07-19') !== []) {
         throw new RuntimeException('self_test_daily_zero');
     }
-    return ['passed' => 22, 'total' => 22];
+    return ['passed' => 23, 'total' => 23];
 }
 
 $stage = 'startup';
