@@ -19,10 +19,10 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 const FRIENDLY: Record<string, string> = {
   no_session: 'Your session has expired — please sign in again.',
   forbidden: 'You do not have permission for this action.',
-  role_denied: 'Only the Logistics Manager can rotate driver passwords. / مدير الخدمات اللوجستية فقط.',
-  validation_failed: 'Check the password requirements and confirmation. / تحقق من شروط كلمة المرور والتأكيد.',
-  integration_unavailable: 'Fleetbase credential service is unavailable; nothing was stored. / خدمة Fleetbase غير متاحة ولم يُحفظ شيء.',
-  upstream_rejected: 'Fleetbase rejected the rotation; nothing was stored. / رفض Fleetbase العملية ولم يُحفظ شيء.',
+  role_denied: 'Only the Logistics Manager can perform this action. / مدير الخدمات اللوجستية فقط.',
+  validation_failed: 'Check the submitted values or selection. / تحقق من البيانات أو الاختيارات.',
+  integration_unavailable: 'Fleetbase is unavailable; check the recorded outcome before retrying. / Fleetbase غير متاح؛ تحقق من النتيجة المسجلة قبل المحاولة.',
+  upstream_rejected: 'Fleetbase rejected the operation. / رفض Fleetbase العملية.',
 };
 
 export function humanMessage(e: unknown): string {

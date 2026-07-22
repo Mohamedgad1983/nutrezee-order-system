@@ -11,17 +11,40 @@ interface Unassigned { order_id: string; customer_id: string | null; customer_na
 interface Route { id: string; driver_id: string | null; driver_name?: string | null; delivery_date: string; delivery_time: string | null; area_group: string | null; status: string; stop_count?: number; delivered_count?: number }
 interface Stop { id: string; order_id: string; customer_name?: string | null; area: string | null; status: string; stop_sequence: number | null; masked?: boolean }
 interface CredentialDriver { id: string; name: string; phone_hint: string | null; status: string | null; online: boolean }
+interface ReassignmentDriver { id: string; name: string; status: string | null; online: boolean }
+interface ReassignmentOrder {
+  id: string;
+  tracking: string | null;
+  status: string;
+  scheduled_at: string | null;
+  dispatched: boolean;
+  eligible: boolean;
+  blocked_reason: 'started' | 'current_job' | 'terminal' | 'invalid_record' | null;
+}
+interface ReassignmentResult {
+  reassignment_id: string;
+  status: 'completed' | 'partial' | 'failed';
+  requested_count: number;
+  completed_count: number;
+  failed_count: number;
+  failed_orders: Array<{ id: string; reason: string }>;
+}
 
 const today = (): string => new Date().toISOString().slice(0, 10);
-type Tab = 'drivers' | 'unassigned' | 'routes' | 'credentials';
+type Tab = 'drivers' | 'unassigned' | 'routes' | 'credentials' | 'reassign';
 
 export function DeliveryPage(): React.JSX.Element {
   const { me } = useAuth();
   const [tab, setTab] = useState<Tab>('unassigned');
   const canRotateCredentials = me?.roles.some((role) => role === 'logistics_manager' || role === 'super_admin') === true;
-  const canOperateDelivery = me?.roles.some((role) => ['ops_manager', 'admin', 'super_admin'].includes(role)) === true;
+  const canReassignOrders = canRotateCredentials;
+  const canOperateDelivery = me?.roles.some((role) => ['logistics_manager', 'ops_manager', 'admin', 'super_admin'].includes(role)) === true;
   const tabs: Tab[] = canOperateDelivery
-    ? [...(['unassigned', 'routes', 'drivers'] as Tab[]), ...(canRotateCredentials ? ['credentials' as Tab] : [])]
+    ? [
+      ...(['unassigned', 'routes', 'drivers'] as Tab[]),
+      ...(canReassignOrders ? ['reassign' as Tab] : []),
+      ...(canRotateCredentials ? ['credentials' as Tab] : []),
+    ]
     : canRotateCredentials ? ['credentials'] : ['unassigned', 'routes', 'drivers'];
   const visibleTab = tabs.includes(tab) ? tab : tabs[0]!;
   return (
@@ -29,16 +52,212 @@ export function DeliveryPage(): React.JSX.Element {
       <section className="toolbar">
         {tabs.map((t) => (
           <button key={t} type="button" className={visibleTab === t ? 'primary' : ''} onClick={() => setTab(t)}>
-            {t === 'credentials' ? 'Driver passwords / كلمات المرور' : t}
+            {t === 'credentials' ? 'Driver passwords / كلمات المرور'
+              : t === 'reassign' ? 'Reassign orders / نقل الأوردرات' : t}
           </button>
         ))}
       </section>
       {visibleTab === 'drivers' ? <Drivers /> : null}
       {visibleTab === 'unassigned' ? <UnassignedView /> : null}
       {visibleTab === 'routes' ? <Routes /> : null}
+      {visibleTab === 'reassign' && canReassignOrders ? <DriverOrderReassignment /> : null}
       {visibleTab === 'credentials' && canRotateCredentials ? <DriverCredentials /> : null}
     </section>
   );
+}
+
+function DriverOrderReassignment(): React.JSX.Element {
+  const [drivers, setDrivers] = useState<ReassignmentDriver[]>([]);
+  const [orders, setOrders] = useState<ReassignmentOrder[]>([]);
+  const [source, setSource] = useState('');
+  const [target, setTarget] = useState('');
+  const [date, setDate] = useState(today());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ReassignmentResult | null>(null);
+
+  const loadDrivers = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api<ListResponse<ReassignmentDriver>>('/driver-order-reassignments/drivers')
+      .then((data) => setDrivers(data.items))
+      .catch((e: unknown) => setError(humanMessage(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadOrders = useCallback(() => {
+    setSelected(new Set());
+    setAcknowledged(false);
+    if (!source) {
+      setOrders([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    api<{ items: ReassignmentOrder[] }>(
+      `/driver-order-reassignments/drivers/${encodeURIComponent(source)}/orders?date=${encodeURIComponent(date)}`,
+    )
+      .then((data) => setOrders(data.items))
+      .catch((e: unknown) => setError(humanMessage(e)))
+      .finally(() => setLoading(false));
+  }, [date, source]);
+
+  useEffect(() => { loadDrivers(); }, [loadDrivers]);
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  const eligible = orders.filter((order) => order.eligible);
+  const allEligibleSelected = eligible.length > 0 && eligible.every((order) => selected.has(order.id));
+
+  function toggleOrder(id: string): void {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setAcknowledged(false);
+  }
+
+  function toggleAll(): void {
+    setSelected(allEligibleSelected ? new Set() : new Set(eligible.map((order) => order.id)));
+    setAcknowledged(false);
+  }
+
+  async function reassign(): Promise<void> {
+    if (!source || !target || source === target || selected.size === 0 || !acknowledged) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await api<ReassignmentResult>('/driver-order-reassignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_driver_id: source,
+          target_driver_id: target,
+          order_ids: [...selected],
+        }),
+      });
+      setResult(response);
+      setSelected(new Set());
+      setAcknowledged(false);
+      loadOrders();
+    } catch (e) {
+      setError(humanMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <p className="hintLine reassignmentHint">
+        <span>Select any number of not-started orders and move them to another driver. No customer details are shown.</span>
+        <span lang="ar" dir="rtl">اختر أي عدد من الأوردرات التي لم يبدأ تنفيذها وانقلها لسائق آخر؛ لا تظهر بيانات العملاء.</span>
+      </p>
+      <section className="toolbar">
+        <label className="field">
+          <span>From driver / من السائق</span>
+          <select value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} disabled={busy}>
+            <option value="">Select / اختر</option>
+            {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>To driver / إلى السائق</span>
+          <select value={target} onChange={(event) => { setTarget(event.target.value); setAcknowledged(false); setResult(null); }} disabled={busy}>
+            <option value="">Select / اختر</option>
+            {drivers.filter((driver) => driver.id !== source).map((driver) => (
+              <option key={driver.id} value={driver.id}>{driver.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Delivery date / تاريخ التوصيل</span>
+          <input type="date" value={date} onChange={(event) => { setDate(event.target.value); setResult(null); }} disabled={busy} />
+        </label>
+        <button type="button" onClick={() => { loadDrivers(); loadOrders(); }} disabled={busy || loading}>
+          Refresh / تحديث
+        </button>
+      </section>
+      {error ? <p className="error">{error}</p> : null}
+      {result ? (
+        <section className="card">
+          <p className={result.status === 'completed' ? 'hintLine' : 'error'}>
+            Batch {result.reassignment_id}: {result.completed_count}/{result.requested_count} moved,
+            {' '}{result.failed_count} failed or unconfirmed. / تم نقل {result.completed_count} من {result.requested_count}، وتعذر نقل أو تأكيد {result.failed_count}.
+          </p>
+          {result.failed_orders.length > 0 ? (
+            <details>
+              <summary>Failed or unconfirmed / لم تُنقل أو لم يتم تأكيدها ({result.failed_orders.length})</summary>
+              <ul>{result.failed_orders.map((item) => <li key={item.id}><span className="mono">{item.id}</span> — {item.reason}</li>)}</ul>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
+      <section className="toolbar">
+        <button type="button" onClick={toggleAll} disabled={eligible.length === 0 || busy}>
+          {allEligibleSelected ? 'Clear selection / إلغاء التحديد' : `Select all eligible (${eligible.length}) / تحديد الكل`}
+        </button>
+        <span className="countLine">
+          {loading ? 'Loading… / جارٍ التحميل' : `${orders.length} orders; ${selected.size} selected / ${selected.size} محدد`}
+        </span>
+      </section>
+      {orders.length > 0 ? (
+        <table className="table reassignmentTable">
+          <thead><tr><th></th><th>Order / الأوردر</th><th>Tracking / التتبع</th><th>Time / الوقت</th><th>Status / الحالة</th><th>Eligibility / قابلية النقل</th></tr></thead>
+          <tbody>
+            {orders.map((order) => (
+              <tr key={order.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(order.id)}
+                    disabled={!order.eligible || busy}
+                    onChange={() => toggleOrder(order.id)}
+                    aria-label={`Select ${order.id}`}
+                  />
+                </td>
+                <td className="mono">{order.id}</td>
+                <td className="mono">{order.tracking ?? '—'}</td>
+                <td>{order.scheduled_at ? new Date(order.scheduled_at).toLocaleString() : '—'}</td>
+                <td><span className="badge">{order.status}</span></td>
+                <td>{order.eligible ? 'Ready / جاهز' : blockedReasonLabel(order.blocked_reason)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (!loading && source ? <p className="emptyLine">No orders for this date. / لا توجد أوردرات لهذا التاريخ.</p> : null)}
+      <section className="card reviewPanel" style={{ marginTop: 16 }}>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            disabled={selected.size === 0 || !target || source === target || busy}
+            onChange={(event) => setAcknowledged(event.target.checked)}
+          />
+          I confirm moving {selected.size} selected orders to the target driver.
+          {' '}أؤكد نقل {selected.size} أوردر محدد إلى السائق الآخر.
+        </label>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => void reassign()}
+          disabled={busy || !acknowledged || selected.size === 0 || !target || source === target}
+        >
+          {busy ? 'Reassigning… / جارٍ النقل' : `Reassign ${selected.size} orders / نقل الأوردرات`}
+        </button>
+      </section>
+    </section>
+  );
+}
+
+function blockedReasonLabel(reason: ReassignmentOrder['blocked_reason']): string {
+  if (reason === 'started') return 'Started / بدأ التنفيذ';
+  if (reason === 'current_job') return 'Current job / المهمة الحالية';
+  if (reason === 'terminal') return 'Completed or canceled / مكتمل أو ملغي';
+  return 'Unavailable / غير متاح';
 }
 
 function DriverCredentials(): React.JSX.Element {

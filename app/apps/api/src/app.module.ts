@@ -49,6 +49,8 @@ import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controlle
 import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
 import { DriverCredentialController } from './modules/m24-fleetbase/driver-credential.controller';
 import { DriverCredentialService } from './modules/m24-fleetbase/driver-credential.service';
+import { DriverOrderReassignmentController } from './modules/m24-fleetbase/driver-order-reassignment.controller';
+import { DriverOrderReassignmentService } from './modules/m24-fleetbase/driver-order-reassignment.service';
 import { PackingController } from './modules/m20-packing/packing.controller';
 import { PackingService } from './modules/m20-packing/packing.service';
 import { DeliveryController } from './modules/m21-delivery/delivery.controller';
@@ -66,7 +68,7 @@ export const POOL = 'POOL';
     NotificationController, ReportController,
     BridgeController, MigrationController,
     PackingController, DeliveryController,
-    FleetbaseController, DriverCredentialController,
+    FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -273,6 +275,13 @@ export const POOL = 'POOL';
       // loaded lazily from env so a missing secret fails closed without breaking startup.
       provide: DriverCredentialService,
       useFactory: (pool: Pool, audit: AuditService) => new DriverCredentialService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      // WP-OPS-03 / A22 — safely chunked, server-verified Fleetbase order reassignment.
+      // A missing order-manager token fails closed without breaking API startup.
+      provide: DriverOrderReassignmentService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverOrderReassignmentService(pool, audit),
       inject: [POOL, AuditService],
     },
   ],
