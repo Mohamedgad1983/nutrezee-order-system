@@ -14,6 +14,12 @@ let settings: SettingsReader;
 
 beforeAll(async () => {
   pool = await freshDb();
+  // This suite's first sweep explicitly tests log mode. New security-sensitive roles may
+  // seed deny mode, so normalize the generated matrix here instead of assuming seed modes.
+  await pool.query(
+    `UPDATE setting SET value=(SELECT jsonb_object_agg(code, '"log"'::jsonb) FROM role)
+      WHERE key='rbac_enforcement_mode'`,
+  );
   settings = new SettingsReader(pool, 0); // no cache: tests mutate the mode setting
   access = new AccessService(pool, new AuditService(), settings, 0);
 }, 60_000);
@@ -38,7 +44,7 @@ async function matrixFromDb() {
 describe('TS-R rbac — matrix-generated allow/deny (log mode)', () => {
   it('decide() matches role_permission for every role × permission', async () => {
     const { roles, perms, granted } = await matrixFromDb();
-    expect(roles.length).toBe(12);
+    expect(roles.length).toBe(13);
     expect(perms.length).toBeGreaterThanOrEqual(11);
     for (const role of roles) {
       for (const perm of perms) {

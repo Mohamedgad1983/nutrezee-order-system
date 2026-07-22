@@ -47,6 +47,8 @@ import { MigrationController } from './modules/m19-migration/migration.controlle
 import { MigrationService } from './modules/m19-migration/migration.service';
 import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controller';
 import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
+import { DriverCredentialController } from './modules/m24-fleetbase/driver-credential.controller';
+import { DriverCredentialService } from './modules/m24-fleetbase/driver-credential.service';
 import { PackingController } from './modules/m20-packing/packing.controller';
 import { PackingService } from './modules/m20-packing/packing.service';
 import { DeliveryController } from './modules/m21-delivery/delivery.controller';
@@ -64,7 +66,7 @@ export const POOL = 'POOL';
     NotificationController, ReportController,
     BridgeController, MigrationController,
     PackingController, DeliveryController,
-    FleetbaseController,
+    FleetbaseController, DriverCredentialController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -265,6 +267,13 @@ export const POOL = 'POOL';
       useFactory: (pool: Pool, audit: AuditService, settings: SettingsReader) =>
         new FleetbaseService(pool, audit, settings),
       inject: [POOL, AuditService, SettingsReader],
+    },
+    {
+      // WP-OPS-02 / A21 — server-only driver credential rotation. The service token is
+      // loaded lazily from env so a missing secret fails closed without breaking startup.
+      provide: DriverCredentialService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverCredentialService(pool, audit),
+      inject: [POOL, AuditService],
     },
   ],
 })
