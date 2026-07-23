@@ -30,6 +30,14 @@ Caddy proxy network. Report: `/root/fleetbase_install_report.md`. Repo branch `b
 `mysqldump` (fleetbase + sandbox + storefront DBs) + `tar` (.env/storage/config) →
 `/opt/fleetbase/backups/<UTC>/`, 14-day retention. Independent of the other apps' backups.
 
+## Partner order snapshots
+
+The A23 read-only Partner snapshot runs daily at 06:30 Kuwait through
+`nutreeze-partner-snapshot.timer`. It retains only sanitized aggregate manifests
+under `/var/lib/nutreeze-partner-snapshots/` for 30 days. It never writes to the
+Partner/legacy source or Fleetbase. The separate dispatch timer remains disabled;
+see `PARTNER_DAILY_DISPATCH_RUNBOOK.md`.
+
 ## Data dirs (bind mounts — back these up, not Docker volumes)
 `./docker/database/mysql` (MySQL data), `./api/.env`, `./api/storage/app`, `./console/fleetbase.config.json`.
 

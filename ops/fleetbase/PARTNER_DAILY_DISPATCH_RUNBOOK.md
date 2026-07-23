@@ -119,7 +119,37 @@ The source summary must show `orders_location_country_fallback_held=0` before
 claiming that every otherwise-approved July 20 delivery was assigned. Do not
 add this option to `nutreeze-daily-sync.sh`.
 
-## Timer (installed, deliberately disabled)
+## Read-only daily snapshot timer
+
+`nutreeze-partner-snapshot.timer` runs at 06:30 Kuwait (03:30 UTC), after the
+documented 06:00 Partner publication. It performs two independent `--dry-run`
+API walks and persists only an allowlisted aggregate manifest under:
+
+```text
+/var/lib/nutreeze-partner-snapshots/YYYY-MM-DD.json
+```
+
+The directory is root-only mode `0700`; each manifest is mode `0600`. Raw
+Partner responses, customer names, phones, detailed addresses, credentials,
+and per-order payloads are never retained. The manifest records the aggregate
+count, source digest, location/hold counts, `fleetbase_written=false`, and the
+explicit completeness state `stable_two_pass_not_authoritative`. A same-date
+rerun is idempotent only when count and digest match; a changed source fails
+without overwriting the first snapshot. Sanitized manifests are retained for
+30 days under ASM-054.
+
+The snapshot service is intentionally separate from the write service. Enable
+and verify only the read-only timer with:
+
+```sh
+systemctl enable --now nutreeze-partner-snapshot.timer
+systemctl start nutreeze-partner-snapshot.service
+systemctl status nutreeze-partner-snapshot.service --no-pager
+systemctl list-timers nutreeze-partner-snapshot.timer --no-pager
+jq . /var/lib/nutreeze-partner-snapshots/"$(TZ=Asia/Kuwait date +%F)".json
+```
+
+## Dispatch timer (installed, deliberately disabled)
 
 The supplied timer targets 07:00 Kuwait (04:00 UTC), after the documented 06:00
 Partner snapshot. The service accepts only the 06:45–07:45 Kuwait window, does

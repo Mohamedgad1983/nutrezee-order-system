@@ -76,6 +76,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: node scripts/scan-cross-module-writes.mjs
+      - name: Partner daily read-only snapshot guards
+        run: ../ops/fleetbase/test-daily-snapshot.sh
 
   no-get-mutation-scan:
     runs-on: ubuntu-latest
