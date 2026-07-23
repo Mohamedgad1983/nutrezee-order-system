@@ -1,0 +1,12 @@
+[Unit]
+Description=Capture Nutrezee Partner orders after the 06:00 Kuwait source publication
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=false
+RandomizedDelaySec=120
+AccuracySec=1min
+Unit=nutreeze-partner-snapshot.service
+
+[Install]
+WantedBy=timers.target
