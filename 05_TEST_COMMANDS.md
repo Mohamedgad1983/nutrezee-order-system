@@ -22,7 +22,7 @@ All commands run from `app/` unless noted.
 | GitHub Actions `ci.yml` (push to `main`/`build/**`, PRs): jobs `install`, `lint`, `typecheck`, `build`, suite matrix `ts-u…ts-s`, `boundary-scan`*, `no-get-mutation-scan`* | CI gates per test_strategy | **Verified 2026-06-10** — all runs green since WP-00; run 27279685845 = 14/14 jobs success. *Scan jobs are placeholders until WP-01 implements the real guards |
 | `gh run list --limit N` / `gh run view <id> --json jobs` / `gh run watch <id>` | Per-WP CI verification from the session | **Verified** (`gh` 2.93 installed + authed 2026-06-10, account Mohamedgad1983) |
 | `git status --short && git branch -vv` | STEP 0 #4 clean-tree/sync check | **Verified** |
-| `ops/fleetbase/test-daily-snapshot.sh` (repo root) | A23 read-only snapshot: two-pass stability, idempotence, same-date conflict, PII allowlist, zero-day labeling, retention | **Verified 2026-07-23** (5/5 locally, on Linux VPS, and CI boundary-scan job 89102288092) |
+| `ops/fleetbase/test-daily-snapshot.sh` (repo root) | A23/A24 read-only snapshot: fixed 01:00 Kuwait schedule, two-pass stability, idempotence, same-date conflict, PII allowlist, zero-day labeling, retention | **Verified 2026-07-23** (6/6 locally; CI-enforced in `boundary-scan`) |
 
 ## Coming with later WPs (do not invent earlier)
 

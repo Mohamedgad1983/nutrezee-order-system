@@ -121,9 +121,13 @@ add this option to `nutreeze-daily-sync.sh`.
 
 ## Read-only daily snapshot timer
 
-`nutreeze-partner-snapshot.timer` runs at 06:30 Kuwait (03:30 UTC), after the
-documented 06:00 Partner publication. It performs two independent `--dry-run`
-API walks and persists only an allowlisted aggregate manifest under:
+Under sponsor amendment A24, `nutreeze-partner-snapshot.timer` runs at 01:00
+Kuwait (22:00 UTC on the preceding calendar day). This is five hours before the
+previously documented 06:00 Partner publication, so the manifest must remain
+explicitly `stable_two_pass_not_authoritative`; it must never be presented as
+proof that every delivery for the date was already published. The job performs
+two independent `--dry-run` API walks and persists only an allowlisted aggregate
+manifest under:
 
 ```text
 /var/lib/nutreeze-partner-snapshots/YYYY-MM-DD.json

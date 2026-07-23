@@ -1,8 +1,8 @@
 [Unit]
-Description=Capture Nutrezee Partner orders after the 06:00 Kuwait source publication
+Description=Capture Nutrezee Partner orders at 01:00 Kuwait
 
 [Timer]
-OnCalendar=*-*-* 03:30:00 UTC
+OnCalendar=*-*-* 22:00:00 UTC
 Persistent=false
 RandomizedDelaySec=120
 AccuracySec=1min
