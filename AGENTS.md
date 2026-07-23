@@ -42,6 +42,16 @@ write to Partner/legacy or Fleetbase, retain raw source rows, enable the dispatc
 timer, or reuse the one-day A19 address-call exception. Sanitized retention is
 governed by ASM-054 pending an operations-owned retention policy.
 
+## Daily snapshot 01:00 schedule amendment
+
+AMENDMENT 2026-07-23 — Mohamed changed the unattended read-only Partner snapshot
+schedule from 06:30 to **01:00 Kuwait** (`22:00 UTC` on the preceding calendar
+day). This explicitly supersedes A23's after-06:00 schedule even though 01:00 is
+earlier than the previously documented 06:00 source publication. The resulting
+manifest must remain labeled non-authoritative and must not enable or feed the
+dispatch timer. All A23 storage, PII, write-prohibition, and A19 boundaries remain
+in force.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

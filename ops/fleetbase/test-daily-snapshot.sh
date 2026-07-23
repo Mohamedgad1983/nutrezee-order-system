@@ -3,6 +3,7 @@ set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 SCRIPT="$SCRIPT_DIR/nutreeze-daily-snapshot.sh"
+TIMER="$SCRIPT_DIR/nutreeze-partner-snapshot.timer"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/nutreeze-snapshot-test.XXXXXX")"
 MOCK_RUNNER="$TEST_ROOT/mock-runner.sh"
 SNAPSHOT_DIR="$TEST_ROOT/snapshots"
@@ -17,6 +18,9 @@ fail() {
   printf 'FAIL: %s\n' "$1" >&2
   exit 1
 }
+
+grep -q '^OnCalendar=\*-\*-\* 22:00:00 UTC$' "$TIMER" \
+  || fail 'timer must run at 01:00 Kuwait (22:00 UTC)'
 
 cat > "$MOCK_RUNNER" <<'EOF'
 #!/bin/sh
@@ -133,4 +137,4 @@ jq -e '.completeness_status == "empty_two_pass_not_authoritative"' \
   "$SNAPSHOT_DIR/2026-07-25.json" >/dev/null || fail 'stable zero snapshot was not flagged'
 [ ! -e "$SNAPSHOT_DIR/2020-01-01.json" ] || fail 'retention did not remove the old snapshot'
 
-printf '%s\n' 'daily snapshot tests: 5/5 passed'
+printf '%s\n' 'daily snapshot tests: 6/6 passed'
