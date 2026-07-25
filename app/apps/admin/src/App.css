@@ -211,6 +211,9 @@ button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.06); box
 .chosen, .orLine, .hintLine { margin: 8px 0 0; font-size: 14px; color: var(--ink-soft); }
 .orLine { color: var(--muted); font-style: italic; }
 .hintLine { color: #92400e; }
+.reassignmentHint { display: grid; gap: 2px; margin: 12px 24px 0; line-height: 1.5; }
+.reassignmentHint [lang="ar"] { text-align: right; }
+.reassignmentTable th { position: static; }
 .actionsBar { display: grid; gap: 10px; }
 .completeness .ok { color: #08613e; font-weight: 700; }
 .completeness .warn { color: #92400e; font-weight: 700; }

@@ -2,6 +2,8 @@
 
 Logistics Manager driver-password rotation is documented in
 [`DRIVER_CREDENTIAL_ROTATION.md`](./DRIVER_CREDENTIAL_ROTATION.md) (WP-OPS-02 / A21).
+Driver-to-driver bulk reassignment: [`DRIVER_ORDER_REASSIGNMENT.md`](./DRIVER_ORDER_REASSIGNMENT.md)
+(WP-OPS-03 / A22).
 
 Fleetbase **v0.7.48** installed 2026-06-26 as a fully isolated Docker stack on the VPS
 (`/opt/fleetbase`), behind the shared Caddy, sharing **nothing** with the existing apps except the
