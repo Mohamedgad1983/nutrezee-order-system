@@ -15,7 +15,7 @@
 
 | Item | Status |
 |---|---|
-| CI | ✅ Workflow live; current operational parent head `efe95ee` passed CI run 30169584314. WP-OPS-02/03 branch and PR runs passed 14/14. |
+| CI | ✅ Workflow live; draft parent PR #43 is clean/mergeable and push/PR runs 30170042208 + 30170050086 passed 14/14. |
 | Staging | ✅ **Live and healthy** at `https://13-140-159-201.sslip.io`; Nutrezee database currently has 22 migrations through `0023_address_block.sql`. WP-OPS-02/03 are not deployed. |
 | Local environment | ✅ Current operational branch is clean and pushed; full app checks and 313 tests passed during WP-OPS-03 closeout. |
 | Workshop / assumption-carry | ✅ **Assumption-carry accepted 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
@@ -51,6 +51,6 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-> **2026-07-25 — WP-OPS-02/03 release gate verified:** provision separate least-privilege Fleetbase service identities for credential rotation and order reassignment, store their tokens only in `/opt/nutrezee/.env` mode `0600`, and identify the named human Logistics Manager account. The three required integration variables are currently unset; no dedicated Logistics Manager exists; migrations `0025/0026` are not deployed. After those inputs exist, open/merge the operational parent release into `main`, deploy migrations `0024–0026`, then run the required staging Playwright and Navigator proof. Do not use the UAT seed account or silently add logistics privileges to the existing super-admin as a substitute.
+> **2026-07-25 — WP-OPS-02/03 release gate verified:** provision separate least-privilege Fleetbase service identities for credential rotation and order reassignment, store their tokens only in `/opt/nutrezee/.env` mode `0600`, and identify the named human Logistics Manager account. The three required integration variables are currently unset; no dedicated Logistics Manager exists; migrations `0025/0026` are not deployed. Draft PR #43 is green and mergeable but must remain unmerged until those inputs exist and its broad operational parent diff is reviewed. Then merge PR #43, deploy migrations `0024–0026`, and run the required staging Playwright and Navigator proof. Do not use the UAT seed account or silently add logistics privileges to the existing super-admin as a substitute.
 
 **WP-14's remaining critical path** is now the non-infrastructure items per `19_Roadmap/wp14_blocker_report.md` §4: the workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix), assumption-register sign-off, and the staging **restore drill** (environment_plan §4). UAT/pilot can now exercise the live staging URL.
