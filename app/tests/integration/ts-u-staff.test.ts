@@ -129,7 +129,7 @@ describe('TS-U unit — role grants via M13 only (C4), dormant alert', () => {
 
   it('matrix export exposes role -> permissions for the drift compare', async () => {
     const matrix = await roles.exportMatrix();
-    expect(Object.keys(matrix).length).toBe(12);
+    expect(Object.keys(matrix).length).toBe(13);
     expect(matrix['super_admin'].permissions).toContain('rbac.role.grant');
     expect(matrix['driver'].dormant).toBe(true);
   });

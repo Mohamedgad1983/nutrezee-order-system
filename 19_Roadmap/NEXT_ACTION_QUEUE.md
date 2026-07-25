@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-07-23 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31), **WP-UI-05 merge UI ✅** (#33), **WP-UI-06 payment actions ✅** (#35), **WP-14 restore drill ✅** (2026-06-14, backups verified recoverable), **WP-OPS-01 July 20 operational run ✅**, and **A23/A24 daily read-only Partner snapshot deployed at 01:00 Kuwait ✅** (branch merge pending). **🛑 ENGINEERING FRONTIER EXHAUSTED** — no unblocked build/ops work remains. Everything left is **sponsor/workshop-gated** (see below). The OS should now HOLD and report this, not invent scope. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-07-25 · **Frontier:** **WP-OPS-02 Logistics Manager driver credential rotation is implementation/CI complete and BLOCKED AT RELEASE** under A21; release requires a protected least-privilege Fleetbase service identity/token, a named human Logistics Manager account, and staging Playwright/Navigator proof. No live password rotation was attempted. **WP-OPS-01 July 20 operational run is complete**, and the separate **A23/A24 read-only Partner snapshot is live at 01:00 Kuwait** with non-authoritative completeness; it cannot feed dispatch and the unattended dispatch timer remains disabled. The prior engineering frontier remains exhausted after these explicit narrow exceptions; remaining legacy-cutover work stays sponsor/workshop-gated. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
 
 ---
 
@@ -27,6 +27,16 @@
 ---
 
 ## Engineering Queue (take the top unblocked item)
+
+### 🛑 WP-OPS-02 — Logistics Manager driver credential rotation · **BLOCKED AT RELEASE · size S · blocked_by: protected Fleetbase service token + named manager account + parent branch closeout + staging Playwright/Navigator proof**
+- A21 authorizes only the driver-password rotation slice in the Nutrezee admin panel.
+- API must list Fleetbase drivers through a server-held least-privilege integration token and derive the linked Fleetbase user UUID server-side.
+- `POST` rotation only; no GET mutation. Reject arbitrary user UUIDs, non-driver targets, password mismatch/weak passwords, and missing integration config.
+- Password values must never be persisted, logged, emailed, returned, or included in audit before/after data.
+- Permission: dedicated Logistics Manager credential-rotation grant; no unrestricted Fleetbase IAM permission in the browser.
+- HIGH audit trail records requested/completed/failed outcomes without secrets. Fleetbase vendor source and Navigator `/legacy` stay untouched.
+- DoD: focused service/controller/RBAC tests + full app Vitest/lint/typecheck/build/scans green; visible staging Playwright after the protected integration secret is provisioned.
+- Result 2026-07-22: implementation complete; local typecheck/lint/build, 59 files / 300 tests, cross-module-write scan, no-GET-mutation scan, and diff checks green; PR CI run 29920117590 14/14 green. No deployment or live credential change.
 
 ### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.
