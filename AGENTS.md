@@ -31,6 +31,27 @@ The exception requires an exact manual runtime confirmation, must reject unknown
 country fallbacks, and must not be added to the unattended timer or reused for any other
 date. All other A18 boundaries remain in force.
 
+## Daily read-only snapshot amendment
+
+AMENDMENT 2026-07-23 — Mohamed authorized an unattended daily read-only
+Partner API snapshot after the documented 06:00 source publication. The job may
+perform two complete date-scoped API reads and retain only a root-protected,
+PII-free aggregate manifest containing counts, digest, hold/location totals,
+capture time, and an explicit non-authoritative completeness label. It must not
+write to Partner/legacy or Fleetbase, retain raw source rows, enable the dispatch
+timer, or reuse the one-day A19 address-call exception. Sanitized retention is
+governed by ASM-054 pending an operations-owned retention policy.
+
+## Daily snapshot 01:00 schedule amendment
+
+AMENDMENT 2026-07-23 — Mohamed changed the unattended read-only Partner snapshot
+schedule from 06:30 to **01:00 Kuwait** (`22:00 UTC` on the preceding calendar
+day). This explicitly supersedes A23's after-06:00 schedule even though 01:00 is
+earlier than the previously documented 06:00 source publication. The resulting
+manifest must remain labeled non-authoritative and must not enable or feed the
+dispatch timer. All A23 storage, PII, write-prohibition, and A19 boundaries remain
+in force.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:
