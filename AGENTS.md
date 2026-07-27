@@ -10,6 +10,45 @@ credential storage, biometric unlock. AGPL-3.0 compliance: modified source provi
 users (Nutreeze staff) on request; fork lives in the private repo. Everything else in /src
 and all of /legacy remains OFF-LIMITS. Config-only rule still applies outside this scope.
 
+## Driver production-readiness source amendment
+
+AMENDMENT A25 2026-07-26 — Mohamed explicitly instructed Codex to proceed without waiting
+and complete the Nutreeze driver app for distribution. This authorizes the smallest
+necessary Navigator `/src` changes for the verified A-to-Z defects: KWD-only fuel reports
+and correct amount/status persistence; null-safe order documents; post-completion Orders
+state/navigation; chat participant/channel persistence; customer call/navigation behavior;
+Arabic language availability; and background-tracking integration fixes that do not require
+a commercial license. Each source file must be predeclared in the driver repo `PLAN.md` and
+regression-tested. AGPL-3.0 source-availability obligations remain in force. `/legacy`,
+Fleetbase vendor/backend source, production/Partner writes, secret generation, and any
+paid-license purchase remain OFF-LIMITS.
+
+## Driver full reachable-screen release-hardening amendment
+
+AMENDMENT A26 2026-07-26 — Mohamed reaffirmed that the driver app must be complete end to end
+and that every reachable screen and visible action must be tested. This extends A25 to the
+minimum Navigator `/src` repairs for defects confirmed by the exhaustive reachable-screen,
+button, null-fixture, and route-contract audit recorded in the driver repo `PLAN.md`. Every
+edited source file must still be predeclared before editing and regression-tested.
+`/legacy`, Fleetbase vendor/backend source, production/Partner writes, secret generation,
+and paid-license purchase remain prohibited.
+
+## Exact legacy label + permanent customer barcode amendment
+
+AMENDMENT A27 2026-07-27 — Mohamed authorized reproduction of the existing legacy daily-meal
+label with the same structure, fields, field order and printing layout, plus ONE permanent
+`Code 128` barcode per customer. In scope: authoritative meal and nutrition sourcing (no
+fabricated, inferred or placeholder nutrition values — an absent dish source must render as an
+explicit empty state); governed `customer_barcode` records with idempotent issuance, merge-alias
+preservation and audited administrative replacement; individual and batch label printing;
+audit-controlled reprints with a required reason; current-day driver-manifest validation;
+collection scanning with same-transaction audit and same-day duplicate prevention; and the
+minimum **predeclared** Navigator `/src` changes required for the collection screen and `Code 128`
+scanning. The barcode value carries no PII and is not derived from any customer attribute.
+Partner and legacy systems remain read-only. Fleetbase vendor source, Navigator `/legacy`,
+secret generation, commercial licence purchase and unattended dispatch activation remain
+OFF-LIMITS. AGPL-3.0 source-availability obligations remain in force.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →
