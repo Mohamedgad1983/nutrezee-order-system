@@ -7,7 +7,6 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "build:ops": "vite build --base=/nz-admin/ --outDir=dist-ops",
     "dev": "vite"
   },
   "dependencies": {

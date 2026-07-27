@@ -49,6 +49,30 @@ Partner and legacy systems remain read-only. Fleetbase vendor source, Navigator 
 secret generation, commercial licence purchase and unattended dispatch activation remain
 OFF-LIMITS. AGPL-3.0 source-availability obligations remain in force.
 
+## Fleet-Ops label correction amendment
+
+AMENDMENT A28 2026-07-28 — After reviewing the deployed A27 result, Mohamed explicitly
+authorized the corrective implementation. `https://ops.nutreeze.com/` must remain the single
+Fleetbase/Fleet-Ops operations admin. Scope: remove the mistakenly deployed `/nz-admin` SPA
+mount and `/labels` redirect from the live staging host while preserving the `/nz/*` Nutrezee
+API gateway and every existing Fleet-Ops route; remove the corresponding dual-admin source
+and image changes; add Nutrezee label/barcode/collection operations through a supported custom
+Fleetbase Console extension; and rebuild the self-hosted console with only the documented
+extension dependency/registration wiring. Fleetbase application/vendor source files otherwise
+remain OFF-LIMITS. The extension source must remain separately identifiable and available
+under the applicable AGPL-3.0 obligations.
+
+For collection, the existing Fleetbase identity and the driver's Fleetbase-assigned orders are
+the only driver/assignment authority; a second Nutrezee driver login and the synthetic
+Nutrezee `driver`/`delivery_route` authorization path must be retired. A driver may receive
+customer name, area and phone only for their own currently assigned work. The permanent
+customer Code 128 barcode, audited print/reprint governance, append-only collection ledger,
+same-day duplicate protection and authoritative-or-explicitly-empty nutrition rule remain in
+force. Meal/nutrition values may be read from an already-authorized read-only source or entered
+by authorized operations staff, but must never be inferred or fabricated. Partner and legacy
+remain read-only; production writes, Navigator `/legacy`, secret generation, paid-license
+purchase and unattended dispatch activation remain prohibited.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →

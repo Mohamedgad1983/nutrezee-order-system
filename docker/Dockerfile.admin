@@ -7,11 +7,10 @@ COPY app/apps/admin/package.json app/apps/admin/
 COPY app/packages/shared/package.json app/packages/shared/
 RUN cd app && npm ci --workspaces --include-workspace-root
 COPY app/ app/
-RUN cd app && npm run build -w apps/admin && npm run build:ops -w apps/admin
+RUN cd app && npm run build -w apps/admin
 
 FROM nginx:alpine
 # D1: SPA fallback + same-origin API proxy (see docker/nginx.admin.conf header)
 COPY docker/nginx.admin.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/app/apps/admin/dist /usr/share/nginx/html
-COPY --from=build /repo/app/apps/admin/dist-ops /usr/share/nginx/nz-admin
 EXPOSE 80
