@@ -123,6 +123,7 @@ jobs:
           grep -q 'src="/assets/' /tmp/root-labels.html
           curl -fsS http://127.0.0.1:18080/nz-admin/app/labels > /tmp/ops-labels.html
           grep -q 'src="/nz-admin/assets/' /tmp/ops-labels.html
-          ops_asset="$(grep -o '/nz-admin/assets/[^"]*\\.js' /tmp/ops-labels.html)"
+          ops_asset="$(grep -oE '/nz-admin/assets/[^"]+[.]js' /tmp/ops-labels.html)"
           test -n "$ops_asset"
+          printf 'ops admin asset: %s\n' "$ops_asset"
           curl -fsS "http://127.0.0.1:18080${ops_asset}" >/dev/null
