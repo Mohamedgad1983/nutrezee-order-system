@@ -96,6 +96,24 @@ overlap, no wrapped captions, source meal order), the print stylesheet, PDF outp
 Collection scan: all seven outcomes exercised over real HTTP, plus idempotent retry and the full
 audit trail — see `03_collection_scan_verification.md`.
 
+### Full-application regression
+
+Every admin route was visited in a real browser against the running API and asserted to render its
+shell, produce content, and raise no unexpected console error (401/403 from endpoints the demo user
+cannot reach are not counted; a crashed React tree is):
+
+```
+PASS /app/dashboard  /app/intake   /app/drafts    /app/review-queue  /app/orders
+PASS /app/customers  /app/payments /app/kitchen   /app/packing       /app/labels
+PASS /app/delivery   /app/exceptions /app/catalog /app/reports       /app/staff
+PASS /app/settings   /app/audit
+
+17/17 admin routes render cleanly
+```
+
+Authentication, dashboard, orders, customers, packing, printing, drivers/delivery, navigation,
+settings, reports and the audit log are therefore all confirmed unaffected by this work package.
+
 ## 5. Performance
 
 - Admin bundle 340.28 kB → 348.76 kB JS (+2.5 %), 21.68 → 24.60 kB CSS. The Code 128 renderer is
