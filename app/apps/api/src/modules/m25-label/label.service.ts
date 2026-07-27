@@ -262,7 +262,7 @@ export class LabelService {
          JOIN customer_dish_day_item i ON i.customer_dish_day_id = d.id
         WHERE d.customer_order_id = $1 AND d.meal_date = $2
           AND coalesce(i.is_deleted, false) = false
-        ORDER BY d.legacy_order_meal_id NULLS LAST, i.created_at, i.id`,
+        ORDER BY d.legacy_order_meal_id NULLS LAST, i.sort_order NULLS LAST, i.created_at, i.id`,
       [orderId, deliveryDate],
     );
     if (rows.length === 0) return [[], 'no_dish_source'];

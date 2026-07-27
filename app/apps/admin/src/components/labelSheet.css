@@ -1,22 +1,26 @@
 /* WP-LBL-A27 — print stylesheet for the exact legacy Nutreeze label.
  *
- * Physical size: the legacy stock has NOT been measured yet (WP-LBL-00 completion gate is a
- * physical print comparison by the owner). The dimensions below are the working default and are
- * driven by two custom properties so they can be corrected without touching layout code:
+ * Physical size: the legacy stock has NOT been measured yet (the WP-LBL-00 completion gate is a
+ * physical print comparison by the owner). 100 x 70 mm landscape is the working default, driven by
+ * two custom properties so the size can be corrected without touching layout code:
  *
- *     .labelPrintRoot { --label-w: 100mm; --label-h: 70mm; }
+ *     .labelSheet { --label-w: 100mm; --label-h: 70mm; }
  *
- * Everything inside scales from --label-h, so changing the stock size rescales the whole label
- * rather than reflowing it.
+ * Everything is sized in mm from those, so changing the stock rescales rather than reflows.
+ *
+ * The legacy label is DENSE: ~28 field values plus a 6-column table inside 100 x 70 mm. The type
+ * scale below is deliberately small to match that density — an earlier, larger scale overflowed
+ * the sheet and pushed the barcode over the address block.
  */
 
 .labelSheet {
   --label-w: 100mm;
   --label-h: 70mm;
-  --label-pad: 3.2mm;
-  --label-fg: #1a1a1a;
-  --label-rule: #b9b9b9;
-  --label-grid: #cfcfcf;
+  --label-pad: 2.4mm;
+  --label-fg: #111;
+  --label-rule: #9a9a9a;
+  --label-grid: #b5b5b5;
+  --label-base: 2.05mm;
 
   box-sizing: border-box;
   width: var(--label-w);
@@ -27,62 +31,62 @@
   background: #fff;
   color: var(--label-fg);
   font-family: "Segoe UI", Calibri, "Helvetica Neue", Arial, sans-serif;
-  font-size: 2.45mm;
-  line-height: 1.32;
-  overflow: hidden; /* long values must never spill past the die-cut edge */
+  font-size: var(--label-base);
+  line-height: 1.24;
+  overflow: hidden; /* nothing may spill past the die-cut edge */
 }
 
 /* ---- header ---- */
 .labelHeader {
   text-align: center;
   flex: 0 0 auto;
-  margin-bottom: 1mm;
+  margin-bottom: 0.8mm;
 }
 .labelMark {
-  width: 4.4mm;
-  height: 4.8mm;
+  width: 3.4mm;
+  height: 3.7mm;
   display: block;
-  margin: 0 auto 0.3mm;
-  color: #4a4a4a;
+  margin: 0 auto 0.2mm;
+  color: #555;
 }
 .labelBrand {
-  font-size: 4.4mm;
-  letter-spacing: 0.15mm;
-  font-weight: 400;
+  font-size: 3.9mm;
+  line-height: 1.05;
+  letter-spacing: 0.08mm;
 }
 .labelTagline {
-  font-size: 1.75mm;
+  font-size: 1.55mm;
   color: #555;
-  letter-spacing: 0.1mm;
+  letter-spacing: 0.06mm;
 }
 
 /* ---- two-column body ---- */
 .labelBody {
   flex: 1 1 auto;
   display: flex;
-  gap: 3mm;
+  gap: 2.4mm;
   min-height: 0;
+  overflow: hidden;
 }
-.labelInfo { flex: 0 0 46%; min-width: 0; }
-.labelMeals { flex: 1 1 auto; min-width: 0; }
+.labelInfo { flex: 0 0 45%; min-width: 0; display: flex; flex-direction: column; }
+.labelMeals { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 
 /* hairline rules between field groups, as on the legacy label */
 .labelGroup {
-  padding: 0.7mm 0;
-  border-bottom: 0.18mm solid var(--label-rule);
+  padding: 0.5mm 0;
+  border-bottom: 0.15mm solid var(--label-rule);
 }
-.labelGroup:last-child { border-bottom: 0.18mm solid var(--label-rule); }
 
-.labelRow { display: flex; gap: 1.2mm; align-items: baseline; }
+.labelRow { display: flex; gap: 0.9mm; align-items: baseline; }
 .labelKey {
   font-style: italic;
-  flex: 0 0 21mm;
+  flex: 0 0 16mm;
   color: #333;
 }
 .labelVal {
   flex: 1 1 auto;
   min-width: 0;
-  overflow-wrap: anywhere; /* a long Arabic/English name wraps instead of overflowing */
+  overflow-wrap: anywhere; /* a long name wraps instead of overflowing */
 }
 
 .labelPackage strong { font-style: italic; }
@@ -91,7 +95,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1.5mm;
+  gap: 1mm;
+  white-space: nowrap;
 }
 /* the legacy label stacks this caption above its value, right-aligned */
 .labelOrderNo {
@@ -99,6 +104,7 @@
   flex-direction: column;
   align-items: flex-end;
   text-align: right;
+  line-height: 1.1;
 }
 
 .labelAddress > div { overflow-wrap: anywhere; }
@@ -108,32 +114,36 @@
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  font-size: 1.95mm;
 }
 .labelTable th,
 .labelTable td {
-  border: 0.18mm solid var(--label-grid);
-  padding: 0.55mm 0.7mm;
+  border: 0.15mm solid var(--label-grid);
+  padding: 0.35mm 0.4mm;
   text-align: center;
   vertical-align: top;
   overflow-wrap: anywhere;
 }
-.labelTable th { font-weight: 600; }
-.labelTable .dishCol { text-align: left; width: 46%; }
+/* numeric captions must never wrap into "Qt y" / "Ca rb" */
+.labelTable th { font-weight: 600; white-space: nowrap; }
+.labelTable .dishCol { text-align: left; width: 44%; white-space: normal; }
+.labelTable col.numCol { width: 11.2%; }
 .labelNoDish {
   text-align: center;
   font-style: italic;
-  color: #666;
-  padding: 2mm 0.7mm;
+  color: #555;
+  padding: 1.6mm 0.4mm;
 }
 
 /* ---- totals block (unbordered on the legacy label) ---- */
 .labelTotals {
   display: flex;
   align-items: flex-end;
-  gap: 2mm;
-  margin-top: 1.4mm;
+  gap: 1.4mm;
+  margin-top: 0.9mm;
+  font-size: 1.95mm;
 }
-.labelTotalsLabel { flex: 0 0 auto; padding-bottom: 0.4mm; }
+.labelTotalsLabel { flex: 0 0 auto; padding-bottom: 0.3mm; white-space: nowrap; }
 .labelTotalsTable {
   flex: 1 1 auto;
   border-collapse: collapse;
@@ -143,21 +153,24 @@
 .labelTotalsTable td {
   border: 0;
   text-align: center;
-  padding: 0.2mm 0.5mm;
+  padding: 0.1mm 0.3mm;
+  white-space: nowrap;
 }
 .labelTotalsTable th { font-weight: 400; }
 
 /* ---- the one new element: Code 128 barcode strip ---- */
 .labelBarcode {
   flex: 0 0 auto;
-  margin-top: 1.2mm;
-  padding-top: 1mm;
-  border-top: 0.18mm solid var(--label-rule);
+  height: 10.5mm;              /* reserved, so the body can never push into it */
+  margin-top: 0.8mm;
+  padding-top: 0.7mm;
+  border-top: 0.15mm solid var(--label-rule);
   text-align: center;
+  overflow: hidden;
 }
 .labelBarcodeImg svg {
-  /* height is fixed so bars stay scannable; width scales but never past the label edge */
-  height: 8mm;
+  /* fixed height keeps bars scannable; width scales but never past the label edge */
+  height: 6.6mm;
   width: auto;
   max-width: 100%;
   display: block;
@@ -165,9 +178,10 @@
 }
 .labelBarcodeRef {
   font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 2.4mm;
-  letter-spacing: 0.35mm;
-  margin-top: 0.5mm;
+  font-size: 2.05mm;
+  letter-spacing: 0.25mm;
+  margin-top: 0.3mm;
+  white-space: nowrap;
 }
 
 /* ---- screen preview chrome (never printed) ---- */
@@ -176,6 +190,7 @@
   box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
   border: 1px solid #ddd;
   background: #fff;
+  margin: 0 8px 8px 0;
 }
 
 /* ---- print ---- */
@@ -201,6 +216,7 @@
     box-shadow: none;
     border: 0;
     display: block;
+    margin: 0;
   }
   .labelSheet {
     break-after: page;

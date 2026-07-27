@@ -105,6 +105,16 @@ CREATE UNIQUE INDEX driver_staff_user_uq ON driver (staff_user_id) WHERE staff_u
 COMMENT ON COLUMN driver.staff_user_id IS
   'Links a driver to the staff_user account they sign in with, so a collection scan can be checked against that driver''s own manifest. Nullable: a driver who never signs in has none.';
 
+-- ===== deterministic meal order on the label =====
+-- customer_dish_day_item (migration 0020) has no ordering column, so the label's meal rows could
+-- only be ordered by created_at + id. Rows imported in one transaction share created_at and ULID
+-- ids carry a random component within the same millisecond, so the printed dish order was not the
+-- source order. The legacy label lists meals in a meaningful sequence (first meal first), so an
+-- explicit nullable position is added; the label orders by it and falls back to created_at, id.
+ALTER TABLE customer_dish_day_item ADD COLUMN IF NOT EXISTS sort_order integer;
+COMMENT ON COLUMN customer_dish_day_item.sort_order IS
+  'Position of this dish within its meal-day, as captured from the source. Drives the printed label order; NULL falls back to created_at, id.';
+
 -- ===== RBAC (granted to active roles only; dormant roles untouched) =====
 INSERT INTO permission (id, code, visibility_grants, created_by) VALUES
  ('seed-perm-label.read','label.read','["pii"]','seed'),

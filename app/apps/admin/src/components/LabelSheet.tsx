@@ -115,6 +115,12 @@ export function LabelSheet({ doc }: { doc: LabelDocument }): React.JSX.Element {
 
         <section className="labelMeals">
           <table className="labelTable">
+            {/* fixed numeric widths so "Qty"/"Carb"/"Cal" can never wrap mid-word */}
+            <colgroup>
+              <col className="dishCol" />
+              <col className="numCol" /><col className="numCol" /><col className="numCol" />
+              <col className="numCol" /><col className="numCol" />
+            </colgroup>
             <thead>
               <tr>
                 <th className="dishCol">Dish Name</th>
