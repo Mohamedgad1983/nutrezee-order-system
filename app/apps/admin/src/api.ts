@@ -1,3 +1,5 @@
+import { apiUrl } from './runtimePaths';
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -33,7 +35,7 @@ export function humanMessage(e: unknown): string {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path, window.location.pathname), {
     ...init,
     credentials: 'include',
     headers: {

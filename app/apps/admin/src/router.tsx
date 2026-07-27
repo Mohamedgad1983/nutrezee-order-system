@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react';
+import { adminUrl, stripAdminBase } from './runtimePaths';
 
 // Deliberately tiny pathname router (no dependency): the SPA owns /app/* while
 // the API owns its root prefixes (/auth, /drafts, ... — see docker/nginx.admin.conf).
+// On ops.nutreeze.com the same SPA is mounted at /nz-admin/* and the API at /nz/*.
+
+function currentPath(): string {
+  return stripAdminBase(window.location.pathname);
+}
 
 export function navigate(to: string, opts?: { replace?: boolean }): void {
+  const resolved = adminUrl(to, window.location.pathname);
   if (opts?.replace) {
-    window.history.replaceState(null, '', to);
+    window.history.replaceState(null, '', resolved);
   } else {
-    window.history.pushState(null, '', to);
+    window.history.pushState(null, '', resolved);
   }
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 export function usePath(): string {
-  const [path, setPath] = useState(window.location.pathname);
+  const [path, setPath] = useState(currentPath);
   useEffect(() => {
-    const onPop = (): void => setPath(window.location.pathname);
+    const onPop = (): void => setPath(currentPath());
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -42,7 +49,7 @@ export function Link({
 }): React.JSX.Element {
   return (
     <a
-      href={to}
+      href={adminUrl(to, window.location.pathname)}
       className={className}
       onClick={(e) => {
         e.preventDefault();

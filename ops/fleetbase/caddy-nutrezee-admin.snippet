@@ -1,0 +1,10 @@
+# Add inside the existing `ops.nutreeze.com` route, before its Fleetbase
+# console catch-all. Preserve /nz-admin in the upstream request so nginx can
+# select the separately-built subpath bundle. /nz remains the API gateway.
+handle /labels {
+	redir /nz-admin/app/labels 308
+}
+
+handle /nz-admin* {
+	reverse_proxy admin:80
+}

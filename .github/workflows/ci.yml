@@ -111,3 +111,18 @@ jobs:
         run: docker build -f docker/Dockerfile.api -t nutrezee-api:ci .
       - name: build admin image (D1 config baked in)
         run: docker build -f docker/Dockerfile.admin -t nutrezee-admin:ci .
+      - name: smoke root and ops-host admin bundles
+        run: |
+          docker run -d --name nutrezee-admin-ci --add-host api:127.0.0.1 -p 127.0.0.1:18080:80 nutrezee-admin:ci
+          trap 'docker rm -f nutrezee-admin-ci' EXIT
+          for attempt in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1 || true
+            if curl -fsS http://127.0.0.1:18080/app/labels > /tmp/root-labels.html; then break; fi
+            sleep 1
+          done
+          grep -q 'src="/assets/' /tmp/root-labels.html
+          curl -fsS http://127.0.0.1:18080/nz-admin/app/labels > /tmp/ops-labels.html
+          grep -q 'src="/nz-admin/assets/' /tmp/ops-labels.html
+          ops_asset="$(sed -n 's/.*src="\\(\\/nz-admin\\/assets\\/[^"]*\\.js\\)".*/\\1/p' /tmp/ops-labels.html)"
+          test -n "$ops_asset"
+          curl -fsS "http://127.0.0.1:18080${ops_asset}" >/dev/null
