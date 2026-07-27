@@ -161,7 +161,7 @@ export class DeliveryController {
   }
 }
 
-interface CreateDriverBody { legacy_driver_id?: string; name?: string; phone?: string; active?: boolean; capacity_per_slot?: number; areas?: Array<{ area: string; priority?: number }> }
+interface CreateDriverBody { legacy_driver_id?: string; name?: string; phone?: string; active?: boolean; capacity_per_slot?: number; staff_user_id?: string; areas?: Array<{ area: string; priority?: number }> }
 interface AssignBody { order_id?: string; driver_id?: string; delivery_date?: string; delivery_time?: string; area?: string }
 interface BulkAssignBody { driver_id?: string; delivery_date?: string; delivery_time?: string; area?: string; order_ids?: string[] }
 interface CreateRouteBody { driver_id?: string; delivery_date: string; delivery_time?: string; area_group?: string }

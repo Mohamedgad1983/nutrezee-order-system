@@ -53,6 +53,9 @@ const OWNERSHIP = {
   delivery_route: 'm21-delivery', delivery_route_order: 'm21-delivery',
   driver_assignment_history: 'm21-delivery',
 
+  // wave 7 — m25 exact legacy label + permanent customer barcode + box collection (A27)
+  customer_barcode: 'm25-label', label_print_event: 'm25-label', box_collection: 'm25-label',
+
   // wave 6 — m22 customer meal-history controlled transfer (no bridge)
   legacy_meal_history_raw: 'm22-meal-history', customer_meal_history: 'm22-meal-history',
   customer_meal_history_items: 'm22-meal-history', customer_meal_history_import_runs: 'm22-meal-history',

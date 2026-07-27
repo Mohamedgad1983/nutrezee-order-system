@@ -59,7 +59,7 @@ export class DeliveryService {
 
   async createDriver(
     actor: StaffContext,
-    input: { legacy_driver_id?: string; name?: string; phone?: string; active?: boolean; capacity_per_slot?: number; areas?: Array<{ area: string; priority?: number }> },
+    input: { legacy_driver_id?: string; name?: string; phone?: string; active?: boolean; capacity_per_slot?: number; staff_user_id?: string; areas?: Array<{ area: string; priority?: number }> },
   ): Promise<{ id: string }> {
     if (!input.name) throw new DeliveryError('validation_failed', { field: 'name' });
     const cap = Number.isFinite(input.capacity_per_slot) ? Math.max(0, Math.trunc(input.capacity_per_slot as number)) : 0;
@@ -67,12 +67,13 @@ export class DeliveryService {
       const id = newId();
       try {
         await client.query(
-          `INSERT INTO driver (id, legacy_driver_id, name, phone, active, capacity_per_slot, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [id, input.legacy_driver_id ?? null, input.name, input.phone ?? null, input.active ?? true, cap, actor.staffId],
+          `INSERT INTO driver (id, legacy_driver_id, name, phone, active, capacity_per_slot, staff_user_id, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [id, input.legacy_driver_id ?? null, input.name, input.phone ?? null, input.active ?? true, cap,
+            input.staff_user_id ?? null, actor.staffId],
         );
       } catch (e) {
-        if ((e as { code?: string }).code === '23505') throw new DeliveryError('conflict', { reason: 'legacy_driver_id already exists' });
+        if ((e as { code?: string }).code === '23505') throw new DeliveryError('conflict', { reason: 'legacy_driver_id or staff_user_id already in use' });
         throw e;
       }
       for (const a of input.areas ?? []) {

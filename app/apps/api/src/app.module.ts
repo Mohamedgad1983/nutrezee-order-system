@@ -55,6 +55,10 @@ import { PackingController } from './modules/m20-packing/packing.controller';
 import { PackingService } from './modules/m20-packing/packing.service';
 import { DeliveryController } from './modules/m21-delivery/delivery.controller';
 import { DeliveryService } from './modules/m21-delivery/delivery.service';
+import { LabelController } from './modules/m25-label/label.controller';
+import { BarcodeService } from './modules/m25-label/barcode.service';
+import { LabelService } from './modules/m25-label/label.service';
+import { CollectionService } from './modules/m25-label/collection.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
@@ -67,7 +71,7 @@ export const POOL = 'POOL';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
-    PackingController, DeliveryController,
+    PackingController, DeliveryController, LabelController,
     FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
@@ -138,6 +142,9 @@ export const POOL = 'POOL';
         const merges = new MergeService(pool, audit, outbox, settings);
         merges.registerRelinkStep(DraftService.customerRelinkStep());
         merges.registerRelinkStep(OrderService.customerRelinkStep());
+        // A27: the loser's barcode survives a merge as an alias on the winner, so labels
+        // already printed for the loser keep resolving to the surviving customer.
+        merges.registerRelinkStep(BarcodeService.customerRelinkStep());
         return merges;
       },
       inject: [POOL, AuditService, OutboxService, SettingsReader],
@@ -262,6 +269,25 @@ export const POOL = 'POOL';
       provide: DeliveryService,
       useFactory: (pool: Pool, audit: AuditService) => new DeliveryService(pool, audit),
       inject: [POOL, AuditService],
+    },
+    // Wave-7 m25-label (A27) — exact legacy label, permanent customer barcode, box collection.
+    // Writes only customer_barcode / label_print_event / box_collection; everything else is read.
+    {
+      provide: BarcodeService,
+      useFactory: (pool: Pool, audit: AuditService) => new BarcodeService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      provide: LabelService,
+      useFactory: (pool: Pool, audit: AuditService, barcodes: BarcodeService) =>
+        new LabelService(pool, audit, barcodes),
+      inject: [POOL, AuditService, BarcodeService],
+    },
+    {
+      provide: CollectionService,
+      useFactory: (pool: Pool, audit: AuditService, barcodes: BarcodeService, idem: IdempotencyService) =>
+        new CollectionService(pool, audit, barcodes, idem),
+      inject: [POOL, AuditService, BarcodeService, IdempotencyService],
     },
     {
       // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).

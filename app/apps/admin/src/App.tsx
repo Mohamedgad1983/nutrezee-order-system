@@ -16,6 +16,7 @@ import { DashboardPage } from './pages/Dashboard';
 import { StaffPage } from './pages/Staff';
 import { ExceptionsPage } from './pages/Exceptions';
 import { PackingPage } from './pages/Packing';
+import { LabelsPage } from './pages/Labels';
 import { DeliveryPage } from './pages/Delivery';
 import { AuditPage } from './pages/Audit';
 import { DraftsPage } from './pages/lists';
@@ -66,6 +67,9 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/packing':
       page = <PackingPage />;
+      break;
+    case '/app/labels':
+      page = <LabelsPage />;
       break;
     case '/app/delivery':
       page = <DeliveryPage />;

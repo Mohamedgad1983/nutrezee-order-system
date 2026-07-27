@@ -1,0 +1,215 @@
+/* WP-LBL-A27 — print stylesheet for the exact legacy Nutreeze label.
+ *
+ * Physical size: the legacy stock has NOT been measured yet (WP-LBL-00 completion gate is a
+ * physical print comparison by the owner). The dimensions below are the working default and are
+ * driven by two custom properties so they can be corrected without touching layout code:
+ *
+ *     .labelPrintRoot { --label-w: 100mm; --label-h: 70mm; }
+ *
+ * Everything inside scales from --label-h, so changing the stock size rescales the whole label
+ * rather than reflowing it.
+ */
+
+.labelSheet {
+  --label-w: 100mm;
+  --label-h: 70mm;
+  --label-pad: 3.2mm;
+  --label-fg: #1a1a1a;
+  --label-rule: #b9b9b9;
+  --label-grid: #cfcfcf;
+
+  box-sizing: border-box;
+  width: var(--label-w);
+  height: var(--label-h);
+  padding: var(--label-pad);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: var(--label-fg);
+  font-family: "Segoe UI", Calibri, "Helvetica Neue", Arial, sans-serif;
+  font-size: 2.45mm;
+  line-height: 1.32;
+  overflow: hidden; /* long values must never spill past the die-cut edge */
+}
+
+/* ---- header ---- */
+.labelHeader {
+  text-align: center;
+  flex: 0 0 auto;
+  margin-bottom: 1mm;
+}
+.labelMark {
+  width: 4.4mm;
+  height: 4.8mm;
+  display: block;
+  margin: 0 auto 0.3mm;
+  color: #4a4a4a;
+}
+.labelBrand {
+  font-size: 4.4mm;
+  letter-spacing: 0.15mm;
+  font-weight: 400;
+}
+.labelTagline {
+  font-size: 1.75mm;
+  color: #555;
+  letter-spacing: 0.1mm;
+}
+
+/* ---- two-column body ---- */
+.labelBody {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 3mm;
+  min-height: 0;
+}
+.labelInfo { flex: 0 0 46%; min-width: 0; }
+.labelMeals { flex: 1 1 auto; min-width: 0; }
+
+/* hairline rules between field groups, as on the legacy label */
+.labelGroup {
+  padding: 0.7mm 0;
+  border-bottom: 0.18mm solid var(--label-rule);
+}
+.labelGroup:last-child { border-bottom: 0.18mm solid var(--label-rule); }
+
+.labelRow { display: flex; gap: 1.2mm; align-items: baseline; }
+.labelKey {
+  font-style: italic;
+  flex: 0 0 21mm;
+  color: #333;
+}
+.labelVal {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere; /* a long Arabic/English name wraps instead of overflowing */
+}
+
+.labelPackage strong { font-style: italic; }
+
+.labelIds {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5mm;
+}
+/* the legacy label stacks this caption above its value, right-aligned */
+.labelOrderNo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.labelAddress > div { overflow-wrap: anywhere; }
+
+/* ---- meals table ---- */
+.labelTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.labelTable th,
+.labelTable td {
+  border: 0.18mm solid var(--label-grid);
+  padding: 0.55mm 0.7mm;
+  text-align: center;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.labelTable th { font-weight: 600; }
+.labelTable .dishCol { text-align: left; width: 46%; }
+.labelNoDish {
+  text-align: center;
+  font-style: italic;
+  color: #666;
+  padding: 2mm 0.7mm;
+}
+
+/* ---- totals block (unbordered on the legacy label) ---- */
+.labelTotals {
+  display: flex;
+  align-items: flex-end;
+  gap: 2mm;
+  margin-top: 1.4mm;
+}
+.labelTotalsLabel { flex: 0 0 auto; padding-bottom: 0.4mm; }
+.labelTotalsTable {
+  flex: 1 1 auto;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.labelTotalsTable th,
+.labelTotalsTable td {
+  border: 0;
+  text-align: center;
+  padding: 0.2mm 0.5mm;
+}
+.labelTotalsTable th { font-weight: 400; }
+
+/* ---- the one new element: Code 128 barcode strip ---- */
+.labelBarcode {
+  flex: 0 0 auto;
+  margin-top: 1.2mm;
+  padding-top: 1mm;
+  border-top: 0.18mm solid var(--label-rule);
+  text-align: center;
+}
+.labelBarcodeImg svg {
+  /* height is fixed so bars stay scannable; width scales but never past the label edge */
+  height: 8mm;
+  width: auto;
+  max-width: 100%;
+  display: block;
+  margin: 0 auto;
+}
+.labelBarcodeRef {
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 2.4mm;
+  letter-spacing: 0.35mm;
+  margin-top: 0.5mm;
+}
+
+/* ---- screen preview chrome (never printed) ---- */
+.labelPreviewFrame {
+  display: inline-block;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+  border: 1px solid #ddd;
+  background: #fff;
+}
+
+/* ---- print ---- */
+@page {
+  size: 100mm 70mm;
+  margin: 0;
+}
+
+@media print {
+  /* Hide the whole app, then re-show only the label sheets. Using visibility (not display)
+     keeps the print root's geometry intact so each sheet still paginates correctly. */
+  body * { visibility: hidden !important; }
+  .labelPrintRoot,
+  .labelPrintRoot * { visibility: visible !important; }
+  .labelPrintRoot {
+    position: absolute;
+    inset: 0 auto auto 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+  .labelPreviewFrame {
+    box-shadow: none;
+    border: 0;
+    display: block;
+  }
+  .labelSheet {
+    break-after: page;
+    page-break-after: always;
+    box-shadow: none;
+    border: 0;
+  }
+  .labelSheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
