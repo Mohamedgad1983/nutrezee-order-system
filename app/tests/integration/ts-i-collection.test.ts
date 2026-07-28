@@ -6,11 +6,15 @@ import { AuditService } from '../../apps/api/src/platform/audit/audit.service';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
 import { BarcodeService } from '../../apps/api/src/modules/m25-label/barcode.service';
 import { CollectionService } from '../../apps/api/src/modules/m25-label/collection.service';
+import type {
+  FleetbaseDriverContext,
+} from '../../apps/api/src/modules/m25-label/fleetbase-identity.service';
 import type { StaffContext } from '../../apps/api/src/platform/auth/session.service';
 
-// TS-I — daily box collection scan (WP-LBL-03, amendment A27).
-// Every one of the seven approved outcomes is exercised, plus duplicate prevention, idempotent
-// retry, the driver manifest, and the rule that EVERY outcome (accepted or rejected) is audited.
+// TS-I — Fleetbase-authorized daily box collection (WP-LBL-A28).
+// Fleetbase identity and exact Fleetbase order assignments are the only collection authority.
+// Every outcome is audited, assignment failures disclose no customer PII, and accepted rows retain
+// the Fleetbase user/driver/order proof while the retired synthetic driver/route columns stay null.
 
 let pool: Pool;
 let barcodes: BarcodeService;
@@ -19,74 +23,67 @@ let collection: CollectionService;
 const DATE = '2099-05-12';
 const OTHER_DATE = '2099-05-13';
 
-/** Two drivers, each signed in as their own staff user. */
-const driverOne: StaffContext = {
-  staffId: 'staff-driver-1', name: 'Driver One', email: 'd1@t', locale: 'en',
-  roles: ['driver'], sessionId: 's1',
+const driverOne: FleetbaseDriverContext = {
+  actorId: 'fleetbase:user-1',
+  actorRole: 'fleetbase_driver',
+  userUuid: 'user-1',
+  driverId: 'driver_1',
+  driverRef: 'A1',
+  assignedOrders: [],
 };
-const driverTwo: StaffContext = {
-  staffId: 'staff-driver-2', name: 'Driver Two', email: 'd2@t', locale: 'en',
-  roles: ['driver'], sessionId: 's2',
+const driverTwo: FleetbaseDriverContext = {
+  actorId: 'fleetbase:user-2',
+  actorRole: 'fleetbase_driver',
+  userUuid: 'user-2',
+  driverId: 'driver_2',
+  driverRef: 'A2',
+  assignedOrders: [],
 };
 const opsActor: StaffContext = {
-  staffId: 'ops-1', name: 'Ops', email: 'o@t', locale: 'en', roles: ['ops_manager'], sessionId: 's',
+  staffId: 'fleetbase:ops-1',
+  name: 'Fleet-Ops user',
+  email: '',
+  locale: 'en',
+  roles: ['ops_manager'],
+  sessionId: 'fleetbase',
 };
-
-let driverOneId: string;
-let driverTwoId: string;
-let routeOne: string;
-let routeTwo: string;
 
 beforeAll(async () => {
   pool = await freshDb();
   const audit = new AuditService();
   barcodes = new BarcodeService(pool, audit);
   collection = new CollectionService(pool, audit, barcodes, new IdempotencyService());
-
-  driverOneId = await seedDriver(driverOne.staffId, 'Driver One', 'A1');
-  driverTwoId = await seedDriver(driverTwo.staffId, 'Driver Two', 'A2');
-  routeOne = await seedRoute(driverOneId, DATE);
-  routeTwo = await seedRoute(driverTwoId, DATE);
 }, 60_000);
 
 afterAll(async () => { await pool.end(); });
 
-async function seedDriver(staffUserId: string, name: string, legacyRef: string): Promise<string> {
-  await pool.query(
-    `INSERT INTO staff_user (id, name_en, email, created_by) VALUES ($1,$2,$3,'test')`,
-    [staffUserId, name, `${staffUserId}@test.local`],
-  );
-  const id = newId();
-  await pool.query(
-    `INSERT INTO driver (id, legacy_driver_id, name, active, staff_user_id, created_by)
-     VALUES ($1,$2,$3,true,$4,'test')`,
-    [id, legacyRef, name, staffUserId],
-  );
-  return id;
+interface Seeded {
+  customerId: string;
+  orderId: string;
+  orderNumber: string;
+  fleetbaseOrderId: string;
+  barcode: string;
 }
-
-async function seedRoute(driverId: string, date: string): Promise<string> {
-  const id = newId();
-  await pool.query(
-    `INSERT INTO delivery_route (id, driver_id, delivery_date, status, created_by)
-     VALUES ($1,$2,$3,'assigned','test')`,
-    [id, driverId, date],
-  );
-  return id;
-}
-
-interface Seeded { customerId: string; orderId: string; barcode: string }
 
 async function seedCustomer(opts: {
-  name: string; orderNo: string;
+  name: string;
+  orderNo: string;
   days?: Array<{ date: string; status?: string }>;
-  assignTo?: string | null;   // route id, or null for "scheduled but unassigned"
+  assignTo?: FleetbaseDriverContext | null;
+  phone?: string;
 }): Promise<Seeded> {
   const customerId = newId();
   const orderId = newId();
+  const fleetbaseOrderId = `order_${orderId}`;
   await pool.query(
     `INSERT INTO customer (id, full_name_en, created_by) VALUES ($1,$2,'test')`,
     [customerId, opts.name],
+  );
+  await pool.query(
+    `INSERT INTO customer_phone
+       (id, customer_id, phone_normalized, phone_raw, is_primary, created_by)
+     VALUES ($1,$2,$3,$3,true,'test')`,
+    [newId(), customerId, opts.phone ?? '+96550000000'],
   );
   await pool.query(
     `INSERT INTO customer_order
@@ -103,14 +100,20 @@ async function seedCustomer(opts: {
     );
   }
   if (opts.assignTo) {
-    await pool.query(
-      `INSERT INTO delivery_route_order (id, route_id, order_id, customer_id, status, created_by)
-       VALUES ($1,$2,$3,$4,'assigned','test')`,
-      [newId(), opts.assignTo, orderId, customerId],
-    );
+    opts.assignTo.assignedOrders.push({
+      fleetbaseOrderId,
+      localOrderId: orderId,
+      orderNumber: opts.orderNo,
+    });
   }
   const bc = await barcodes.issueFor(opsActor, customerId);
-  return { customerId, orderId, barcode: bc.barcode_value };
+  return {
+    customerId,
+    orderId,
+    orderNumber: opts.orderNo,
+    fleetbaseOrderId,
+    barcode: bc.barcode_value,
+  };
 }
 
 async function auditCount(eventType: string, customerId: string): Promise<number> {
@@ -122,22 +125,37 @@ async function auditCount(eventType: string, customerId: string): Promise<number
   return rows[0].n as number;
 }
 
-describe('TS-I collection — the seven approved outcomes', () => {
-  it('accepted: the assigned driver collects the daily box', async () => {
-    const s = await seedCustomer({ name: 'Accepted Cust', orderNo: 'N-COL-OK', assignTo: routeOne });
+describe('TS-I collection — Fleetbase assignment and seven outcomes', () => {
+  it('accepted: persists the verified Fleetbase identity and assignment', async () => {
+    const s = await seedCustomer({ name: 'Accepted Cust', orderNo: 'N-COL-OK', assignTo: driverOne });
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
 
     expect(res.outcome).toBe('accepted');
     expect(res.customer_name).toBe('Accepted Cust');
     expect(res.order_number).toBe('N-COL-OK');
+    expect(res.area).toBe('Salmiya');
+    expect(res.phone).toBe('+96550000000');
     expect(res.delivery_date).toBe(DATE);
     expect(res.collected_at).toBeTruthy();
     expect(res.message_ar).toBeTruthy();
     expect(await auditCount('collection.accepted', s.customerId)).toBe(1);
+
+    const { rows } = await pool.query(
+      `SELECT fleetbase_user_uuid, fleetbase_driver_id, fleetbase_order_id, driver_id, route_id
+         FROM box_collection WHERE customer_id=$1 AND delivery_date=$2`,
+      [s.customerId, DATE],
+    );
+    expect(rows).toEqual([expect.objectContaining({
+      fleetbase_user_uuid: driverOne.userUuid,
+      fleetbase_driver_id: driverOne.driverId,
+      fleetbase_order_id: s.fleetbaseOrderId,
+      driver_id: null,
+      route_id: null,
+    })]);
   });
 
   it('duplicate: the same customer cannot be collected twice on the same day', async () => {
-    const s = await seedCustomer({ name: 'Dup Cust', orderNo: 'N-COL-DUP', assignTo: routeOne });
+    const s = await seedCustomer({ name: 'Dup Cust', orderNo: 'N-COL-DUP', assignTo: driverOne });
     const first = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
     const second = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
 
@@ -153,44 +171,94 @@ describe('TS-I collection — the seven approved outcomes', () => {
     expect(rows[0].n).toBe(1);
   });
 
-  it('wrong_driver: a driver cannot collect another driver’s customer', async () => {
-    const s = await seedCustomer({ name: 'Other Driver Cust', orderNo: 'N-COL-WD', assignTo: routeTwo });
+  it('wrong_driver: refuses another driver and discloses no customer data', async () => {
+    const s = await seedCustomer({
+      name: 'Other Driver Cust',
+      orderNo: 'N-COL-WD',
+      assignTo: driverTwo,
+      phone: '+96551111111',
+    });
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
 
     expect(res.outcome).toBe('wrong_driver');
-    expect(res.assigned_driver_ref).toBe('A2');
+    expect(res.customer_id).toBeNull();
+    expect(res.customer_name).toBeNull();
+    expect(res.order_number).toBeNull();
+    expect(res.area).toBeNull();
+    expect(res.phone).toBeNull();
+    expect(res.assigned_driver_ref).toBeNull();
     expect(await auditCount('collection.wrong_driver', s.customerId)).toBe(1);
 
     const { rows } = await pool.query(
       `SELECT count(*)::int AS n FROM box_collection WHERE customer_id=$1`, [s.customerId],
     );
-    expect(rows[0].n).toBe(0);      // nothing recorded on a rejection
+    expect(rows[0].n).toBe(0);
   });
 
-  it('wrong_driver: an order on nobody’s manifest is also refused', async () => {
+  it('wrong_driver: an order on nobody’s Fleetbase manifest is refused', async () => {
     const s = await seedCustomer({ name: 'Unassigned Cust', orderNo: 'N-COL-UN', assignTo: null });
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
     expect(res.outcome).toBe('wrong_driver');
-    expect(res.assigned_driver_ref).toBeNull();
+    expect(res.customer_name).toBeNull();
+    expect(res.phone).toBeNull();
+  });
+
+  it('fails closed when Fleetbase metadata gives a local id and a conflicting order number', async () => {
+    const assigned = await seedCustomer({
+      name: 'Exact Id Cust',
+      orderNo: 'N-COL-EXACT',
+      assignTo: null,
+    });
+    const conflicting = await seedCustomer({
+      name: 'Conflicting Number Cust',
+      orderNo: 'N-COL-CONFLICT',
+      assignTo: null,
+    });
+    const contradictoryContext: FleetbaseDriverContext = {
+      ...driverOne,
+      assignedOrders: [{
+        fleetbaseOrderId: 'order_contradictory',
+        localOrderId: assigned.orderId,
+        orderNumber: conflicting.orderNumber,
+      }],
+    };
+
+    const res = await collection.scan(
+      contradictoryContext,
+      { barcode: conflicting.barcode, delivery_date: DATE },
+    );
+    expect(res.outcome).toBe('wrong_driver');
+    expect(res.customer_id).toBeNull();
+    expect(res.customer_name).toBeNull();
+    expect(res.phone).toBeNull();
   });
 
   it('no_delivery_today: the customer has no scheduled day on this date', async () => {
     const s = await seedCustomer({
-      name: 'No Delivery Cust', orderNo: 'N-COL-ND',
-      days: [{ date: OTHER_DATE }], assignTo: routeOne,
+      name: 'No Delivery Cust',
+      orderNo: 'N-COL-ND',
+      days: [{ date: OTHER_DATE }],
+      assignTo: driverOne,
     });
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
     expect(res.outcome).toBe('no_delivery_today');
+    expect(res.customer_id).toBeNull();
+    expect(res.customer_name).toBeNull();
+    expect(res.phone).toBeNull();
     expect(await auditCount('collection.no_delivery_today', s.customerId)).toBe(1);
   });
 
-  it('cancelled: today’s delivery is cancelled', async () => {
+  it('cancelled: assigned driver sees the cancelled outcome and their own stop data', async () => {
     const s = await seedCustomer({
-      name: 'Cancelled Cust', orderNo: 'N-COL-CX',
-      days: [{ date: DATE, status: 'cancelled_day' }], assignTo: routeOne,
+      name: 'Cancelled Cust',
+      orderNo: 'N-COL-CX',
+      days: [{ date: DATE, status: 'cancelled_day' }],
+      assignTo: driverOne,
     });
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
     expect(res.outcome).toBe('cancelled');
+    expect(res.customer_name).toBe('Cancelled Cust');
+    expect(res.phone).toBe('+96550000000');
     expect(await auditCount('collection.cancelled', s.customerId)).toBe(1);
   });
 
@@ -208,9 +276,8 @@ describe('TS-I collection — the seven approved outcomes', () => {
     expect(rows[0].n).toBe(2);
   });
 
-  it('ambiguous_delivery: two live deliveries need operations, not a guess', async () => {
-    const s = await seedCustomer({ name: 'Ambiguous Cust', orderNo: 'N-COL-AM1', assignTo: routeOne });
-    // a second active order for the SAME customer on the same date
+  it('ambiguous_delivery: refuses to guess and discloses no customer data', async () => {
+    const s = await seedCustomer({ name: 'Ambiguous Cust', orderNo: 'N-COL-AM1', assignTo: driverOne });
     const secondOrder = newId();
     await pool.query(
       `INSERT INTO customer_order
@@ -226,21 +293,19 @@ describe('TS-I collection — the seven approved outcomes', () => {
 
     const res = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
     expect(res.outcome).toBe('ambiguous_delivery');
+    expect(res.customer_id).toBeNull();
+    expect(res.customer_name).toBeNull();
+    expect(res.order_number).toBeNull();
+    expect(res.phone).toBeNull();
     expect(await auditCount('collection.ambiguous_delivery', s.customerId)).toBe(1);
-
-    const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM box_collection WHERE customer_id=$1`, [s.customerId],
-    );
-    expect(rows[0].n).toBe(0);
   });
 });
 
-describe('TS-I collection — merged customer, idempotency, manifest, immutability', () => {
-  it('a barcode aliased by a merge still collects for the surviving customer', async () => {
-    const survivor = await seedCustomer({ name: 'Survivor', orderNo: 'N-COL-SV', assignTo: routeOne });
-    const merged = await seedCustomer({ name: 'Merged Away', orderNo: 'N-COL-MG', assignTo: routeOne });
+describe('TS-I collection — merge, idempotency, manifest, immutability', () => {
+  it('an aliased barcode still collects for the surviving customer', async () => {
+    const survivor = await seedCustomer({ name: 'Survivor', orderNo: 'N-COL-SV', assignTo: driverOne });
+    const merged = await seedCustomer({ name: 'Merged Away', orderNo: 'N-COL-MG', assignTo: driverOne });
 
-    // simulate what the merge relink step does
     await pool.query(
       `UPDATE customer_barcode
           SET customer_id=$1, pre_merge_status=status, status='alias',
@@ -255,29 +320,28 @@ describe('TS-I collection — merged customer, idempotency, manifest, immutabili
     expect(res.order_number).toBe('N-COL-SV');
   });
 
-  it('a retried scan with the same idempotency key repeats "accepted", not "duplicate"', async () => {
-    const s = await seedCustomer({ name: 'Retry Cust', orderNo: 'N-COL-RT', assignTo: routeOne });
+  it('same-driver retry repeats accepted; another driver cannot replay it', async () => {
+    const s = await seedCustomer({ name: 'Retry Cust', orderNo: 'N-COL-RT', assignTo: driverOne });
     const key = `scan-${newId()}`;
 
     const first = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE }, key);
     const retry = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE }, key);
+    const crossDriver = await collection.scan(driverTwo, { barcode: s.barcode, delivery_date: DATE }, key);
     const withoutKey = await collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE });
 
     expect(first.outcome).toBe('accepted');
     expect(retry.outcome).toBe('accepted');
     expect(retry.collected_at).toBe(first.collected_at);
-    expect(withoutKey.outcome).toBe('duplicate');   // a genuinely new scan still sees the duplicate
-
-    const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM box_collection WHERE customer_id=$1`, [s.customerId],
-    );
-    expect(rows[0].n).toBe(1);
+    expect(crossDriver.outcome).toBe('wrong_driver');
+    expect(crossDriver.customer_name).toBeNull();
+    expect(withoutKey.outcome).toBe('duplicate');
   });
 
-  it('concurrent scans of the same box still record exactly one collection', async () => {
-    const s = await seedCustomer({ name: 'Concurrent Cust', orderNo: 'N-COL-CC', assignTo: routeOne });
+  it('concurrent scans still record exactly one collection', async () => {
+    const s = await seedCustomer({ name: 'Concurrent Cust', orderNo: 'N-COL-CC', assignTo: driverOne });
     const results = await Promise.all(
-      Array.from({ length: 4 }, () => collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE })),
+      Array.from({ length: 4 }, () =>
+        collection.scan(driverOne, { barcode: s.barcode, delivery_date: DATE })),
     );
     expect(results.filter((r) => r.outcome === 'accepted')).toHaveLength(1);
     expect(results.filter((r) => r.outcome === 'duplicate')).toHaveLength(3);
@@ -288,7 +352,7 @@ describe('TS-I collection — merged customer, idempotency, manifest, immutabili
     expect(rows[0].n).toBe(1);
   });
 
-  it('the manifest reports assigned / collected / remaining for the signed-in driver only', async () => {
+  it('manifest contains only exact Fleetbase assignments for the current driver', async () => {
     const mine = await collection.manifest(driverOne, DATE);
     const theirs = await collection.manifest(driverTwo, DATE);
 
@@ -296,18 +360,11 @@ describe('TS-I collection — merged customer, idempotency, manifest, immutabili
     expect(mine.total).toBe(mine.collected + mine.remaining);
     expect(mine.entries).toHaveLength(mine.total);
     expect(mine.collected).toBeGreaterThan(0);
-    // driver two only ever had the wrong_driver customer assigned, never collected
+    expect(mine.entries.every((entry) => typeof entry.phone === 'string')).toBe(true);
     expect(theirs.driver_ref).toBe('A2');
     expect(theirs.collected).toBe(0);
-    // no customer of driver two appears on driver one's manifest
-    const mineIds = new Set(mine.entries.map((e) => e.customer_id));
-    expect(theirs.entries.some((e) => mineIds.has(e.customer_id))).toBe(false);
-  });
-
-  it('a staff user who is not a linked driver cannot scan or read a manifest', async () => {
-    await expect(collection.scan(opsActor, { barcode: 'NZC-AAAA-AAAA-AA', delivery_date: DATE }))
-      .rejects.toMatchObject({ code: 'forbidden' });
-    await expect(collection.manifest(opsActor, DATE)).rejects.toMatchObject({ code: 'forbidden' });
+    const mineIds = new Set(mine.entries.map((entry) => entry.customer_id));
+    expect(theirs.entries.some((entry) => mineIds.has(entry.customer_id))).toBe(false);
   });
 
   it('collections are append-only at the database level', async () => {

@@ -201,6 +201,29 @@ describe('TS-I barcode — customer merge preserves the old label', () => {
 });
 
 describe('TS-I label — exact legacy content, honest nutrition', () => {
+  it('resolves Fleetbase bridge metadata by authoritative id, otherwise exact order number', async () => {
+    const direct = await seed('Direct Fleetbase Ref', 'N-LBL-FB-DIRECT');
+    const numbered = await seed('Number Fleetbase Ref', 'N-LBL-FB-NUMBER');
+
+    await expect(labels.resolveFleetbaseOrder({
+      id: 'order_direct',
+      meta: { nutrezee_order_id: direct.orderId, source_order_number: numbered.orderNo },
+    })).resolves.toBe(direct.orderId);
+
+    await expect(labels.resolveFleetbaseOrder({
+      id: 'order_number',
+      meta: { source_order_number: numbered.orderNo },
+    })).resolves.toBe(numbered.orderId);
+
+    await expect(labels.resolveFleetbaseOrder({
+      id: 'order_stale',
+      meta: { nutrezee_order_id: 'stale-local-id', source_order_number: numbered.orderNo },
+    })).rejects.toMatchObject({
+      code: 'not_found',
+      detail: { reason: 'fleetbase_order_not_in_nutrezee' },
+    });
+  });
+
   it('builds every legacy field from an authoritative source', async () => {
     const s = await seed('mariam khlaed almajed', 'N-LBL-DOC', { phone: '51712730' });
     const doc = await labels.build(actor, s.orderId, DATE_A);

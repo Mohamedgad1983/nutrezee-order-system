@@ -194,6 +194,8 @@ export interface CollectionScanResultContract {
   delivery_date?: string | null;
   delivery_time?: string | null;
   area?: string | null;
+  /** Returned only after Fleetbase proves this delivery is assigned to the current driver. */
+  phone?: string | null;
   collected_at?: string | null;
   /** For wrong_driver: the driver the delivery actually belongs to. */
   assigned_driver_ref?: string | null;
@@ -207,6 +209,7 @@ export interface CollectionManifestEntryContract {
   order_number: string;
   area: string | null;
   delivery_time: string | null;
+  phone: string | null;
   collected: boolean;
   collected_at: string | null;
 }

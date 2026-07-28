@@ -59,6 +59,7 @@ import { LabelController } from './modules/m25-label/label.controller';
 import { BarcodeService } from './modules/m25-label/barcode.service';
 import { LabelService } from './modules/m25-label/label.service';
 import { CollectionService } from './modules/m25-label/collection.service';
+import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
@@ -288,6 +289,12 @@ export const POOL = 'POOL';
       useFactory: (pool: Pool, audit: AuditService, barcodes: BarcodeService, idem: IdempotencyService) =>
         new CollectionService(pool, audit, barcodes, idem),
       inject: [POOL, AuditService, BarcodeService, IdempotencyService],
+    },
+    {
+      // A28 — validates the existing Fleetbase bearer token and resolves the authenticated
+      // driver's assignments directly from Fleetbase. No second Nutrezee driver identity exists.
+      provide: FleetbaseIdentityService,
+      useFactory: () => new FleetbaseIdentityService(),
     },
     {
       // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).

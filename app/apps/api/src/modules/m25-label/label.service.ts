@@ -9,6 +9,7 @@ import { AuditService } from '../../platform/audit/audit.service';
 import type { StaffContext } from '../../platform/auth/session.service';
 import { newId } from '../../platform/ids';
 import { BarcodeService } from './barcode.service';
+import type { FleetbaseOrderProjection } from './fleetbase-identity.service';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -58,7 +59,12 @@ export class LabelService {
    * Build the render-ready label for one order on one delivery date. Read-only apart from
    * first-time barcode issuance, which is idempotent.
    */
-  async build(actor: StaffContext, orderId: string, deliveryDate: string): Promise<LabelDocumentContract> {
+  async build(
+    actor: StaffContext,
+    orderId: string,
+    deliveryDate: string,
+    source?: { driverRef?: string | null },
+  ): Promise<LabelDocumentContract> {
     if (!DATE_RE.test(deliveryDate ?? '')) {
       throw new LabelError('validation_failed', { field: 'delivery_date' });
     }
@@ -101,7 +107,9 @@ export class LabelService {
     const r = rows[0] as Record<string, unknown>;
 
     const [meals, mealSource] = await this.mealRows(orderId, deliveryDate);
-    const driverRef = await this.driverRef(orderId, deliveryDate);
+    const driverRef = source && 'driverRef' in source
+      ? source.driverRef ?? null
+      : await this.driverRef(orderId, deliveryDate);
     const barcode = await this.barcodes.issueFor(actor, r.customer_id as string);
 
     const address: LabelAddressContract = {
@@ -143,6 +151,51 @@ export class LabelService {
       barcode_value: barcode.barcode_value,
       barcode_svg: code128Svg(barcode.barcode_value, { moduleWidth: 1, height: 44, quietModules: 10 }),
     };
+  }
+
+  /**
+   * Resolve a server-fetched Fleetbase order to one local order by exact bridge metadata only.
+   * The browser never chooses the Nutrezee order id. This supports both the m24 bridge metadata
+   * and the read-only Partner daily-dispatch metadata already stored on Fleetbase orders.
+   */
+  async resolveFleetbaseOrder(order: FleetbaseOrderProjection): Promise<string> {
+    const meta = order.meta ?? {};
+    const ids = compactStrings([meta.nutrezee_order_id]);
+    const numbers = compactStrings([
+      meta.source_order_number,
+      meta.external_ref,
+      order.internal_id,
+    ]);
+    if (ids.length === 0 && numbers.length === 0) {
+      throw new LabelError('not_found', { reason: 'fleetbase_order_has_no_nutrezee_reference' });
+    }
+    // A direct Nutrezee id is authoritative. If Fleetbase also carries a contradictory order
+    // number, or the direct id is stale, fail closed instead of silently falling back.
+    const { rows } = ids.length > 0
+      ? await this.pool.query(
+        `SELECT id FROM customer_order WHERE id = ANY($1::text[]) ORDER BY id LIMIT 2`,
+        [ids],
+      )
+      : await this.pool.query(
+        `SELECT id FROM customer_order WHERE order_number = ANY($1::text[]) ORDER BY id LIMIT 2`,
+        [numbers],
+      );
+    if (rows.length === 0) {
+      throw new LabelError('not_found', { reason: 'fleetbase_order_not_in_nutrezee' });
+    }
+    if (rows.length > 1) {
+      throw new LabelError('conflict', { reason: 'fleetbase_order_reference_ambiguous' });
+    }
+    return (rows[0] as Record<string, unknown>).id as string;
+  }
+
+  fleetbaseDriverRef(order: FleetbaseOrderProjection): string | null {
+    const driver = order.driver_assigned;
+    return driver?.internal_id?.trim()
+      || driver?.name?.trim()
+      || driver?.public_id?.trim()
+      || driver?.id?.trim()
+      || null;
   }
 
   /**
@@ -297,6 +350,13 @@ export class LabelService {
 
 function numOrNull(v: unknown): number | null {
   return v === null || v === undefined ? null : Number(v);
+}
+
+function compactStrings(values: unknown[]): string[] {
+  return [...new Set(values
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean))];
 }
 
 /**

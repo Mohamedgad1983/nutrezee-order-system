@@ -6,16 +6,16 @@ import type {
 import { withTransaction } from '../../platform/db/tx';
 import { AuditService } from '../../platform/audit/audit.service';
 import { IdempotencyService } from '../../platform/idempotency/idempotency.service';
-import type { StaffContext } from '../../platform/auth/session.service';
 import { newId } from '../../platform/ids';
 import { BarcodeService } from './barcode.service';
+import type { FleetbaseAssignedOrder, FleetbaseDriverContext } from './fleetbase-identity.service';
 
 // m25-label — daily box collection (WP-LBL-03, amendment A27).
 //
 // A driver scans a customer's permanent barcode; the system decides the outcome by combining the
-// barcode, today's date, the logged-in driver and that driver's manifest. Every outcome — accepted
-// AND every rejection — is written to audit_event in the same transaction. Writes ONLY
-// box_collection; fulfillment_day / delivery_route / customer are read-only here.
+// barcode, today's date, the verified Fleetbase driver and that driver's Fleetbase-assigned orders.
+// Every outcome — accepted AND every rejection — is written to audit_event in the same
+// transaction. Writes ONLY box_collection; fulfillment_day / customer are read-only here.
 //
 // Duplicate prevention is DB-enforced by UNIQUE (customer_id, delivery_date): even two concurrent
 // scans of the same box resolve to exactly one accepted collection.
@@ -38,6 +38,7 @@ interface DeliveryRow {
   status: string;
   delivery_time: string | null;
   area: string | null;
+  phone: string | null;
 }
 
 interface Messages { en: string; ar: string }
@@ -76,32 +77,11 @@ export class CollectionService {
    * The signed-in driver's manifest for a date: who is assigned, who has been collected, who is
    * still outstanding. Read-only.
    */
-  async manifest(actor: StaffContext, date?: string): Promise<CollectionManifestContract> {
+  async manifest(actor: FleetbaseDriverContext, date?: string): Promise<CollectionManifestContract> {
     const deliveryDate = date ?? await this.today();
     if (!DATE_RE.test(deliveryDate)) throw new CollectionError('validation_failed', { field: 'delivery_date' });
 
-    const driver = await this.driverForStaff(actor.staffId);
-    if (!driver) throw new CollectionError('forbidden', { reason: 'staff_user_not_linked_to_driver' });
-
-    const { rows } = await this.pool.query(
-      `SELECT co.customer_id,
-              c.full_name_en                AS customer_name,
-              co.order_number,
-              coalesce(dro.area, co.delivery_area_frozen)                   AS area,
-              coalesce(dro.delivery_time_frozen, co.delivery_time_frozen)   AS delivery_time,
-              bc.id                         AS collection_id,
-              bc.scanned_at
-         FROM delivery_route dr
-         JOIN delivery_route_order dro ON dro.route_id = dr.id AND dro.status <> 'returned'
-         JOIN customer_order co ON co.id = dro.order_id
-         LEFT JOIN customer c ON c.id = co.customer_id
-         JOIN fulfillment_day fd ON fd.order_id = co.id AND fd.date = dr.delivery_date
-                                AND fd.status <> ALL($3::text[])
-         LEFT JOIN box_collection bc ON bc.customer_id = co.customer_id AND bc.delivery_date = dr.delivery_date
-        WHERE dr.driver_id = $1 AND dr.delivery_date = $2
-        ORDER BY (bc.id IS NOT NULL), c.full_name_en NULLS LAST, co.order_number`,
-      [driver.id, deliveryDate, CANCELLED_STATUSES],
-    );
+    const rows = await this.assignedDeliveryRows(actor.assignedOrders, deliveryDate);
 
     const entries: CollectionManifestEntryContract[] = rows.map((raw) => {
       const r = raw as Record<string, unknown>;
@@ -111,15 +91,20 @@ export class CollectionService {
         order_number: r.order_number as string,
         area: (r.area as string) ?? null,
         delivery_time: (r.delivery_time as string) ?? null,
+        phone: (r.phone as string) ?? null,
         collected: r.collection_id !== null && r.collection_id !== undefined,
         collected_at: r.scanned_at instanceof Date ? r.scanned_at.toISOString()
           : (r.scanned_at as string) ?? null,
       };
-    });
+    }).sort((a, b) =>
+      Number(a.collected) - Number(b.collected)
+      || (a.customer_name ?? '').localeCompare(b.customer_name ?? '')
+      || a.order_number.localeCompare(b.order_number),
+    );
     const collected = entries.filter((e) => e.collected).length;
     return {
       delivery_date: deliveryDate,
-      driver_ref: driver.driver_ref,
+      driver_ref: actor.driverRef,
       total: entries.length,
       collected,
       remaining: entries.length - collected,
@@ -132,7 +117,7 @@ export class CollectionService {
    * is a result, not an error — so the driver app can render it. Every outcome is audited.
    */
   async scan(
-    actor: StaffContext,
+    actor: FleetbaseDriverContext,
     input: { barcode: string; delivery_date?: string; device_ref?: string },
     idempotencyKey?: string,
   ): Promise<CollectionScanResultContract> {
@@ -142,12 +127,9 @@ export class CollectionService {
     // A retried request (flaky signal in a stairwell) must repeat its original ACCEPTED answer
     // rather than degrade to `duplicate`, which would read to the driver as a failure.
     if (idempotencyKey) {
-      const replay = await this.replayOf(idempotencyKey);
+      const replay = await this.replayOf(idempotencyKey, actor.driverId);
       if (replay) return replay;
     }
-
-    const driver = await this.driverForStaff(actor.staffId);
-    if (!driver) throw new CollectionError('forbidden', { reason: 'staff_user_not_linked_to_driver' });
 
     // 1 — barcode must resolve (alias rows resolve to the surviving customer)
     const resolved = await this.barcodes.resolve(input.barcode ?? '');
@@ -155,35 +137,45 @@ export class CollectionService {
       return this.reject(actor, 'unknown_barcode', deliveryDate, {
         // Deliberately does not echo the scanned text back into audit: an unknown scan may be any
         // arbitrary barcode the driver pointed the camera at.
-        relatedRefs: { driver_id: driver.id, delivery_date: deliveryDate },
+        relatedRefs: { fleetbase_driver_id: actor.driverId, delivery_date: deliveryDate },
       });
     }
-
-    const customer = await this.customerName(resolved.customer_id);
 
     // 2 — the customer must have a delivery scheduled on this date
     const deliveries = await this.deliveriesFor(resolved.customer_id, deliveryDate);
     if (deliveries.length === 0) {
       return this.reject(actor, 'no_delivery_today', deliveryDate, {
-        customerId: resolved.customer_id, customerName: customer,
-        relatedRefs: { driver_id: driver.id, customer_id: resolved.customer_id, delivery_date: deliveryDate },
+        customerId: resolved.customer_id, customerName: null,
+        relatedRefs: {
+          fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+          delivery_date: deliveryDate,
+        },
       });
     }
 
     const active = deliveries.filter((d) => !CANCELLED_STATUSES.includes(d.status));
     // 3 — every scheduled day for this date is cancelled
     if (active.length === 0) {
+      const assignedCancelled = deliveries.find((item) =>
+        this.assignmentFor(actor.assignedOrders, item),
+      );
+      const customer = assignedCancelled ? await this.customerName(resolved.customer_id) : null;
       return this.reject(actor, 'cancelled', deliveryDate, {
-        customerId: resolved.customer_id, customerName: customer, delivery: deliveries[0],
-        relatedRefs: { driver_id: driver.id, customer_id: resolved.customer_id, delivery_date: deliveryDate },
+        customerId: resolved.customer_id, customerName: customer,
+        delivery: assignedCancelled,
+        relatedRefs: {
+          fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+          delivery_date: deliveryDate,
+        },
       });
     }
     // 4 — more than one live delivery: operations must decide, we must not guess
     if (active.length > 1) {
       return this.reject(actor, 'ambiguous_delivery', deliveryDate, {
-        customerId: resolved.customer_id, customerName: customer,
+        customerId: resolved.customer_id, customerName: null,
         relatedRefs: {
-          driver_id: driver.id, customer_id: resolved.customer_id, delivery_date: deliveryDate,
+          fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+          delivery_date: deliveryDate,
           order_ids: active.map((d) => d.order_id).join(','),
         },
       });
@@ -191,18 +183,19 @@ export class CollectionService {
 
     const delivery = active[0]!;
 
-    // 5 — the delivery must be on THIS driver's manifest for this date
-    const assignment = await this.assignmentFor(delivery.order_id, deliveryDate);
-    if (!assignment || assignment.driver_id !== driver.id) {
+    // 5 — the delivery must be in THIS verified Fleetbase driver's assigned-order response.
+    const assignment = this.assignmentFor(actor.assignedOrders, delivery);
+    if (!assignment) {
       return this.reject(actor, 'wrong_driver', deliveryDate, {
-        customerId: resolved.customer_id, customerName: customer, delivery,
-        assignedDriverRef: assignment?.driver_ref ?? null,
+        customerId: resolved.customer_id, customerName: null,
+        assignedDriverRef: null,
         relatedRefs: {
-          driver_id: driver.id, customer_id: resolved.customer_id, order_id: delivery.order_id,
-          delivery_date: deliveryDate, assigned_driver_id: assignment?.driver_id ?? 'unassigned',
+          fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+          order_id: delivery.order_id, delivery_date: deliveryDate,
         },
       });
     }
+    const customer = await this.customerName(resolved.customer_id);
 
     // 6 — already collected today?
     const existing = await this.existingCollection(resolved.customer_id, deliveryDate);
@@ -211,7 +204,8 @@ export class CollectionService {
         customerId: resolved.customer_id, customerName: customer, delivery,
         collectedAt: existing.scanned_at,
         relatedRefs: {
-          driver_id: driver.id, customer_id: resolved.customer_id, delivery_date: deliveryDate,
+          fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+          delivery_date: deliveryDate,
           existing_collection_id: existing.id,
         },
       });
@@ -229,20 +223,21 @@ export class CollectionService {
         const id = newId();
         const { rows } = await client.query(
           `INSERT INTO box_collection
-             (id, customer_id, delivery_date, order_id, fulfillment_day_id, driver_id, route_id,
+             (id, customer_id, delivery_date, order_id, fulfillment_day_id,
+              fleetbase_user_uuid, fleetbase_driver_id, fleetbase_order_id,
               barcode_id, barcode_value, device_ref, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            RETURNING scanned_at`,
           [id, resolved.customer_id, deliveryDate, delivery.order_id, delivery.fulfillment_day_id,
-            driver.id, assignment.route_id, resolved.barcode_id, resolved.barcode_value,
-            input.device_ref ?? null, actor.staffId],
+            actor.userUuid, actor.driverId, assignment.fleetbaseOrderId,
+            resolved.barcode_id, resolved.barcode_value, input.device_ref ?? null, actor.actorId],
         );
         await this.audit.writeInTx(client, {
           eventType: 'collection.accepted', actor: this.actor(actor),
           entityType: 'box_collection', entityId: id, severity: 'info',
           relatedRefs: {
-            driver_id: driver.id, customer_id: resolved.customer_id, order_id: delivery.order_id,
-            delivery_date: deliveryDate,
+            fleetbase_driver_id: actor.driverId, fleetbase_order_id: assignment.fleetbaseOrderId,
+            customer_id: resolved.customer_id, order_id: delivery.order_id, delivery_date: deliveryDate,
           },
           after: { outcome: 'accepted', barcode_value: resolved.barcode_value },
         });
@@ -262,7 +257,8 @@ export class CollectionService {
           customerId: resolved.customer_id, customerName: customer, delivery,
           collectedAt: settled?.scanned_at ?? null,
           relatedRefs: {
-            driver_id: driver.id, customer_id: resolved.customer_id, delivery_date: deliveryDate,
+            fleetbase_driver_id: actor.driverId, customer_id: resolved.customer_id,
+            delivery_date: deliveryDate,
             existing_collection_id: settled?.id ?? 'unknown', race: 'true',
           },
         });
@@ -273,34 +269,32 @@ export class CollectionService {
 
   // ---- helpers ----
 
-  private async driverForStaff(staffUserId: string): Promise<{ id: string; driver_ref: string | null } | null> {
-    const { rows } = await this.pool.query(
-      `SELECT id, coalesce(legacy_driver_id, name) AS driver_ref
-         FROM driver WHERE staff_user_id = $1 AND active LIMIT 1`,
-      [staffUserId],
-    );
-    if (rows.length === 0) return null;
-    const r = rows[0] as Record<string, unknown>;
-    return { id: r.id as string, driver_ref: (r.driver_ref as string) ?? null };
-  }
-
   /**
    * If this idempotency key already produced an accepted collection, rebuild that exact result.
    * Returns null when the key is unused, still in flight, or belonged to a different operation.
    */
-  private async replayOf(key: string): Promise<CollectionScanResultContract | null> {
+  private async replayOf(key: string, fleetbaseDriverId: string): Promise<CollectionScanResultContract | null> {
     const { rows } = await this.pool.query(
       `SELECT bc.id, bc.customer_id, bc.delivery_date, bc.scanned_at,
               c.full_name_en AS customer_name,
               co.order_number, co.delivery_time_frozen AS delivery_time,
-              co.delivery_area_frozen AS area, bc.order_id, bc.fulfillment_day_id
+              co.delivery_area_frozen AS area, ph.phone_normalized AS phone,
+              bc.order_id, bc.fulfillment_day_id
          FROM idempotency_key ik
          JOIN box_collection bc ON bc.id = ik.response_ref
          LEFT JOIN customer c ON c.id = bc.customer_id
          LEFT JOIN customer_order co ON co.id = bc.order_id
+         LEFT JOIN LATERAL (
+              SELECT phone_normalized
+                FROM customer_phone
+               WHERE customer_id = bc.customer_id
+               ORDER BY is_primary DESC, created_at ASC
+               LIMIT 1
+         ) ph ON true
         WHERE ik.key = $1 AND ik.operation = 'collection.scan' AND ik.response_ref IS NOT NULL
+          AND bc.fleetbase_driver_id = $2
         LIMIT 1`,
-      [key],
+      [key, fleetbaseDriverId],
     );
     if (rows.length === 0) return null;
     const r = rows[0] as Record<string, unknown>;
@@ -316,6 +310,7 @@ export class CollectionService {
         status: 'scheduled',
         delivery_time: (r.delivery_time as string) ?? null,
         area: (r.area as string) ?? null,
+        phone: (r.phone as string) ?? null,
       },
       collectedAt: r.scanned_at instanceof Date ? r.scanned_at.toISOString() : String(r.scanned_at),
       deliveryDate: date,
@@ -331,9 +326,17 @@ export class CollectionService {
     const { rows } = await this.pool.query(
       `SELECT fd.id AS fulfillment_day_id, fd.order_id, fd.status,
               co.order_number, co.delivery_time_frozen AS delivery_time,
-              co.delivery_area_frozen AS area
+              co.delivery_area_frozen AS area,
+              ph.phone_normalized AS phone
          FROM fulfillment_day fd
          JOIN customer_order co ON co.id = fd.order_id
+         LEFT JOIN LATERAL (
+              SELECT phone_normalized
+                FROM customer_phone
+               WHERE customer_id = co.customer_id
+               ORDER BY is_primary DESC, created_at ASC
+               LIMIT 1
+         ) ph ON true
         WHERE co.customer_id = $1 AND fd.date = $2
         ORDER BY fd.created_at`,
       [customerId, date],
@@ -347,29 +350,68 @@ export class CollectionService {
         status: r.status as string,
         delivery_time: (r.delivery_time as string) ?? null,
         area: (r.area as string) ?? null,
+        phone: (r.phone as string) ?? null,
       };
     });
   }
 
-  private async assignmentFor(
-    orderId: string, date: string,
-  ): Promise<{ driver_id: string | null; driver_ref: string | null; route_id: string } | null> {
+  /**
+   * Resolve the driver's Fleetbase-assigned orders to local deliveries using exact identifiers
+   * only. The bridge may carry the Nutrezee order id directly, or the authoritative Partner order
+   * number. Fuzzy matching is deliberately absent.
+   */
+  private async assignedDeliveryRows(
+    assignments: FleetbaseAssignedOrder[], date: string,
+  ): Promise<Record<string, unknown>[]> {
+    if (assignments.length === 0) return [];
+    const fleetbaseIds = assignments.map((item) => item.fleetbaseOrderId);
+    const localIds = assignments.map((item) => item.localOrderId ?? '');
+    const orderNumbers = assignments.map((item) => item.orderNumber ?? '');
     const { rows } = await this.pool.query(
-      `SELECT dr.id AS route_id, dr.driver_id, coalesce(d.legacy_driver_id, d.name) AS driver_ref
-         FROM delivery_route_order dro
-         JOIN delivery_route dr ON dr.id = dro.route_id
-         LEFT JOIN driver d ON d.id = dr.driver_id
-        WHERE dro.order_id = $1 AND dr.delivery_date = $2 AND dro.status <> 'returned'
-        ORDER BY dro.created_at DESC LIMIT 1`,
-      [orderId, date],
+      `WITH assigned AS (
+         SELECT *
+           FROM unnest($1::text[], $2::text[], $3::text[])
+                AS a(fleetbase_order_id, local_order_id, order_number)
+       )
+       SELECT DISTINCT ON (co.id)
+              a.fleetbase_order_id,
+              co.customer_id,
+              c.full_name_en AS customer_name,
+              co.order_number,
+              co.delivery_area_frozen AS area,
+              co.delivery_time_frozen AS delivery_time,
+              ph.phone_normalized AS phone,
+              bc.id AS collection_id,
+              bc.scanned_at
+         FROM assigned a
+         JOIN customer_order co
+           ON (a.local_order_id <> '' AND co.id = a.local_order_id)
+           OR (a.local_order_id = '' AND a.order_number <> '' AND co.order_number = a.order_number)
+         JOIN fulfillment_day fd
+           ON fd.order_id = co.id AND fd.date = $4 AND fd.status <> ALL($5::text[])
+         LEFT JOIN customer c ON c.id = co.customer_id
+         LEFT JOIN LATERAL (
+              SELECT phone_normalized
+                FROM customer_phone
+               WHERE customer_id = co.customer_id
+               ORDER BY is_primary DESC, created_at ASC
+               LIMIT 1
+         ) ph ON true
+         LEFT JOIN box_collection bc
+           ON bc.customer_id = co.customer_id AND bc.delivery_date = fd.date
+        ORDER BY co.id, (bc.id IS NOT NULL), c.full_name_en NULLS LAST`,
+      [fleetbaseIds, localIds, orderNumbers, date, CANCELLED_STATUSES],
     );
-    if (rows.length === 0) return null;
-    const r = rows[0] as Record<string, unknown>;
-    return {
-      driver_id: (r.driver_id as string) ?? null,
-      driver_ref: (r.driver_ref as string) ?? null,
-      route_id: r.route_id as string,
-    };
+    return rows as Record<string, unknown>[];
+  }
+
+  private assignmentFor(
+    assignments: FleetbaseAssignedOrder[], delivery: DeliveryRow,
+  ): FleetbaseAssignedOrder | null {
+    return assignments.find((assignment) => assignment.localOrderId
+      ? assignment.localOrderId === delivery.order_id
+      : assignment.orderNumber === delivery.order_number
+    ) ?? null;
   }
 
   private async existingCollection(
@@ -389,7 +431,7 @@ export class CollectionService {
 
   /** Audit a rejected scan in its own transaction, then shape the driver-facing result. */
   private async reject(
-    actor: StaffContext, outcome: CollectionOutcome, deliveryDate: string,
+    actor: FleetbaseDriverContext, outcome: CollectionOutcome, deliveryDate: string,
     ctx: {
       customerId?: string; customerName?: string | null; delivery?: DeliveryRow;
       assignedDriverRef?: string | null; collectedAt?: string | null;
@@ -415,12 +457,15 @@ export class CollectionService {
   ): CollectionScanResultContract {
     return {
       outcome,
-      customer_id: ctx.customerId ?? null,
+      // The resolved customer id is also withheld until an exact Fleetbase assignment is proven.
+      // It is retained in audit related_refs for operations, never disclosed to another driver.
+      customer_id: ctx.delivery ? ctx.customerId ?? null : null,
       customer_name: ctx.customerName ?? null,
       order_number: ctx.delivery?.order_number ?? null,
       delivery_date: ctx.deliveryDate,
       delivery_time: ctx.delivery?.delivery_time ?? null,
       area: ctx.delivery?.area ?? null,
+      phone: ctx.delivery?.phone ?? null,
       collected_at: ctx.collectedAt ?? null,
       assigned_driver_ref: ctx.assignedDriverRef ?? null,
       message_en: MESSAGES[outcome].en,
@@ -428,7 +473,7 @@ export class CollectionService {
     };
   }
 
-  private actor(actor: StaffContext): { id: string; role: string } {
-    return { id: actor.staffId, role: actor.roles[0] ?? 'none' };
+  private actor(actor: FleetbaseDriverContext): { id: string; role: string } {
+    return { id: actor.actorId, role: actor.actorRole };
   }
 }

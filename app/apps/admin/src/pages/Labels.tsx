@@ -107,7 +107,7 @@ export function LabelsPage(): React.JSX.Element {
   const missingDish = docs.filter((d) => d.meal_source === 'no_dish_source').length;
 
   return (
-    <section>
+    <section className="labelsPage">
       <section className="toolbar">
         <label>
           <span>Delivery date</span>

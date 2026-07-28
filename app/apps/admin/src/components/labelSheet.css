@@ -200,14 +200,30 @@
 }
 
 @media print {
-  /* Hide the whole app, then re-show only the label sheets. Using visibility (not display)
-     keeps the print root's geometry intact so each sheet still paginates correctly. */
-  body * { visibility: hidden !important; }
-  .labelPrintRoot,
-  .labelPrintRoot * { visibility: visible !important; }
+  /* Remove the app chrome from print layout completely. `visibility: hidden` still reserves the
+     shell's full height and made Chrome append five blank pages after a single 100 x 70 mm label. */
+  body:has(.labelsPage),
+  body:has(.labelsPage) #root,
+  body:has(.labelsPage) .layout,
+  body:has(.labelsPage) .main,
+  body:has(.labelsPage) .content,
+  body:has(.labelsPage) .labelsPage {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    display: block;
+    overflow: visible;
+  }
+  body:has(.labelsPage) .sidebar,
+  body:has(.labelsPage) .header,
+  body:has(.labelsPage) .labelsPage > :not(.labelPrintRoot) {
+    display: none !important;
+  }
   .labelPrintRoot {
-    position: absolute;
-    inset: 0 auto auto 0;
+    position: static;
+    width: 100mm;
     margin: 0;
     padding: 0;
     background: #fff;
