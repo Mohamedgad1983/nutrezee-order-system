@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FleetbaseIdentityService,
+  HttpFleetbaseIdentityGateway,
   type FleetbaseIdentityGateway,
   type FleetbaseOrderProjection,
 } from '../../apps/api/src/modules/m25-label/fleetbase-identity.service';
@@ -153,5 +154,28 @@ describe('TS-U Fleetbase identity boundary', () => {
         detail: { reason: 'fleetbase_order_has_no_delivery_date' },
       }),
     );
+  });
+
+  it('filters the protected Fleetbase driver projection by exact user_uuid itself', async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requested.push(String(input));
+      return new Response(JSON.stringify({
+        data: [
+          { public_id: 'driver_other', user_uuid: 'user-other' },
+          { public_id: 'driver_exact', user_uuid: 'user-exact' },
+        ],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual([
+        { public_id: 'driver_exact', user_uuid: 'user-exact' },
+      ]);
+      expect(requested).toEqual(['https://fleetbase.test/int/v1/drivers?limit=-1']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

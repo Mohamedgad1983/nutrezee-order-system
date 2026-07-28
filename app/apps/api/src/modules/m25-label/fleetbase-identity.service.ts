@@ -35,6 +35,7 @@ interface FleetbaseSession {
 interface FleetbaseDriverProjection {
   id?: string;
   public_id?: string;
+  user_uuid?: string;
   internal_id?: string | null;
   name?: string | null;
 }
@@ -163,9 +164,14 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
 
   async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
     const response = await this.request<unknown>(
-      'GET', `/v1/drivers?user_uuid=${encodeURIComponent(userUuid)}&limit=2`, token,
+      // Fleetbase 0.7.48 exposes user_uuid in the protected internal driver projection, but its
+      // DriverFilter silently ignores a user_uuid query parameter. Fetch the current company's
+      // bounded driver set and enforce the exact UUID comparison here rather than trusting a
+      // non-functional upstream filter.
+      'GET', '/int/v1/drivers?limit=-1', token,
     );
-    return arrayPayload<FleetbaseDriverProjection>(response);
+    return arrayPayload<FleetbaseDriverProjection>(response)
+      .filter((driver) => driver.user_uuid === userUuid);
   }
 
   async assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]> {
