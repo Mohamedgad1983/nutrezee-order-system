@@ -1,6 +1,6 @@
 # 08 — A28 Fleet-Ops product correction
 
-> **Status:** live route correction verified 2026-07-28; source correction verified locally.
+> **Status:** fully deployed and browser-verified on 2026-07-28.
 > A28 supersedes A27's separate Nutrezee operations-admin mount. Fleet-Ops at
 > `https://ops.nutreeze.com/` is the sole operations admin.
 
@@ -63,6 +63,10 @@ The corrected source:
 The retired generated `dist-ops` directory was moved to
 `/tmp/nutrezee-a28-dist-ops-retired` rather than deleted.
 
+The supported local Fleetbase extension is now live inside the existing
+Fleet-Ops order-details panel. It uses the already-authenticated Fleetbase
+session and does not restore the retired administration shell.
+
 ## 4. Verification
 
 Local verification after the source rollback:
@@ -72,6 +76,9 @@ Local verification after the source rollback:
 - TypeScript typecheck: pass;
 - ESLint: pass;
 - application build: pass.
+- Live Fleet-Ops browser proof: `Label & Barcode` appears beside `Overview`
+  and `Invoice` on synthetic order `order_xn06VY2b1Q`, and opens the legacy
+  label with permanent barcode `NZC-GQ2W-Y271-CF`.
 
 The label print pagination repair is retained as an independent label correctness change; it
 does not reintroduce the separate operations admin.

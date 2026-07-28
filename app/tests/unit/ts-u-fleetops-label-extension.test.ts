@@ -43,7 +43,11 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(readme).toContain('EXTENSIONS: "@nutrezee/fleetops-labels-engine"');
     expect(readme).toContain('/extensions.json');
     expect(readme).toContain('Cache-Control: no-cache, no-store, must-revalidate');
-    expect(readme).toContain('0.7.48-a28.0');
+    expect(readme).toContain('0.7.48-a28.1');
+    expect(readme).toContain('vendor.js');
+    expect(readme).toContain('?v=a28.2');
+    expect(readme).toContain('rotate Fleetbase');
+    expect(readme).toContain('clearing one browser');
   });
 
   it('reuses the current Fleetbase bearer token and contains no second login', () => {
