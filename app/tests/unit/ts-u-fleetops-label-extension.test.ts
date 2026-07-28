@@ -14,6 +14,7 @@ const component = read('addon/components/order-label.js');
 const template = read('addon/components/order-label.hbs');
 const styles = read('addon/styles/addon.css');
 const routes = read('addon/routes.js');
+const readme = read('README.md');
 const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
 describe('TS-U A28 Fleet-Ops label extension boundary', () => {
@@ -35,6 +36,14 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(routes).toContain('buildRoutes(function () {})');
     expect(extension).not.toContain('registerHeaderMenuItem');
     expect(extension).not.toContain('registerAdminMenuPanel');
+  });
+
+  it('documents both Fleetbase enablement layers and cache invalidation', () => {
+    expect(readme).toContain('fleetbase.config.json');
+    expect(readme).toContain('EXTENSIONS: "@nutrezee/fleetops-labels-engine"');
+    expect(readme).toContain('/extensions.json');
+    expect(readme).toContain('Cache-Control: no-cache, no-store, must-revalidate');
+    expect(readme).toContain('0.7.48-a28.0');
   });
 
   it('reuses the current Fleetbase bearer token and contains no second login', () => {
