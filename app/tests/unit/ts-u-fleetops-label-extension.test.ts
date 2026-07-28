@@ -25,6 +25,7 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
   });
 
   it('registers inside Fleet-Ops order details and exposes no standalone operations UI', () => {
+    expect(extension).toContain("universe.getService('universe/menu-service')");
     expect(extension).toContain("'fleet-ops:component:order:details'");
     expect(extension).toContain("title: 'Nutrezee Label'");
     expect(extension).toContain("slug: 'nutrezee-label'");

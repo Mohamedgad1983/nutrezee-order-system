@@ -4,7 +4,7 @@ import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
 // Fleet-Ops order-details page; no second admin shell, route redirect or Nutrezee login is added.
 export default {
     setupExtension(_app, universe) {
-        const menuService = universe.getService('menu');
+        const menuService = universe.getService('universe/menu-service');
         menuService.registerMenuItem(
             'fleet-ops:component:order:details',
             new MenuItem({
