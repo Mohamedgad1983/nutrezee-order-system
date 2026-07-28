@@ -14,6 +14,7 @@ const component = read('addon/components/order-label.js');
 const template = read('addon/components/order-label.hbs');
 const styles = read('addon/styles/addon.css');
 const routes = read('addon/routes.js');
+const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
 describe('TS-U A28 Fleet-Ops label extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
@@ -49,6 +50,7 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(component).toContain('/nz/fleet-ops/labels/${encoded}/printed');
     expect(component).toContain("kind: this.isReprint ? 'reprint' : 'print'");
     expect(component).toContain('A reprint reason is required.');
+    expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {
