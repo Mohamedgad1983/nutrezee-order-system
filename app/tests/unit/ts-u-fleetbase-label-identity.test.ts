@@ -7,11 +7,15 @@ import {
 } from '../../apps/api/src/modules/m25-label/fleetbase-identity.service';
 
 // TS-U — A28 identity boundary. Nutrezee accepts only Fleetbase's verified user/driver identity,
-// filters driver assignments to the requested Kuwait delivery date, and never trusts a browser
-// supplied local driver, route, order id or delivery date.
+// filters driver assignments to the server-validated Kuwait delivery date, and never trusts a
+// browser-supplied local driver, route, order id or delivery date.
 
 class FakeGateway implements FleetbaseIdentityGateway {
-  sessionResult: { user?: string; type?: string } = { user: 'user-1', type: 'driver' };
+  sessionResult: { user?: string; type?: string; verified?: boolean } = {
+    user: 'user-1',
+    type: 'driver',
+    verified: true,
+  };
   driverResults = [{ public_id: 'driver_1', internal_id: 'A1', name: 'Driver One' }];
   orderResults: FleetbaseOrderProjection[] = [];
   oneOrder: FleetbaseOrderProjection = {
@@ -112,6 +116,18 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
   });
 
+  it('rejects an unverified Fleetbase driver before resolving assignments', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'driver-user', type: 'driver', verified: false };
+    const identity = new FleetbaseIdentityService(gateway);
+
+    await expect(identity.driverContext('token', '2099-05-12')).rejects.toMatchObject({
+      code: 'forbidden',
+      detail: { reason: 'verified_driver_required' },
+    });
+    expect(gateway.driverUserQuery).toBeNull();
+  });
+
   it('rejects operations users from driver endpoints and drivers from Fleet-Ops endpoints', async () => {
     const gateway = new FakeGateway();
     const identity = new FleetbaseIdentityService(gateway);
@@ -129,15 +145,39 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
   });
 
+  it('accepts verified Fleetbase user and administrator sessions without fabricating local roles', async () => {
+    const gateway = new FakeGateway();
+    const identity = new FleetbaseIdentityService(gateway);
+
+    gateway.sessionResult = { user: 'ops-1', type: 'user', verified: true };
+    await expect(identity.operatorContext('token')).resolves.toMatchObject({
+      staffId: 'fleetbase:ops-1',
+      roles: ['fleetbase_operator'],
+    });
+
+    gateway.sessionResult = { user: 'admin-1', type: 'admin', verified: true };
+    await expect(identity.operatorContext('token')).resolves.toMatchObject({
+      staffId: 'fleetbase:admin-1',
+      roles: ['fleetbase_admin'],
+    });
+
+    gateway.sessionResult = { user: 'ops-2', type: 'user', verified: false };
+    await expect(identity.operatorContext('token')).rejects.toMatchObject({
+      code: 'forbidden',
+      detail: { reason: 'verified_operations_user_required' },
+    });
+  });
+
   it('fetches the Fleetbase order server-side and derives its Kuwait delivery date', async () => {
     const gateway = new FakeGateway();
-    gateway.sessionResult = { user: 'ops-1', type: 'user' };
+    gateway.sessionResult = { user: 'ops-1', type: 'admin', verified: true };
     const identity = new FleetbaseIdentityService(gateway);
 
     const verified = await identity.verifiedOrderForOperator('token', 'order_public_7');
 
     expect(gateway.fetchedOrderId).toBe('order_public_7');
     expect(verified.actor.staffId).toBe('fleetbase:ops-1');
+    expect(verified.actor.roles).toEqual(['fleetbase_admin']);
     expect(identity.deliveryDateForOrder(verified.order)).toBe('2099-05-12');
   });
 

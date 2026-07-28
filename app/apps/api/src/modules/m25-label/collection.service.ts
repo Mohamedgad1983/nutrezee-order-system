@@ -63,10 +63,12 @@ export class CollectionService {
     private readonly audit: AuditService,
     private readonly barcodes: BarcodeService,
     private readonly idempotency: IdempotencyService,
+    private readonly todayProvider?: () => Promise<string>,
   ) {}
 
   /** Today in Kuwait — the operating timezone the analytics layer already standardises on. */
   async today(): Promise<string> {
+    if (this.todayProvider) return this.todayProvider();
     const { rows } = await this.pool.query(
       `SELECT to_char((now() AT TIME ZONE 'Asia/Kuwait')::date, 'YYYY-MM-DD') AS d`,
     );
@@ -74,12 +76,29 @@ export class CollectionService {
   }
 
   /**
+   * Collection is deliberately current-day only. A caller may echo the date displayed by
+   * Navigator, but that value never selects the operating day: the server's Kuwait date does.
+   */
+  async currentDay(requested?: string): Promise<string> {
+    const current = await this.today();
+    if (!DATE_RE.test(current)) {
+      throw new CollectionError('validation_failed', { field: 'delivery_date' });
+    }
+    if (requested !== undefined && requested !== current) {
+      throw new CollectionError('forbidden', {
+        reason: 'current_day_only',
+        field: 'delivery_date',
+      });
+    }
+    return current;
+  }
+
+  /**
    * The signed-in driver's manifest for a date: who is assigned, who has been collected, who is
    * still outstanding. Read-only.
    */
   async manifest(actor: FleetbaseDriverContext, date?: string): Promise<CollectionManifestContract> {
-    const deliveryDate = date ?? await this.today();
-    if (!DATE_RE.test(deliveryDate)) throw new CollectionError('validation_failed', { field: 'delivery_date' });
+    const deliveryDate = await this.currentDay(date);
 
     const rows = await this.assignedDeliveryRows(actor.assignedOrders, deliveryDate);
 
@@ -121,8 +140,7 @@ export class CollectionService {
     input: { barcode: string; delivery_date?: string; device_ref?: string },
     idempotencyKey?: string,
   ): Promise<CollectionScanResultContract> {
-    const deliveryDate = input.delivery_date ?? await this.today();
-    if (!DATE_RE.test(deliveryDate)) throw new CollectionError('validation_failed', { field: 'delivery_date' });
+    const deliveryDate = await this.currentDay(input.delivery_date);
 
     // A retried request (flaky signal in a stairwell) must repeat its original ACCEPTED answer
     // rather than degrade to `duplicate`, which would read to the driver as a failure.

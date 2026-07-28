@@ -52,10 +52,30 @@ beforeAll(async () => {
   pool = await freshDb();
   const audit = new AuditService();
   barcodes = new BarcodeService(pool, audit);
-  collection = new CollectionService(pool, audit, barcodes, new IdempotencyService());
+  collection = new CollectionService(
+    pool,
+    audit,
+    barcodes,
+    new IdempotencyService(),
+    async () => DATE,
+  );
 }, 60_000);
 
 afterAll(async () => { await pool.end(); });
+
+it('rejects past or future collection dates before reading a manifest or recording a scan', async () => {
+  await expect(collection.manifest(driverOne, OTHER_DATE)).rejects.toMatchObject({
+    code: 'forbidden',
+    detail: { reason: 'current_day_only', field: 'delivery_date' },
+  });
+  await expect(collection.scan(driverOne, {
+    barcode: 'NZC-ZZZZ-ZZZZ-ZZ',
+    delivery_date: OTHER_DATE,
+  })).rejects.toMatchObject({
+    code: 'forbidden',
+    detail: { reason: 'current_day_only', field: 'delivery_date' },
+  });
+});
 
 interface Seeded {
   customerId: string;

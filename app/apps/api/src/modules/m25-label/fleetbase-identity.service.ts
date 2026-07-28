@@ -71,7 +71,10 @@ export class FleetbaseIdentityService {
   async operatorContext(token: string): Promise<StaffContext> {
     const session = await this.client().session(requireToken(token));
     if (!session.user) throw new FleetbaseIdentityError('invalid_token');
-    if (session.type !== 'user') {
+    if (session.verified === false) {
+      throw new FleetbaseIdentityError('forbidden', { reason: 'verified_operations_user_required' });
+    }
+    if (session.type !== 'user' && session.type !== 'admin') {
       throw new FleetbaseIdentityError('forbidden', { reason: 'operations_user_required' });
     }
     return {
@@ -79,7 +82,9 @@ export class FleetbaseIdentityService {
       name: 'Fleet-Ops user',
       email: '',
       locale: 'en',
-      roles: ['ops_manager'],
+      // Do not fabricate a Nutrezee RBAC role. The same token must successfully fetch the
+      // Fleetbase order in verifiedOrderForOperator(), which is the upstream authorization gate.
+      roles: [session.type === 'admin' ? 'fleetbase_admin' : 'fleetbase_operator'],
       sessionId: 'fleetbase',
     };
   }
@@ -91,6 +96,9 @@ export class FleetbaseIdentityService {
     const safeToken = requireToken(token);
     const session = await this.client().session(safeToken);
     if (!session.user) throw new FleetbaseIdentityError('invalid_token');
+    if (session.verified === false) {
+      throw new FleetbaseIdentityError('forbidden', { reason: 'verified_driver_required' });
+    }
     if (session.type !== 'driver') {
       throw new FleetbaseIdentityError('forbidden', { reason: 'driver_session_required' });
     }

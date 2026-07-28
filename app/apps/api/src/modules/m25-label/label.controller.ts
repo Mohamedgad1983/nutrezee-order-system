@@ -168,7 +168,9 @@ export class LabelController {
   @Get('collection/manifest')
   async manifest(@Req() req: Request, @Query('date') date?: string) {
     return this.wrap(async () => {
-      const deliveryDate = date ?? await this.collection.today();
+      // Validate the optional client echo before contacting Fleetbase. The server's Kuwait date
+      // is the sole authority; a stale or manipulated past/future date is rejected.
+      const deliveryDate = await this.collection.currentDay(date);
       const driver = await this.fleetbaseIdentity.driverContext(this.bearer(req), deliveryDate);
       return this.collection.manifest(driver, deliveryDate);
     });
@@ -183,7 +185,7 @@ export class LabelController {
   ) {
     if (!body?.barcode?.trim()) throw new BadRequestException({ error_code: 'validation_failed', field: 'barcode' });
     return this.wrap(async () => {
-      const deliveryDate = body.delivery_date ?? await this.collection.today();
+      const deliveryDate = await this.collection.currentDay(body.delivery_date);
       const driver = await this.fleetbaseIdentity.driverContext(this.bearer(req), deliveryDate);
       return this.collection.scan(driver, {
         barcode: body.barcode, delivery_date: deliveryDate, device_ref: body.device_ref,
