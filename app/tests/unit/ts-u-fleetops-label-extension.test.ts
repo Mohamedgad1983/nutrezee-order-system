@@ -12,6 +12,9 @@ const packageJson = JSON.parse(read('package.json')) as {
 const extension = read('addon/extension.js');
 const component = read('addon/components/order-label.js');
 const template = read('addon/components/order-label.hbs');
+const batchComponent = read('addon/components/batch-labels.js');
+const batchTemplate = read('addon/components/batch-labels.hbs');
+const normalize = read('addon/utils/normalize-label.js');
 const styles = read('addon/styles/addon.css');
 const routes = read('addon/routes.js');
 const readme = read('README.md');
@@ -25,7 +28,7 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(packageJson.license).toBe('AGPL-3.0-or-later');
   });
 
-  it('registers inside Fleet-Ops order details and exposes no standalone operations UI', () => {
+  it('registers individual and batch operations inside supported Fleet-Ops registries only', () => {
     expect(extension).toContain("universe.getService('menu')");
     expect(extension).toContain("'fleet-ops:component:order:details'");
     expect(extension).toContain("title: 'Nutrezee Label'");
@@ -33,6 +36,12 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(extension).toContain("route: 'operations.orders.index.details.virtual'");
     expect(extension).toContain("'@nutrezee/fleetops-labels-engine'");
     expect(extension).toContain("'order-label'");
+    expect(extension).toContain("'engine:fleet-ops'");
+    expect(extension).toContain("title: 'Nutrezee Batch Labels'");
+    expect(extension).toContain("slug: 'nutrezee-batch-labels'");
+    expect(extension).toContain("section: 'operations'");
+    expect(extension).toContain("permission: 'fleet-ops list order'");
+    expect(extension).toContain("'batch-labels'");
     expect(routes).toContain('buildRoutes(function () {})');
     expect(extension).not.toContain('registerHeaderMenuItem');
     expect(extension).not.toContain('registerAdminMenuPanel');
@@ -67,6 +76,29 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 
+  it('supports one current-day batch by driver or area without false print recording', () => {
+    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/options')");
+    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/preview'");
+    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/printed'");
+    expect(batchComponent).toContain("filter_type: this.filterType");
+    expect(batchComponent).toContain("selection_ids: this.selectionIds");
+    expect(batchComponent).toContain("document.body.classList.add('nutrezee-batch-print-mode')");
+    expect(batchComponent).toContain('this.awaitingConfirmation = true');
+    expect(batchComponent.indexOf('window.print()')).toBeLessThan(
+      batchComponent.indexOf("this.request('/nz/fleet-ops/labels/batch/printed'"),
+    );
+    expect(batchTemplate).toContain('Driver / السائق');
+    expect(batchTemplate).toContain('Area / المنطقة');
+    expect(batchTemplate).toContain('Select all');
+    expect(batchTemplate).toContain('Nothing is recorded until you confirm');
+    expect(batchTemplate).toContain('Cancel — do not record');
+    expect(batchTemplate).toContain('A partial driver or area batch will not be printed');
+    expect(styles).toContain('body.nutrezee-batch-print-mode .nz-batch-label');
+    expect(styles).toContain('page-break-after: always');
+    expect(styles).toContain('width: 100mm !important');
+    expect(styles).toContain('height: 70mm !important');
+  });
+
   it('preserves the legacy structure and adds one Code 128 footer', () => {
     expect(template.match(/<polygon/g)).toHaveLength(2);
     expect(template).toContain('Full Name :');
@@ -88,6 +120,6 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
   it('renders an explicit empty meal state instead of fabricated nutrition', () => {
     expect(template).toContain('No dish detail recorded for this date');
     expect(template).toContain('No authoritative dish detail is recorded');
-    expect(component).toContain("nutritionMissing: document?.meal_source === 'no_dish_source'");
+    expect(normalize).toContain("nutritionMissing: document?.meal_source === 'no_dish_source'");
   });
 });

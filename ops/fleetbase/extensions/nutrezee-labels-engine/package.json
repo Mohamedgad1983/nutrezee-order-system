@@ -1,6 +1,6 @@
 {
   "name": "@nutrezee/fleetops-labels-engine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Nutrezee legacy daily-meal label and permanent customer barcode inside Fleet-Ops",
   "fleetbase": {
     "route": "nutrezee-labels"

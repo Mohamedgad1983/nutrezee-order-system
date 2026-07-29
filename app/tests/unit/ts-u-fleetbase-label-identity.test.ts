@@ -41,6 +41,10 @@ class FakeGateway implements FleetbaseIdentityGateway {
     return this.orderResults;
   }
 
+  async orders() {
+    return this.orderResults;
+  }
+
   async order(_token: string, orderId: string) {
     this.fetchedOrderId = orderId;
     return this.oneOrder;
@@ -181,6 +185,23 @@ describe('TS-U Fleetbase identity boundary', () => {
     expect(identity.deliveryDateForOrder(verified.order)).toBe('2099-05-12');
   });
 
+  it('returns only current-day printable operator orders', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'ops-1', type: 'admin', verified: true };
+    gateway.orderResults = [
+      { id: 'today', meta: { delivery_date: '2099-05-12' }, status: 'dispatched' },
+      { id: 'held', meta: { delivery_date: '2099-05-12', hold_reason: 'no_pin' }, status: 'created' },
+      { id: 'cancelled', meta: { delivery_date: '2099-05-12' }, status: 'canceled' },
+      { id: 'tomorrow', meta: { delivery_date: '2099-05-13' }, status: 'dispatched' },
+    ];
+    const identity = new FleetbaseIdentityService(gateway);
+
+    await expect(identity.ordersForOperatorDate('token', '2099-05-12')).resolves.toMatchObject({
+      actor: { staffId: 'fleetbase:ops-1' },
+      orders: [{ id: 'today' }],
+    });
+  });
+
   it('rejects invalid dates and orders with no authoritative delivery date', async () => {
     const identity = new FleetbaseIdentityService(new FakeGateway());
 
@@ -214,6 +235,24 @@ describe('TS-U Fleetbase identity boundary', () => {
         { public_id: 'driver_exact', user_uuid: 'user-exact' },
       ]);
       expect(requested).toEqual(['https://fleetbase.test/int/v1/drivers?limit=-1']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('fetches the operator-visible company order list through the protected API', async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requested.push(String(input));
+      return new Response(JSON.stringify({
+        data: [{ id: 'order_today', meta: { delivery_date: '2099-05-12' } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      await expect(gateway.orders('token')).resolves.toHaveLength(1);
+      expect(requested).toEqual(['https://fleetbase.test/v1/orders?limit=-1']);
     } finally {
       globalThis.fetch = originalFetch;
     }

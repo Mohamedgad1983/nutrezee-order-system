@@ -35,6 +35,67 @@ export class LabelController {
 
   // ---- labels ----
 
+  /** Pure current-day options for the Fleet-Ops Batch Labels page. */
+  @Get('fleet-ops/labels/batch/options')
+  async fleetbaseBatchOptions(@Req() req: Request) {
+    return this.wrap(async () => {
+      const deliveryDate = await this.collection.currentDay();
+      const { orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
+        this.bearer(req), deliveryDate,
+      );
+      const candidates = await this.labels.batchCandidates(deliveryDate, orders);
+      return batchOptionsResponse(deliveryDate, orders.length, candidates);
+    });
+  }
+
+  /** Render all selected labels; first-time permanent barcode issuance is intentionally POST. */
+  @Post('fleet-ops/labels/batch/preview')
+  @HttpCode(200)
+  async fleetbaseBatchPreview(@Req() req: Request, @Body() body: FleetbaseBatchBody) {
+    return this.wrap(async () => {
+      const deliveryDate = await this.collection.currentDay();
+      const { actor, orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
+        this.bearer(req), deliveryDate,
+      );
+      const candidates = await this.labels.batchCandidates(deliveryDate, orders);
+      assertCompleteBatch(orders.length, candidates.length);
+      const selected = this.labels.selectBatchCandidates(candidates, {
+        filterType: body?.filter_type,
+        filterValue: body?.filter_value,
+        selectionIds: body?.selection_ids,
+      });
+      const items = await this.labels.buildCandidateBatch(actor, deliveryDate, selected);
+      return {
+        delivery_date: deliveryDate,
+        filter_type: body.filter_type,
+        filter_value: body.filter_value,
+        count: items.length,
+        reprint_count: items.filter((item) => item.prior_prints > 0).length,
+        items,
+      };
+    });
+  }
+
+  /** Records only an explicitly confirmed physical batch, never a preview or cancelled dialog. */
+  @Post('fleet-ops/labels/batch/printed')
+  @HttpCode(201)
+  async fleetbaseBatchPrinted(@Req() req: Request, @Body() body: FleetbaseBatchPrintBody) {
+    return this.wrap(async () => {
+      const deliveryDate = await this.collection.currentDay();
+      const { actor, orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
+        this.bearer(req), deliveryDate,
+      );
+      const candidates = await this.labels.batchCandidates(deliveryDate, orders);
+      assertCompleteBatch(orders.length, candidates.length);
+      const selected = this.labels.selectBatchCandidates(candidates, {
+        filterType: body?.filter_type,
+        filterValue: body?.filter_value,
+        selectionIds: body?.selection_ids,
+      });
+      return this.labels.recordCandidateBatchPrint(actor, deliveryDate, selected, body?.reason);
+    });
+  }
+
   /** Fleet-Ops order-details extension: resolve the Fleetbase order server-side, then render. */
   @Post('fleet-ops/labels/render')
   @HttpCode(200)
@@ -245,5 +306,68 @@ interface FleetbaseRenderBody { fleetbase_order_id: string }
 interface BatchBody { delivery_date: string; driver_id?: string }
 interface PrintBody { delivery_date: string; kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbasePrintBody { kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
+interface FleetbaseBatchBody {
+  filter_type: 'driver' | 'area';
+  filter_value: string;
+  selection_ids?: string[];
+}
+interface FleetbaseBatchPrintBody extends FleetbaseBatchBody { reason?: string }
 interface ReplaceBody { reason: string }
 interface ScanBody { barcode: string; delivery_date?: string; device_ref?: string }
+
+function batchOptionsResponse(
+  deliveryDate: string,
+  sourceTotal: number,
+  candidates: Awaited<ReturnType<LabelService['batchCandidates']>>,
+) {
+  const driverMap = new Map<string, { id: string; label: string; count: number }>();
+  const areaMap = new Map<string, { id: string; label: string; count: number }>();
+  for (const candidate of candidates) {
+    if (candidate.driverId) {
+      const current = driverMap.get(candidate.driverId);
+      driverMap.set(candidate.driverId, {
+        id: candidate.driverId,
+        label: candidate.driverName ?? candidate.driverId,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+    const area = areaMap.get(candidate.areaKey);
+    areaMap.set(candidate.areaKey, {
+      id: candidate.areaKey,
+      label: candidate.areaLabel,
+      count: (area?.count ?? 0) + 1,
+    });
+  }
+  const unmapped = Math.max(0, sourceTotal - candidates.length);
+  return {
+    delivery_date: deliveryDate,
+    source_total: sourceTotal,
+    total: candidates.length,
+    unmapped,
+    ready: sourceTotal > 0 && unmapped === 0,
+    drivers: [...driverMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    areas: [...areaMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    orders: candidates.map((candidate) => ({
+      selection_id: candidate.selectionId,
+      order_number: candidate.orderNumber,
+      driver_id: candidate.driverId,
+      driver_name: candidate.driverName,
+      area_id: candidate.areaKey,
+      area: candidate.areaLabel,
+    })),
+  };
+}
+
+function assertCompleteBatch(sourceTotal: number, printableTotal: number): void {
+  if (sourceTotal === 0) {
+    throw new LabelError('conflict', { reason: 'daily_fleetbase_set_not_ready' });
+  }
+  if (sourceTotal !== printableTotal) {
+    throw new LabelError('conflict', {
+      reason: 'daily_order_mapping_incomplete',
+      source_total: sourceTotal,
+      printable_total: printableTotal,
+      unmapped: sourceTotal - printableTotal,
+    });
+  }
+}

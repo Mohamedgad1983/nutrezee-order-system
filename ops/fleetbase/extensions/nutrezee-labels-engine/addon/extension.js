@@ -22,5 +22,27 @@ export default {
                 ),
             })
         );
+
+        // A27/A28 — supported Fleet-Ops Operations registry. Fleet-Ops owns the surrounding
+        // sidebar and virtual route; this extension contributes only the batch-label component.
+        menuService.registerMenuItem(
+            'engine:fleet-ops',
+            new MenuItem({
+                title: 'Nutrezee Batch Labels',
+                label: 'Batch Labels',
+                slug: 'nutrezee-batch-labels',
+                view: 'nutrezee-batch-labels',
+                section: 'operations',
+                icon: 'print',
+                priority: 6,
+                permission: 'fleet-ops list order',
+                description: "Print today's labels by driver or area.",
+                keywords: ['labels', 'stickers', 'barcode', 'driver', 'area'],
+                component: new ExtensionComponent(
+                    '@nutrezee/fleetops-labels-engine',
+                    'batch-labels'
+                ),
+            })
+        );
     },
 };

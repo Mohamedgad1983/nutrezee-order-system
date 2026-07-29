@@ -1,0 +1,236 @@
+<section class="nz-batch-panel" data-test-nutrezee-batch-labels>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Batch Labels / طباعة الملصقات بالجملة</h2>
+            <p>Choose a driver or area, select today's orders, then print every sticker at once.</p>
+        </div>
+        <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.loadOptions}}>
+            Reload today
+        </button>
+    </header>
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Loading real current-day orders…</div>
+    {{else if this.error}}
+        <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
+    {{/if}}
+
+    {{#if this.options}}
+        <div class="nz-batch-summary">
+            <div><strong>{{this.options.delivery_date}}</strong><span>Delivery date / تاريخ التوصيل</span></div>
+            <div><strong>{{this.options.source_total}}</strong><span>Fleetbase orders today / طلبات Fleetbase اليوم</span></div>
+            <div><strong>{{this.options.total}}</strong><span>Labels fully mapped / ملصقات مكتملة</span></div>
+            <div><strong>{{this.options.drivers.length}}</strong><span>Assigned drivers / السائقون</span></div>
+            <div><strong>{{this.options.areas.length}}</strong><span>Areas / المناطق</span></div>
+        </div>
+
+        {{#if (eq this.options.source_total 0)}}
+            <div class="nz-label-state nz-label-state--warning">
+                Today's complete Partner → Fleetbase dispatch set is not ready. No partial local
+                count will be printed. / طلبات اليوم الكاملة لم تصل إلى Fleetbase بعد، ولن تتم
+                طباعة عدد جزئي.
+            </div>
+        {{else if (not this.options.ready)}}
+            <div class="nz-label-state nz-label-state--error">
+                Batch printing is blocked: {{this.options.unmapped}} of
+                {{this.options.source_total}} Fleetbase orders are not yet fully synchronized with
+                the label database. A partial driver or area batch will not be printed.
+            </div>
+        {{else}}
+            {{#unless this.hasDriverOptions}}
+                <div class="nz-label-state nz-label-state--warning">
+                    Today's Fleetbase orders have no driver assignments yet. Area printing is
+                    available; driver printing appears automatically after assignment.
+                </div>
+            {{/unless}}
+        {{/if}}
+
+        <div class="nz-batch-controls {{unless this.isReady "nz-batch-controls--disabled"}}">
+            <label>
+                <span>Group by / الاختيار حسب</span>
+                <select value={{this.filterType}} disabled={{not this.isReady}} {{on "change" this.updateFilterType}}>
+                    <option value="area">Area / المنطقة</option>
+                    <option value="driver" disabled={{not this.hasDriverOptions}}>Driver / السائق</option>
+                </select>
+            </label>
+
+            <label>
+                <span>{{#if (eq this.filterType "driver")}}Driver / السائق{{else}}Area / المنطقة{{/if}}</span>
+                <select value={{this.filterValue}} disabled={{or (not this.isReady) (not this.filterOptions.length)}} {{on "change" this.updateFilterValue}}>
+                    {{#each this.filterOptions as |option|}}
+                        <option value={{option.id}}>{{option.label}} — {{option.count}} orders</option>
+                    {{/each}}
+                </select>
+            </label>
+        </div>
+
+        {{#if (and this.isReady this.filteredOrders.length)}}
+            <div class="nz-batch-order-list">
+                <div class="nz-batch-order-list__header">
+                    <label>
+                        <input type="checkbox" checked={{this.allSelected}} {{on "change" this.toggleAll}} />
+                        <strong>Select all {{this.filteredOrders.length}} / اختيار الكل</strong>
+                    </label>
+                    <span>{{this.selectedCount}} selected</span>
+                </div>
+                <div class="nz-batch-order-list__rows">
+                    {{#each this.filteredOrders as |order|}}
+                        <label class="nz-batch-order-row">
+                            <input
+                                type="checkbox"
+                                value={{order.selection_id}}
+                                checked={{order.selected}}
+                                {{on "change" this.toggleOrder}}
+                            />
+                            <strong>{{order.order_number}}</strong>
+                            <span>{{order.area}}</span>
+                            <span>{{#if order.driver_name}}{{order.driver_name}}{{else}}Not assigned yet{{/if}}</span>
+                        </label>
+                    {{/each}}
+                </div>
+            </div>
+
+            <div class="nz-batch-primary-action">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled={{or this.preparing (not this.selectedCount)}}
+                    {{on "click" this.prepareLabels}}
+                >
+                    {{#if this.preparing}}Preparing labels…{{else}}Prepare {{this.selectedCount}} labels / تجهيز الملصقات{{/if}}
+                </button>
+            </div>
+        {{else}}
+            <div class="nz-label-state">No current-day orders match this choice.</div>
+        {{/if}}
+    {{/if}}
+
+    {{#if this.notice}}
+        <div class="nz-label-state nz-label-state--success">{{this.notice}}</div>
+    {{/if}}
+
+    {{#if this.preview}}
+        <div class="nz-batch-print-actions">
+            <div>
+                <h3>{{this.preview.count}} labels ready / ملصقات جاهزة</h3>
+                <p>One 100 × 70 mm sticker per printed page. Nothing is recorded until you confirm.</p>
+                {{#if this.hasReprints}}
+                    <label class="nz-label-reason">
+                        <span>
+                            {{this.preview.reprint_count}} already printed — reprint reason required /
+                            سبب إعادة الطباعة مطلوب
+                        </span>
+                        <input
+                            type="text"
+                            value={{this.reprintReason}}
+                            placeholder="Reason for reprinting"
+                            {{on "input" this.updateReason}}
+                        />
+                    </label>
+                {{/if}}
+            </div>
+            <button type="button" class="btn btn-primary" {{on "click" this.openPrintDialog}}>
+                {{this.printButtonText}}
+            </button>
+        </div>
+
+        {{#if this.awaitingConfirmation}}
+            <div class="nz-batch-confirm">
+                <strong>Did the printer complete the batch? / هل تمت الطباعة بنجاح؟</strong>
+                <div>
+                    <button type="button" class="btn btn-primary" disabled={{this.confirming}} {{on "click" this.confirmPrinted}}>
+                        {{#if this.confirming}}Recording…{{else}}{{this.confirmButtonText}}{{/if}}
+                    </button>
+                    <button type="button" class="btn btn-default" disabled={{this.confirming}} {{on "click" this.cancelConfirmation}}>
+                        Cancel — do not record
+                    </button>
+                </div>
+            </div>
+        {{/if}}
+
+        <div class="nz-batch-labels" aria-label="Prepared Nutrezee batch labels">
+            {{#each this.preview.items as |item|}}
+                <article class="nz-legacy-label nz-batch-label" aria-label="Nutrezee label for order {{item.label.orderNumber}}">
+                    <header class="nz-legacy-label__header">
+                        <svg class="nz-legacy-label__mark" viewBox="0 0 48 44" aria-hidden="true">
+                            <polygon points="24,2 42,12 42,32 24,42 6,32 6,12" fill="none" stroke="currentColor" stroke-width="1.4" />
+                            <polygon points="24,6 38,14 38,30 24,38 10,30 10,14" fill="none" stroke="currentColor" stroke-width="1.1" />
+                        </svg>
+                        <div class="nz-legacy-label__brand">Nutreeze</div>
+                        <div class="nz-legacy-label__tagline">Stay Healthy</div>
+                    </header>
+
+                    <div class="nz-legacy-label__body">
+                        <section class="nz-legacy-label__info">
+                            <div class="nz-info-group">
+                                <div class="nz-info-row"><em>Full Name :</em><strong>{{item.label.fullName}}</strong></div>
+                                <div class="nz-info-row"><em>Subscription :</em><strong>{{item.label.subscription}}</strong></div>
+                                <div class="nz-info-row"><em>Delivery Time :</em><strong>{{item.label.deliveryTime}}</strong></div>
+                                <div class="nz-info-row"><em>Days Remaining :</em><strong>{{item.label.daysRemaining}}</strong></div>
+                                <div class="nz-info-row"><em>Delivery Method :</em><strong>{{item.label.deliveryMethod}}</strong></div>
+                            </div>
+
+                            <div class="nz-info-group nz-package-row">
+                                <strong><em>{{item.label.packageName}}</em> (Meal: {{item.label.mealsPerDay}})</strong>
+                                <strong>(Snacks: {{item.label.snacksPerDay}})</strong>
+                            </div>
+
+                            <div class="nz-info-group nz-id-row">
+                                <span>User ID <strong>{{item.label.legacyUserId}}</strong></span>
+                                <span>Driver ID <strong>{{item.label.driverRef}}</strong></span>
+                                <span class="nz-id-row__order">User ID <strong>{{item.label.orderNumber}}</strong></span>
+                            </div>
+
+                            <div class="nz-info-group nz-address-block">
+                                <div><strong>Area:</strong> {{item.label.area}}, <strong>Block:</strong> {{item.label.block}}, <strong>Street:</strong> {{item.label.street}}</div>
+                                <div><strong>Building:</strong> {{item.label.building}}, <strong>Floor:</strong> {{item.label.floor}}, <strong>Flat:</strong> {{item.label.flat}}, <strong>Direction:</strong> {{item.label.direction}}</div>
+                                <div><strong>Phone:</strong> {{item.label.phone}}</div>
+                                <div><strong>Notes:</strong> {{item.label.notes}}</div>
+                            </div>
+                        </section>
+
+                        <section class="nz-legacy-label__meals">
+                            <table class="nz-meals-table">
+                                <colgroup>
+                                    <col class="nz-meals-table__dish" />
+                                    <col /><col /><col /><col /><col />
+                                </colgroup>
+                                <thead>
+                                    <tr><th>Dish Name</th><th>Qty</th><th>Pro</th><th>Carb</th><th>Fat</th><th>Cal</th></tr>
+                                </thead>
+                                <tbody>
+                                    {{#each item.label.meals as |meal|}}
+                                        <tr>
+                                            <td>{{meal.dishName}}</td><td>{{meal.qty}}</td><td>{{meal.protein}}</td>
+                                            <td>{{meal.carbs}}</td><td>{{meal.fat}}</td><td>{{meal.calories}}</td>
+                                        </tr>
+                                    {{else}}
+                                        <tr><td class="nz-meals-table__empty" colspan="6">No dish detail recorded for this date</td></tr>
+                                    {{/each}}
+                                </tbody>
+                            </table>
+
+                            <div class="nz-total-row">
+                                <span>Total Nutrition</span>
+                                <table>
+                                    <thead><tr><th>Protein</th><th>Carb</th><th>Fat</th><th>Calories</th></tr></thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>{{item.label.totalProtein}}</td><td>{{item.label.totalCarbs}}</td>
+                                            <td>{{item.label.totalFat}}</td><td>{{item.label.totalCalories}}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <footer class="nz-legacy-label__barcode">
+                        <div class="nz-barcode-svg">{{item.label.barcodeSvg}}</div>
+                        <div class="nz-barcode-value">{{item.label.barcodeValue}}</div>
+                    </footer>
+                </article>
+            {{/each}}
+        </div>
+    {{/if}}
+</section>

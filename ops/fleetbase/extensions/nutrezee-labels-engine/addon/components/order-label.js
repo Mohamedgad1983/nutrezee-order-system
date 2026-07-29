@@ -2,9 +2,7 @@ import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { inject as service } from '@ember/service';
-import { htmlSafe } from '@ember/template';
-
-const DASH = '-';
+import normalizeLabel from '../utils/normalize-label';
 
 export default class OrderLabelComponent extends Component {
     @service session;
@@ -141,55 +139,6 @@ export default class OrderLabelComponent extends Component {
             this.printing = false;
         }
     }
-}
-
-function normalizeLabel(document) {
-    const value = (input) =>
-        input === null || input === undefined || input === '' ? DASH : String(input);
-    const numberValue = (input) =>
-        input === null || input === undefined ? DASH : String(input);
-    const meals = Array.isArray(document?.meals)
-        ? document.meals.map((meal) => ({
-              dishName: value(meal.dish_name),
-              qty: numberValue(meal.qty),
-              protein: numberValue(meal.protein),
-              carbs: numberValue(meal.carbs),
-              fat: numberValue(meal.fat),
-              calories: numberValue(meal.calories),
-          }))
-        : [];
-    return {
-        ...document,
-        fullName: value(document?.full_name),
-        subscription: value(document?.subscription_date_display),
-        deliveryTime: value(document?.delivery_time),
-        daysRemaining: numberValue(document?.days_remaining),
-        deliveryMethod: value(document?.delivery_method),
-        packageName: value(document?.package_name),
-        mealsPerDay: numberValue(document?.meals_per_day),
-        snacksPerDay: numberValue(document?.snacks_per_day),
-        legacyUserId: value(document?.legacy_user_id),
-        driverRef: value(document?.driver_ref),
-        orderNumber: value(document?.order_number),
-        area: value(document?.address?.area),
-        block: value(document?.address?.block),
-        street: value(document?.address?.street),
-        building: value(document?.address?.building),
-        floor: value(document?.address?.floor),
-        flat: value(document?.address?.flat),
-        direction: value(document?.address?.direction),
-        phone: value(document?.phone),
-        notes: value(document?.notes),
-        meals,
-        hasMeals: meals.length > 0,
-        nutritionMissing: document?.meal_source === 'no_dish_source',
-        totalProtein: numberValue(document?.totals?.protein),
-        totalCarbs: numberValue(document?.totals?.carbs),
-        totalFat: numberValue(document?.totals?.fat),
-        totalCalories: numberValue(document?.totals?.calories),
-        barcodeValue: value(document?.barcode_value),
-        barcodeSvg: htmlSafe(document?.barcode_svg ?? ''),
-    };
 }
 
 function messageOf(error) {

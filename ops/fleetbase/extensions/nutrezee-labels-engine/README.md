@@ -1,11 +1,23 @@
 # Nutrezee Fleet-Ops Labels Extension
 
-This separately identifiable AGPL-3.0-or-later Ember engine adds one
-`Label & Barcode` tab to the existing Fleet-Ops order-details screen.
+This separately identifiable AGPL-3.0-or-later Ember engine adds:
+
+- a `Label & Barcode` tab to the existing Fleet-Ops order-details screen; and
+- a `Batch Labels` page in the existing Fleet-Ops **Operations** sidebar.
+
+Batch Labels uses the complete current-day Partner → Fleetbase dispatch set. It can group by
+Fleetbase driver or source routing area, select all or a subset, and prints one 100 × 70 mm
+sticker per page. It fails closed when today's Fleetbase set is absent or any Fleetbase order
+cannot be mapped to the label database; a partial local fulfillment count is never presented as
+the day's operational total.
 
 It uses the already-authenticated Fleetbase bearer token and same-origin
 `/nz/fleet-ops/labels/*` endpoints. It does not add an administration shell,
 login page, or independent customer/driver authorization model.
+
+Opening the print dialog does not record a print. The operator must separately confirm that the
+physical batch completed; cancelled dialogs therefore create no print events. A mixed or complete
+reprint batch requires a reason and shares one audited batch reference.
 
 The extension is installed into the self-hosted Fleetbase Console as a local
 package dependency and enabled in both places used by Fleetbase Console:

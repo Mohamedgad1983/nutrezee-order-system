@@ -44,6 +44,7 @@ export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
   assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
+  orders(token: string): Promise<FleetbaseOrderProjection[]>;
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection>;
 }
 
@@ -139,6 +140,26 @@ export class FleetbaseIdentityService {
     return { actor, order };
   }
 
+  /**
+   * The operator-visible Fleetbase orders for one server-selected delivery date. The response is
+   * the complete operational batch authority; held/cancelled orders can never become printable
+   * driver work and a partial local fulfillment set is never substituted.
+   */
+  async ordersForOperatorDate(token: string, deliveryDate: string): Promise<{
+    actor: StaffContext;
+    orders: FleetbaseOrderProjection[];
+  }> {
+    if (!DATE_RE.test(deliveryDate)) {
+      throw new FleetbaseIdentityError('forbidden', { reason: 'invalid_delivery_date' });
+    }
+    const safeToken = requireToken(token);
+    const actor = await this.operatorContext(safeToken);
+    const orders = (await this.client().orders(safeToken))
+      .filter((order) => order.id && fleetbaseOrderDate(order) === deliveryDate)
+      .filter((order) => !isHeldOrCancelled(order));
+    return { actor, orders };
+  }
+
   /** Delivery date is sourced from the server-fetched Fleetbase order, never from the browser. */
   deliveryDateForOrder(order: FleetbaseOrderProjection): string {
     const deliveryDate = fleetbaseOrderDate(order);
@@ -186,6 +207,11 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     const response = await this.request<unknown>(
       'GET', `/v1/orders?driver=${encodeURIComponent(driverId)}&limit=-1`, token,
     );
+    return arrayPayload<FleetbaseOrderProjection>(response);
+  }
+
+  async orders(token: string): Promise<FleetbaseOrderProjection[]> {
+    const response = await this.request<unknown>('GET', '/v1/orders?limit=-1', token);
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
 
@@ -253,6 +279,13 @@ function fleetbaseOrderDate(order: FleetbaseOrderProjection): string | null {
   if (Number.isNaN(date.getTime())) return null;
   const kuwait = new Date(date.getTime() + 3 * 60 * 60 * 1000);
   return kuwait.toISOString().slice(0, 10);
+}
+
+function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
+  const status = String(order.status ?? '').toLowerCase();
+  if (status.includes('cancel')) return true;
+  const holdReason = order.meta?.hold_reason;
+  return typeof holdReason === 'string' && holdReason.trim().length > 0;
 }
 
 function toAssignedOrder(order: FleetbaseOrderProjection): FleetbaseAssignedOrder | null {

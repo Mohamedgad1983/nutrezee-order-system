@@ -363,4 +363,96 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
     expect(docs.every((d) => d.delivery_date === DATE_B)).toBe(true);
     expect(new Set(docs.map((d) => d.barcode_value)).size).toBe(docs.length); // no shared barcodes
   });
+
+  it('builds a selected driver batch and records one audited batch only after confirmation', async () => {
+    const first = await seed('Batch Driver One', 'N-LBL-BATCH-1');
+    const second = await seed('Batch Driver Two', 'N-LBL-BATCH-2');
+    const fleetbaseOrders = [first, second].map((item, index) => ({
+      id: `fleetbase_batch_${index + 1}`,
+      meta: { delivery_date: DATE_B, nutrezee_order_id: item.orderId },
+      driver_assigned: {
+        public_id: 'driver_ahmed',
+        internal_id: 'AHMED',
+        name: 'Ahmed',
+      },
+    }));
+
+    const candidates = await labels.batchCandidates(DATE_B, fleetbaseOrders);
+    const selected = labels.selectBatchCandidates(candidates, {
+      filterType: 'driver',
+      filterValue: 'driver_ahmed',
+    });
+    expect(selected.map((item) => item.orderNumber).sort()).toEqual([
+      'N-LBL-BATCH-1',
+      'N-LBL-BATCH-2',
+    ]);
+    expect(selected.every((item) => item.driverRef === 'AHMED')).toBe(true);
+
+    const preview = await labels.buildCandidateBatch(actor, DATE_B, selected);
+    expect(preview).toHaveLength(2);
+    expect(preview.every((item) => item.prior_prints === 0)).toBe(true);
+    expect(preview.every((item) => item.label.driver_ref === 'AHMED')).toBe(true);
+
+    const printed = await labels.recordCandidateBatchPrint(actor, DATE_B, selected);
+    expect(printed.printed).toBe(2);
+    expect(printed.reprinted).toBe(0);
+    expect(new Set(printed.items.map((item) => item.print_kind))).toEqual(new Set(['print']));
+
+    const events = await pool.query(
+      `SELECT count(*)::int AS n, count(DISTINCT batch_ref)::int AS batches
+         FROM label_print_event
+        WHERE batch_ref = $1`,
+      [printed.batch_ref],
+    );
+    expect(events.rows[0]).toMatchObject({ n: 2, batches: 1 });
+    const audits = await pool.query(
+      `SELECT count(*)::int AS n
+         FROM audit_event
+        WHERE event_type = 'label.printed' AND related_refs->>'batch_ref' = $1`,
+      [printed.batch_ref],
+    );
+    expect(audits.rows[0].n).toBe(2);
+
+    await expect(labels.recordCandidateBatchPrint(actor, DATE_B, selected))
+      .rejects.toMatchObject({ code: 'validation_failed', detail: { field: 'reason' } });
+    const reprinted = await labels.recordCandidateBatchPrint(
+      actor, DATE_B, selected, 'labels damaged during packing',
+    );
+    expect(reprinted.reprinted).toBe(2);
+    expect(reprinted.printed).toBe(0);
+  });
+
+  it('rejects a tampered selection outside the chosen driver or area', async () => {
+    const one = await seed('Batch Guard One', 'N-LBL-GUARD-1');
+    const two = await seed('Batch Guard Two', 'N-LBL-GUARD-2');
+    const candidates = await labels.batchCandidates(DATE_A, [
+      {
+        id: 'fleetbase_guard_1',
+        meta: { delivery_date: DATE_A, nutrezee_order_id: one.orderId },
+        driver_assigned: { public_id: 'driver_one', name: 'Driver One' },
+      },
+      {
+        id: 'fleetbase_guard_2',
+        meta: { delivery_date: DATE_A, nutrezee_order_id: two.orderId },
+        driver_assigned: { public_id: 'driver_two', name: 'Driver Two' },
+      },
+    ]);
+    const first = candidates.find((item) => item.localOrderId === one.orderId)!;
+    const second = candidates.find((item) => item.localOrderId === two.orderId)!;
+
+    expect(() => labels.selectBatchCandidates(candidates, {
+      filterType: 'driver',
+      filterValue: 'driver_one',
+      selectionIds: [first.selectionId, second.selectionId],
+    })).toThrowError(expect.objectContaining({
+      code: 'forbidden',
+      detail: { reason: 'selection_not_in_current_filter' },
+    }));
+  });
+
+  it('never treats local fulfillment rows as a complete operational batch source', async () => {
+    await seed('Local Only Must Not Print', 'N-LBL-LOCAL-ONLY');
+    const candidates = await labels.batchCandidates(DATE_A, []);
+    expect(candidates).toEqual([]);
+  });
 });
