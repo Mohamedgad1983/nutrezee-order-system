@@ -3,7 +3,12 @@
 This separately identifiable AGPL-3.0-or-later Ember engine adds:
 
 - a `Label & Barcode` tab to the existing Fleet-Ops order-details screen; and
-- a `Batch Labels` page in the existing Fleet-Ops **Operations** sidebar.
+- a `Batch Labels` page in the existing Fleet-Ops **Resources** sidebar.
+
+Fleet-Ops 0.7.48 treats `/fleet-ops/operations/:value` as an order-details route, so its
+`operations` extension section cannot host a virtual page. The supported `management`
+registry renders under the user-facing **Resources** section and routes through Fleet-Ops'
+non-conflicting virtual-page handler.
 
 Batch Labels uses the complete current-day Partner → Fleetbase dispatch set. It can group by
 Fleetbase driver or source routing area, select all or a subset, and prints one 100 × 70 mm

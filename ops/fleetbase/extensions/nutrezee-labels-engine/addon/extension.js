@@ -23,8 +23,13 @@ export default {
             })
         );
 
-        // A27/A28 — supported Fleet-Ops Operations registry. Fleet-Ops owns the surrounding
+        // A27/A28 — supported Fleet-Ops Resources registry. Fleet-Ops owns the surrounding
         // sidebar and virtual route; this extension contributes only the batch-label component.
+        //
+        // Fleet-Ops 0.7.48 reserves `/fleet-ops/operations/:public_id` for order details, so an
+        // extension registered in the `operations` section is interpreted as an order public ID.
+        // The `management` section is the supported non-conflicting virtual-route surface shown
+        // to operators as "Resources".
         menuService.registerMenuItem(
             'engine:fleet-ops',
             new MenuItem({
@@ -32,7 +37,7 @@ export default {
                 label: 'Batch Labels',
                 slug: 'nutrezee-batch-labels',
                 view: 'nutrezee-batch-labels',
-                section: 'operations',
+                section: 'management',
                 icon: 'print',
                 priority: 6,
                 permission: 'fleet-ops list order',

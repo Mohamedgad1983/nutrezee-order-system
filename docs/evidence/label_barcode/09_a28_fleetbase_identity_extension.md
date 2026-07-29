@@ -66,11 +66,16 @@ Two Fleetbase activation layers are required:
 2. runtime `EXTENSIONS` in `fleetbase.config.json`.
 
 Fleetbase also caches the indexed extension list. `/extensions.json` is therefore served with
-`Cache-Control: no-cache, no-store, must-revalidate`. This deployment carries Console version
-`0.7.48-a28.1`, versioned `vendor.js` and Console script URLs, a deployment-specific extension
-cache key, and `/extensions.json?v=a28.2`. These four controls force existing operator browsers
-to reject both the old nine-extension local cache and the old HTTP-cached manifest. The live
-manifest contains ten extensions including the Nutrezee engine.
+`Cache-Control: no-cache, no-store, must-revalidate`, and the live manifest contains ten
+extensions including the Nutrezee engine.
+
+Follow-up batch-page verification on 2026-07-29 found that an operator browser could still reuse
+the response cached under the manifest's **previous** response headers: Fleetbase's loader calls
+`fetch('/extensions.json', { cache: 'default' })`, then stores the filtered list in a
+version-keyed local cache. Console `0.7.48-a28.4` closes that deployment edge by bumping the
+application version and returning `Clear-Site-Data: "cache"` on the new `index.html`. The header
+clears HTTP cache only; cookies and local storage are not cleared. The next boot therefore
+fetches the ten-entry no-store manifest and replaces the version-keyed nine-entry list.
 
 The first visual pass caught the missing runtime registration; the second caught the stale
 extension-manifest cache. A final browser pass proved that the tenth engine loaded and registered

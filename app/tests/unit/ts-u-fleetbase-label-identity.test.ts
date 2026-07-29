@@ -244,15 +244,44 @@ describe('TS-U Fleetbase identity boundary', () => {
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
     globalThis.fetch = (async (input: string | URL | Request) => {
-      requested.push(String(input));
+      const url = String(input);
+      requested.push(url);
+      const page = new URL(url).searchParams.get('page');
       return new Response(JSON.stringify({
-        data: [{ id: 'order_today', meta: { delivery_date: '2099-05-12' } }],
+        data: page === '1'
+          ? [
+              { id: 'order_today_1', meta: { delivery_date: '2099-05-12' } },
+              { id: 'order_today_2', meta: { delivery_date: '2099-05-12' } },
+            ]
+          : [{ id: 'order_today_3', meta: { delivery_date: '2099-05-12' } }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     try {
-      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
-      await expect(gateway.orders('token')).resolves.toHaveLength(1);
-      expect(requested).toEqual(['https://fleetbase.test/v1/orders?limit=-1']);
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 2);
+      await expect(gateway.orders('token', '2099-05-12')).resolves.toHaveLength(3);
+      expect(requested).toEqual([
+        'https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=1',
+        'https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=2',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('fails closed if Fleetbase order pagination repeats a page', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      data: [
+        { id: 'order_repeat_1' },
+        { id: 'order_repeat_2' },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 2);
+      await expect(gateway.orders('token', '2099-05-12')).rejects.toMatchObject({
+        code: 'upstream_unavailable',
+        detail: { reason: 'fleetbase_order_pagination_not_stable' },
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -39,7 +39,7 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(extension).toContain("'engine:fleet-ops'");
     expect(extension).toContain("title: 'Nutrezee Batch Labels'");
     expect(extension).toContain("slug: 'nutrezee-batch-labels'");
-    expect(extension).toContain("section: 'operations'");
+    expect(extension).toContain("section: 'management'");
     expect(extension).toContain("permission: 'fleet-ops list order'");
     expect(extension).toContain("'batch-labels'");
     expect(routes).toContain('buildRoutes(function () {})');

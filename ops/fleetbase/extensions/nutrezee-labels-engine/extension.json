@@ -1,6 +1,6 @@
 {
   "name": "Nutrezee Labels",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Legacy daily-meal label and permanent customer barcode within Fleet-Ops",
   "license": "AGPL-3.0-or-later",
   "engine": "package.json"

@@ -44,7 +44,7 @@ export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
   assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
-  orders(token: string): Promise<FleetbaseOrderProjection[]>;
+  orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]>;
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection>;
 }
 
@@ -154,7 +154,7 @@ export class FleetbaseIdentityService {
     }
     const safeToken = requireToken(token);
     const actor = await this.operatorContext(safeToken);
-    const orders = (await this.client().orders(safeToken))
+    const orders = (await this.client().orders(safeToken, deliveryDate))
       .filter((order) => order.id && fleetbaseOrderDate(order) === deliveryDate)
       .filter((order) => !isHeldOrCancelled(order));
     return { actor, orders };
@@ -180,11 +180,15 @@ export class FleetbaseIdentityService {
 export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
   private readonly base: string;
   private readonly timeoutMs: number;
+  private readonly orderPageSize: number;
+  private readonly maxOrderPages: number;
 
-  constructor(baseUrl?: string, timeoutMs = 15_000) {
+  constructor(baseUrl?: string, timeoutMs = 15_000, orderPageSize = 100, maxOrderPages = 100) {
     const configured = baseUrl?.trim() || process.env.FLEETBASE_INTERNAL_API_BASE?.trim();
     this.base = (configured || 'https://ops.nutreeze.com').replace(/\/+$/, '');
     this.timeoutMs = timeoutMs;
+    this.orderPageSize = Math.max(1, Math.min(500, Math.trunc(orderPageSize)));
+    this.maxOrderPages = Math.max(1, Math.min(100, Math.trunc(maxOrderPages)));
   }
 
   session(token: string): Promise<FleetbaseSession> {
@@ -210,9 +214,46 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
 
-  async orders(token: string): Promise<FleetbaseOrderProjection[]> {
-    const response = await this.request<unknown>('GET', '/v1/orders?limit=-1', token);
-    return arrayPayload<FleetbaseOrderProjection>(response);
+  async orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
+    const orders: FleetbaseOrderProjection[] = [];
+    const seen = new Set<string>();
+
+    // Fleetbase's unfiltered order history grows indefinitely and even one history page can exceed
+    // the per-request timeout. Apply Fleetbase's supported scheduled_at filter at the source, then
+    // use its standard paginator so each protected read stays bounded while still collecting the
+    // complete operator-visible set for this date. Duplicate/missing ids or a non-terminating
+    // paginator fail closed.
+    for (let page = 1; page <= this.maxOrderPages; page += 1) {
+      const response = await this.request<unknown>(
+        'GET',
+        `/v1/orders?scheduled_at=${encodeURIComponent(deliveryDate)}&limit=${this.orderPageSize}&page=${page}`,
+        token,
+      );
+      const pageOrders = arrayPayload<FleetbaseOrderProjection>(response);
+      for (const order of pageOrders) {
+        if (!order.id) {
+          throw new FleetbaseIdentityError('upstream_unavailable', {
+            reason: 'fleetbase_order_has_no_id',
+          });
+        }
+        if (seen.has(order.id)) {
+          throw new FleetbaseIdentityError('upstream_unavailable', {
+            reason: 'fleetbase_order_pagination_not_stable',
+          });
+        }
+        seen.add(order.id);
+        orders.push(order);
+      }
+
+      const lastPage = paginationLastPage(response);
+      if ((lastPage !== null && page >= lastPage) || pageOrders.length < this.orderPageSize) {
+        return orders;
+      }
+    }
+
+    throw new FleetbaseIdentityError('upstream_unavailable', {
+      reason: 'fleetbase_order_page_limit_exceeded',
+    });
   }
 
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection> {
@@ -261,6 +302,16 @@ function arrayPayload<T>(value: unknown): T[] {
     if (Array.isArray(record.data)) return record.data as T[];
   }
   return [];
+}
+
+function paginationLastPage(value: unknown): number | null {
+  if (!value || typeof value !== 'object') return null;
+  const meta = (value as Record<string, unknown>).meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const lastPage = (meta as Record<string, unknown>).last_page;
+  return typeof lastPage === 'number' && Number.isInteger(lastPage) && lastPage > 0
+    ? lastPage
+    : null;
 }
 
 function safeJson(text: string): unknown | null {
