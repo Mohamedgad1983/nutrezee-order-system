@@ -4,44 +4,45 @@ const live = process.env.KDS_E2E_LIVE === '1';
 const username = process.env.KDS_E2E_USERNAME ?? 'kitchen-display';
 const password = process.env.KDS_E2E_PASSWORD ?? 'e2e-only-password';
 
-test('Arabic and English totals-only kitchen display', async ({ page }) => {
+test('English-default and Arabic totals-only kitchen display', async ({ page }) => {
   let totalsRequests = 0;
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/section-totals') totalsRequests += 1;
   });
   await page.goto('/');
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await expect(page.getByRole('heading', { name: 'تسجيل دخول المطبخ' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.getByRole('heading', { name: 'Kitchen sign in' })).toBeVisible();
 
-  await page.getByLabel('اسم المستخدم').fill(username);
-  await page.getByLabel('كلمة المرور').fill(password);
-  await page.getByRole('button', { name: 'تسجيل دخول المطبخ' }).click();
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
 
-  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
   if (live) {
     await assertLiveTotals(page);
     return;
   }
 
-  await expect(page.getByRole('heading', { name: 'المطبخ الساخن' })).toBeVisible();
-  await expect(page.getByText('دجاج مشوي')).toHaveCount(2);
-  await expect(page.getByRole('alert').filter({ hasText: 'يوجد عناصر غير موجّهة لقسم' })).toBeVisible();
-  await expect(page.locator('.sectionCard').filter({ hasText: 'hot' }).locator('.sectionTotal')).toHaveText('٥');
-  await expect(page.locator('.sectionCard.unrouted').locator('.sectionTotal')).toHaveText('٤');
-  await expect(page.locator('body')).not.toContainText('PRIVATE-ROW');
-  await expect(page.locator('body')).not.toContainText('Customer');
-
-  const requestsBeforeLanguageToggle = totalsRequests;
-  await page.getByRole('button', { name: 'English' }).click();
-  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Hot Kitchen' })).toBeVisible();
   await expect(page.getByText('Grilled Chicken')).toHaveCount(2);
   await expect(page.getByRole('alert').filter({ hasText: 'Some items have no section route' })).toBeVisible();
+  await expect(page.locator('.sectionCard').filter({ hasText: 'hot' }).locator('.sectionTotal')).toHaveText('5');
+  await expect(page.locator('.sectionCard.unrouted').locator('.sectionTotal')).toHaveText('4');
+  await expect(page.locator('body')).not.toContainText('PRIVATE-ROW');
+
+  const requestsBeforeLanguageToggle = totalsRequests;
+  await page.getByRole('button', { name: 'العربية' }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'المطبخ الساخن' })).toBeVisible();
+  await expect(page.getByText('دجاج مشوي')).toHaveCount(2);
+  await expect(page.getByRole('alert').filter({ hasText: 'يوجد عناصر غير موجّهة لقسم' })).toBeVisible();
   await page.waitForTimeout(200);
   expect(totalsRequests).toBe(requestsBeforeLanguageToggle);
   await page.setViewportSize({ width: 390, height: 800 });
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible();
 });
 
 test('a slower previous date cannot overwrite the current selection', async ({ page }) => {
@@ -62,12 +63,12 @@ test('a slower previous date cannot overwrite the current selection', async ({ p
   });
 
   await page.goto('/');
-  await page.getByLabel('اسم المستخدم').fill(username);
-  await page.getByLabel('كلمة المرور').fill(password);
-  await page.getByRole('button', { name: 'تسجيل دخول المطبخ' }).click();
-  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
   await initialStarted;
-  await page.getByLabel('تاريخ التسليم').fill('2026-08-09');
+  await page.getByLabel('Delivery date').fill('2026-08-09');
   await expect(page.getByText('وجبة حالية')).toBeVisible();
   await page.waitForTimeout(700);
   await expect(page.getByText('وجبة حالية')).toBeVisible();
@@ -85,9 +86,9 @@ async function assertLiveTotals(page: import('@playwright/test').Page): Promise<
       && new URL(response.url()).pathname === '/api/section-totals'
   ));
   if (requestedDate) {
-    await page.getByLabel('تاريخ التسليم').fill(requestedDate);
+    await page.getByLabel('Delivery date').fill(requestedDate);
   }
-  await page.getByRole('button', { name: 'تحديث الآن' }).click();
+  await page.getByRole('button', { name: 'Refresh now' }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(200);
 
@@ -113,11 +114,11 @@ async function assertLiveTotals(page: import('@playwright/test').Page): Promise<
     expect(section.meals.reduce((sum, meal) => sum + meal.total_qty, 0)).toBe(section.total_qty);
   }
 
-  await expect(page.getByText('إجمالي الوجبات')).toBeVisible();
-  await page.getByRole('button', { name: 'English' }).click();
-  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
   await expect(page.getByText('Meal quantity')).toBeVisible();
+  await page.getByRole('button', { name: 'العربية' }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await expect(page.getByText('إجمالي الوجبات')).toBeVisible();
 }
 
 function totalsPayload(deliveryDate: string, mealName: string, quantity: number) {

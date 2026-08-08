@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KdsDisplayConfig, KdsSectionTotals } from '../contracts';
 import { ApiError, request } from './api';
-import { formatQuantity, initialLanguage, kuwaitToday, type Language } from './model';
+import {
+  formatQuantity,
+  initialLanguage,
+  kuwaitToday,
+  LANGUAGE_STORAGE_KEY,
+  type Language,
+} from './model';
 
 type AuthState = 'checking' | 'signed_in' | 'signed_out';
 
@@ -77,7 +83,7 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
-    localStorage.setItem('nutrezee-kds-language', language);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
 
   useEffect(() => {

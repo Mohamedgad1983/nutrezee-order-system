@@ -1,5 +1,7 @@
 export type Language = 'ar' | 'en';
 
+export const LANGUAGE_STORAGE_KEY = 'nutrezee-kds-language-v2';
+
 export function kuwaitToday(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kuwait',
@@ -19,5 +21,5 @@ export function formatQuantity(value: number, language: Language): string {
 }
 
 export function initialLanguage(storage: Pick<Storage, 'getItem'> = localStorage): Language {
-  return storage.getItem('nutrezee-kds-language') === 'en' ? 'en' : 'ar';
+  return storage.getItem(LANGUAGE_STORAGE_KEY) === 'ar' ? 'ar' : 'en';
 }
