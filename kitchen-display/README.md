@@ -62,12 +62,14 @@ Set `KDS_E2E_DELIVERY_DATE=YYYY-MM-DD` when operations needs to verify a date ot
 
 ## Configuration
 
-Copy `.env.example` to an untracked `.env`. Production must use HTTPS and secure cookies. The preferred staging setup mounts the two secrets as root-protected files:
+Copy `.env.example` to an untracked `.env`. Production must use HTTPS and secure cookies. The preferred staging setup mounts the two secrets as root-owned, dedicated-group-readable files:
 
 - `KDS_PARTNER_API_KEY_FILE=/run/secrets/kds_partner_api_key`
 - `KDS_DISPLAY_PASSWORD_HASH_FILE=/run/secrets/kds_display_password_hash`
 
 Direct `KDS_PARTNER_API_KEY` and `KDS_DISPLAY_PASSWORD_HASH` values are supported for local operation, but a direct value and its `_FILE` alternative cannot be set together. The service never logs either value.
+
+The production host directory is `0750 root:<KDS_SECRET_GID>` and each secret is `0640 root:<KDS_SECRET_GID>`; the default dedicated numeric GID is `61001`. Compose grants only that supplemental group to the otherwise unprivileged Node process. This keeps the files unreadable to other host/container users while allowing the non-root runtime to start.
 
 Create a display password hash without putting the password in command-line arguments:
 

@@ -22,6 +22,10 @@ services:
       - "127.0.0.1:8180:8080"
     volumes:
       - /opt/nutrezee-kds/secrets:/run/secrets:ro
+    # The image runs as non-root UID/GID 1000. A dedicated supplemental group
+    # reads host-owned 0640 secret files without granting world access.
+    group_add:
+      - "${KDS_SECRET_GID:-61001}"
     security_opt:
       - no-new-privileges:true
     read_only: true

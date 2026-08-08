@@ -11,7 +11,7 @@ Completion is blocked only by two deliberately absent protected inputs:
 1. `/opt/nutrezee-kds/secrets/kds_partner_api_key` — a dedicated KDS Partner **read-only** key; the label-service key must not be reused.
 2. `/opt/nutrezee-kds/secrets/kds_display_password_hash` — the scrypt hash of a password chosen by the kitchen-display operator.
 
-Both must be non-empty, root-managed mode `0600`. Once provisioned, the next session starts the isolated service and performs the documented health, HTTPS, Partner arithmetic, privacy, no-write, and bilingual Playwright acceptance before marking WP-KDS-01 DONE.
+Both must be non-empty, root-owned mode `0640`, dedicated group `61001`; their directory is mode `0750` with the same group. Compose grants only that supplemental group to the non-root runtime. Once provisioned, the next session starts the isolated service and performs the documented health, HTTPS, Partner arithmetic, privacy, no-write, and bilingual Playwright acceptance before marking WP-KDS-01 DONE.
 
 **2026-08-08 re-verification:** both inputs remain absent/empty. The exact staged image nevertheless passed a temporary network-disabled hardened runtime smoke on the VPS (`/health` 200, runtime user `node`, read-only root, `cap_drop=ALL`) and left zero residual containers/listeners. DNS for `kds.13-140-159-201.sslip.io` resolves correctly; TLS remains intentionally inactive because the live Caddy route has not been installed.
 
