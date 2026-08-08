@@ -1,0 +1,30 @@
+{
+  "name": "@nutrezee/fleetops-labels-engine",
+  "version": "0.2.1",
+  "description": "Nutrezee legacy daily-meal label and permanent customer barcode inside Fleet-Ops",
+  "fleetbase": {
+    "route": "nutrezee-labels"
+  },
+  "keywords": [
+    "fleetbase-extension",
+    "fleet-ops",
+    "nutrezee",
+    "ember-addon",
+    "ember-engine"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "directories": {
+    "addon": "addon"
+  },
+  "dependencies": {
+    "@fleetbase/ember-core": "^0.3.23",
+    "ember-cli-babel": "^8.2.0",
+    "ember-cli-htmlbars": "^6.3.0"
+  },
+  "peerDependencies": {
+    "ember-engines": "^0.9.0"
+  },
+  "ember": {
+    "edition": "octane"
+  }
+}

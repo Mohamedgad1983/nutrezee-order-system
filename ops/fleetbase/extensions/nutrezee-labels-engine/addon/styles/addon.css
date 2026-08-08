@@ -1,0 +1,528 @@
+/* A28 — exact legacy label inside Fleet-Ops. The barcode occupies the reference label's unused
+ * lower strip; no legacy field, table column, caption or field order is removed. */
+
+.nz-label-panel {
+    padding: 1rem;
+}
+
+.nz-batch-panel {
+    padding: 1rem;
+}
+
+.nz-label-panel__header,
+.nz-label-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nz-label-panel__header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.nz-label-panel__header p {
+    margin: 0.25rem 0 0;
+    color: #6b7280;
+}
+
+.nz-label-state {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: #f9fafb;
+}
+
+.nz-label-state--error {
+    border-color: #fca5a5;
+    color: #991b1b;
+    background: #fef2f2;
+}
+
+.nz-label-state--warning {
+    border-color: #fcd34d;
+    color: #92400e;
+    background: #fffbeb;
+}
+
+.nz-label-state--success {
+    border-color: #86efac;
+    color: #166534;
+    background: #f0fdf4;
+}
+
+.nz-batch-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.nz-batch-summary > div {
+    padding: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: #fff;
+}
+
+.nz-batch-summary strong,
+.nz-batch-summary span {
+    display: block;
+}
+
+.nz-batch-summary strong {
+    font-size: 1.15rem;
+}
+
+.nz-batch-summary span {
+    margin-top: 0.2rem;
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+
+.nz-batch-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nz-batch-controls label > span {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.nz-batch-controls select {
+    width: 100%;
+    padding: 0.55rem 0.625rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: #fff;
+}
+
+.nz-batch-controls--disabled {
+    opacity: 0.55;
+}
+
+.nz-batch-order-list {
+    overflow: hidden;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: #fff;
+}
+
+.nz-batch-order-list__header,
+.nz-batch-order-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(6rem, 0.45fr);
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+}
+
+.nz-batch-order-list__header {
+    border-bottom: 1px solid #d1d5db;
+    background: #f9fafb;
+}
+
+.nz-batch-order-list__rows {
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.nz-batch-order-row {
+    grid-template-columns: 1.2rem minmax(7rem, 0.55fr) minmax(8rem, 1fr) minmax(8rem, 1fr);
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+}
+
+.nz-batch-order-row:last-child {
+    border-bottom: 0;
+}
+
+.nz-batch-primary-action,
+.nz-batch-print-actions,
+.nz-batch-confirm {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.nz-batch-print-actions {
+    padding: 1rem;
+    border: 1px solid #86efac;
+    border-radius: 0.375rem;
+    background: #f0fdf4;
+}
+
+.nz-batch-print-actions h3,
+.nz-batch-print-actions p {
+    margin: 0;
+}
+
+.nz-batch-print-actions p {
+    margin-top: 0.25rem;
+    color: #4b5563;
+}
+
+.nz-batch-confirm {
+    padding: 1rem;
+    border: 1px solid #60a5fa;
+    border-radius: 0.375rem;
+    background: #eff6ff;
+}
+
+.nz-batch-confirm > div {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.nz-batch-labels {
+    display: grid;
+    gap: 1rem;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.nz-batch-label {
+    border: 1px solid #d1d5db;
+    box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+}
+
+.nz-label-reason {
+    display: block;
+    margin-top: 0.75rem;
+}
+
+.nz-label-reason span {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.nz-label-reason input {
+    width: min(28rem, 70vw);
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.625rem;
+}
+
+.nz-label-preview {
+    width: fit-content;
+    max-width: 100%;
+    overflow: auto;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+    background: white;
+}
+
+.nz-legacy-label {
+    --nz-label-fg: #151515;
+    --nz-label-rule: #9a9a9a;
+    box-sizing: border-box;
+    width: 100mm;
+    height: 70mm;
+    padding: 2.2mm 2.4mm 1.8mm;
+    overflow: hidden;
+    background: #fff;
+    color: var(--nz-label-fg);
+    font-family: Arial, "Helvetica Neue", sans-serif;
+    font-size: 2.05mm;
+    line-height: 1.25;
+}
+
+.nz-legacy-label__header {
+    height: 10.2mm;
+    box-sizing: border-box;
+    padding-bottom: 0.7mm;
+    text-align: center;
+    border-bottom: 0.18mm dashed var(--nz-label-rule);
+}
+
+.nz-legacy-label__mark {
+    display: block;
+    width: 4.2mm;
+    height: 3.8mm;
+    margin: 0 auto 0.15mm;
+    color: #555;
+}
+
+.nz-legacy-label__brand {
+    font-size: 3.9mm;
+    line-height: 1;
+    letter-spacing: 0.05mm;
+}
+
+.nz-legacy-label__tagline {
+    margin-top: 0.1mm;
+    color: #555;
+    font-family: Georgia, serif;
+    font-size: 1.45mm;
+}
+
+.nz-legacy-label__body {
+    display: grid;
+    grid-template-columns: minmax(0, 51%) minmax(0, 49%);
+    height: 45.2mm;
+    min-height: 0;
+}
+
+.nz-legacy-label__info {
+    min-width: 0;
+    padding-right: 1.4mm;
+}
+
+.nz-legacy-label__meals {
+    min-width: 0;
+    padding-left: 1.4mm;
+}
+
+.nz-info-group {
+    padding: 0.5mm 0;
+    border-bottom: 0.15mm dashed var(--nz-label-rule);
+}
+
+.nz-info-row {
+    display: grid;
+    grid-template-columns: 17mm minmax(0, 1fr);
+    gap: 0.8mm;
+    min-height: 3.1mm;
+    border-bottom: 0.1mm dotted #c7c7c7;
+}
+
+.nz-info-row:last-child {
+    border-bottom: 0;
+}
+
+.nz-info-row em {
+    color: #272727;
+}
+
+.nz-info-row strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.nz-package-row {
+    min-height: 8.3mm;
+    font-size: 2.15mm;
+}
+
+.nz-package-row strong {
+    display: block;
+}
+
+.nz-id-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    min-height: 5.6mm;
+    gap: 1mm;
+    white-space: nowrap;
+}
+
+.nz-id-row__order {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.05;
+}
+
+.nz-address-block {
+    font-size: 2.1mm;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.nz-meals-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 1.95mm;
+}
+
+.nz-meals-table col:not(.nz-meals-table__dish) {
+    width: 10.8%;
+}
+
+.nz-meals-table__dish {
+    width: 46%;
+}
+
+.nz-meals-table th,
+.nz-meals-table td {
+    border: 0.14mm dotted #a9a9a9;
+    padding: 0.45mm 0.4mm;
+    text-align: center;
+    vertical-align: top;
+}
+
+.nz-meals-table th {
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.nz-meals-table th:first-child,
+.nz-meals-table td:first-child {
+    text-align: left;
+}
+
+.nz-meals-table__empty {
+    padding: 1.8mm 0.4mm !important;
+    color: #555;
+    font-style: italic;
+    text-align: center !important;
+}
+
+.nz-total-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.2mm;
+    margin-top: 1.2mm;
+    font-size: 1.95mm;
+}
+
+.nz-total-row > span {
+    flex: 0 0 auto;
+    padding-bottom: 0.25mm;
+}
+
+.nz-total-row table {
+    flex: 1 1 auto;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.nz-total-row th,
+.nz-total-row td {
+    border: 0;
+    padding: 0.1mm 0.25mm;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.nz-total-row th {
+    font-weight: 400;
+}
+
+.nz-total-row td {
+    font-weight: 600;
+}
+
+.nz-legacy-label__barcode {
+    height: 10.6mm;
+    box-sizing: border-box;
+    padding-top: 0.7mm;
+    border-top: 0.18mm dashed var(--nz-label-rule);
+    overflow: hidden;
+    text-align: center;
+}
+
+.nz-barcode-svg svg {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: 6.5mm;
+    margin: 0 auto;
+}
+
+.nz-barcode-value {
+    margin-top: 0.2mm;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 1.95mm;
+    letter-spacing: 0.24mm;
+    white-space: nowrap;
+}
+
+@page {
+    size: 100mm 70mm;
+    margin: 0;
+}
+
+@media print {
+    body.nutrezee-label-print-mode {
+        width: 100mm !important;
+        height: 70mm !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        background: #fff !important;
+    }
+
+    body.nutrezee-label-print-mode * {
+        visibility: hidden !important;
+    }
+
+    body.nutrezee-label-print-mode .nz-legacy-label,
+    body.nutrezee-label-print-mode .nz-legacy-label * {
+        visibility: visible !important;
+    }
+
+    body.nutrezee-label-print-mode .nz-legacy-label {
+        position: fixed;
+        inset: 0 auto auto 0;
+        margin: 0;
+    }
+
+    body.nutrezee-batch-print-mode {
+        width: 100mm !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+
+    body.nutrezee-batch-print-mode * {
+        visibility: hidden !important;
+    }
+
+    body.nutrezee-batch-print-mode .nz-batch-labels,
+    body.nutrezee-batch-print-mode .nz-batch-labels *,
+    body.nutrezee-batch-print-mode .nz-batch-label,
+    body.nutrezee-batch-print-mode .nz-batch-label * {
+        visibility: visible !important;
+    }
+
+    body.nutrezee-batch-print-mode .nz-batch-labels {
+        display: block !important;
+        width: 100mm !important;
+        max-width: none !important;
+        margin: 0 !important;
+    }
+
+    body.nutrezee-batch-print-mode .nz-batch-label {
+        position: relative !important;
+        width: 100mm !important;
+        height: 70mm !important;
+        margin: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    body.nutrezee-batch-print-mode .nz-batch-label:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+}
+
+@media (max-width: 760px) {
+    .nz-batch-summary,
+    .nz-batch-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .nz-batch-print-actions,
+    .nz-batch-confirm {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
