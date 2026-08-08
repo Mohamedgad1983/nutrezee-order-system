@@ -1,6 +1,7 @@
 # A30 — assigned-driver missing-location recovery
 
-Status: implementation in progress; staging-only until explicit production release approval.
+Status: code complete and CI green in draft PR #47; staging/device proof pending. Production
+activation remains prohibited until explicit release approval.
 
 ## Operating rule
 
