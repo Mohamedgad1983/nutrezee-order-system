@@ -5,7 +5,10 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 15_000;
+// The server intentionally allows the read-only Partner request up to 30 seconds.
+// Keep the browser deadline above that boundary so it receives the server's safe
+// success/error response instead of aborting an otherwise valid production read.
+const DEFAULT_TIMEOUT_MS = 40_000;
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);

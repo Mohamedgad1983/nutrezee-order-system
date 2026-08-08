@@ -15,7 +15,9 @@ if (url.protocol !== 'https:' || url.username || url.password || url.search || u
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 45_000,
+  // One uncached live Partner read may consume the server's full 30-second
+  // deadline before the explicit verification refresh uses the short-lived cache.
+  timeout: 90_000,
   fullyParallel: false,
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
