@@ -1,6 +1,6 @@
 # WP-KDS-01 — Standalone section totals release
 
-**Evidence state:** implementation verified locally 2026-08-08; independent CI, merge, staging deployment, and live Partner acceptance remain required before DONE.
+**Evidence state:** implementation and independent KDS/root CI verified 2026-08-08; PR review/merge, staging deployment, and live Partner acceptance remain required before DONE.
 
 ## Authorized scope
 
@@ -81,7 +81,7 @@ Use today's Kuwait delivery date and each configured kitchen.
 7. An unrouted source row, if present, appears in the warning lane; if none exists, upstream and display both show zero.
 8. Search the JSON/browser/network evidence for item refs, order numbers, customer names, phones, addresses, API keys, delivery actors, and label data; none may appear.
 9. Verify the service issued only Partner GET requests and caused no Partner/database/workflow writes.
-10. Run the bilingual Playwright suite against the staging hostname with the protected test credential.
+10. Run `KDS_E2E_BASE_URL=https://<kds-host> KDS_E2E_USERNAME=<display-user> KDS_E2E_LIVE=1 npm run test:e2e:staging` after exporting `KDS_E2E_PASSWORD` through a protected interactive environment. The live suite requires a successful totals response, validates browser-contract arithmetic and prohibited-field absence, then proves Arabic RTL and English LTR rendering. Set `KDS_E2E_DELIVERY_DATE=YYYY-MM-DD` when validating a specific production date.
 
 ## Rollback
 

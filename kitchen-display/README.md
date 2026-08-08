@@ -47,6 +47,19 @@ npm run test:e2e
 
 `npm run test:e2e` starts an isolated fixture source and production-built server, then runs the Arabic/English Chromium journey. It does not call Partner.
 
+After deployment, run the same journey against the HTTPS hostname without putting credentials in arguments or source control:
+
+```bash
+export KDS_E2E_BASE_URL=https://kds.example.com
+export KDS_E2E_USERNAME=kitchen-display
+read -rs KDS_E2E_PASSWORD
+export KDS_E2E_PASSWORD KDS_E2E_LIVE=1
+npm run test:e2e:staging
+unset KDS_E2E_PASSWORD KDS_E2E_LIVE
+```
+
+Set `KDS_E2E_DELIVERY_DATE=YYYY-MM-DD` when operations needs to verify a date other than today. The live journey requires a successful totals response, checks section/meal arithmetic, scans the browser response for prohibited fields, and verifies Arabic RTL plus English LTR rendering.
+
 ## Configuration
 
 Copy `.env.example` to an untracked `.env`. Production must use HTTPS and secure cookies. The preferred staging setup mounts the two secrets as root-protected files:
