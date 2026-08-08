@@ -6,7 +6,8 @@ services:
     image: nutrezee-kitchen-display:local
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     ports:
       - "127.0.0.1:8180:8080"
     security_opt:

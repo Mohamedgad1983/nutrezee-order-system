@@ -70,6 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f kitchen-display/compose.yml config --quiet
+      - name: validate protected-file staging compose
+        run: KDS_PUBLIC_ORIGIN=https://kds.example.com docker compose -f kitchen-display/compose.staging.yml config --quiet
       - run: docker build -f kitchen-display/Dockerfile -t nutrezee-kds:ci kitchen-display
       - name: verify runtime ESM entrypoint loads
         run: docker run --rm nutrezee-kds:ci node -e "import('./dist/api/api/server.js')"
