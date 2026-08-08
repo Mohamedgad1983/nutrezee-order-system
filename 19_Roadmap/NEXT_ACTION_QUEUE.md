@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-02 is DONE and production-active under A21.** Every production user is server-bound to exactly one current Partner section and all live isolation/security/browser gates are green. No KDS engineering blocker remains. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-02 is DONE and production-active under A35; no KDS blocker remains. WP-OPS-03 and WP-OPS-02 remain code/CI-complete but BLOCKED AT RELEASE under A22/A21.** Staging still lacks migrations `0025/0026`, the two protected least-privilege Fleetbase service identities/tokens, and a dedicated named Logistics Manager account; PR #43 remains intentionally unmerged until those release inputs exist. **WP-OPS-01's July 20 operational run is complete**, while the separate A23/A24 Partner snapshot stays read-only/non-authoritative at 01:00 Kuwait and the unattended dispatch timer remains disabled. The legacy-replacement engineering frontier is exhausted and sponsor/workshop-gated. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. Staging remains seeded for UAT with `cutover_catalog=false`.
 
 ---
 
@@ -28,11 +28,32 @@
 
 ## Engineering Queue (take the top unblocked item)
 
+### 🛑 WP-OPS-03 — unlimited driver-to-driver order reassignment · **BLOCKED AT RELEASE · size M · blocked_by: protected order-manager token + named manager account + deployment/staging/Navigator proof**
+- A22 grants `logistics_manager` every current Nutrezee delivery/driver permission, including password rotation and a dedicated bulk-reassignment grant; unrelated finance, staff/RBAC, catalog, and system-admin permissions remain excluded.
+- The manager chooses source driver, target driver, date, and any number of eligible assigned orders; there is no product/UI batch-size cap. The API processes the selection in bounded upstream chunks and reports completed/failed outcomes.
+- Server derives Fleetbase driver/order UUIDs from standard read APIs. Browser submits only `driver_*` and `order_*` public ids; arbitrary upstream UUIDs are forbidden.
+- ASM-053: only orders with no `started_at` and nonterminal status may move. `started/enroute/completed/canceled` and a driver's current active job stay blocked because Fleetbase bulk reassignment does not transfer activity/current-job state.
+- HIGH audit + per-order outcome ledger; no customer/payload PII in the response or audit. No Fleetbase vendor or Navigator `/legacy` modifications.
+- DoD: RBAC, unlimited/chunking, source-change, status guard, partial failure, PII-minimization, controller/client tests; full app tests/build/scans; CI; visible staging proof only after protected integration setup.
+- Result 2026-07-25: PR #40 merged as `2e255c1` after local typecheck/lint/build, 62 files / 313 tests, cross-module-write/no-GET-mutation scans, snapshot guards, browser QA, and CI runs 30169477421 + 30169478994 all passed. Concurrent attempts for the same order fail closed while an earlier batch is pending. No deployment or live reassignment occurred.
+- Release preflight 2026-07-25: staging is healthy but still at migration `0023`; protected order-manager configuration and a dedicated named manager are absent. No deployment or mutation was attempted.
+
+### 🛑 WP-OPS-02 — Logistics Manager driver credential rotation · **BLOCKED AT RELEASE · size S · blocked_by: protected Fleetbase service token + named manager account + deployment/staging Playwright/Navigator proof**
+- A21 authorizes only the driver-password rotation slice in the Nutrezee admin panel.
+- API must list Fleetbase drivers through a server-held least-privilege integration token and derive the linked Fleetbase user UUID server-side.
+- `POST` rotation only; no GET mutation. Reject arbitrary user UUIDs, non-driver targets, password mismatch/weak passwords, and missing integration config.
+- Password values must never be persisted, logged, emailed, returned, or included in audit before/after data.
+- Permission: dedicated Logistics Manager credential-rotation grant; no unrestricted Fleetbase IAM permission in the browser.
+- HIGH audit trail records requested/completed/failed outcomes without secrets. Fleetbase vendor source and Navigator `/legacy` stay untouched.
+- DoD: focused service/controller/RBAC tests + full app Vitest/lint/typecheck/build/scans green; visible staging Playwright after the protected integration secret is provisioned.
+- Result 2026-07-25: PR #39 merged as `0124f60`; local typecheck/lint/build, 59 files / 300 tests, cross-module-write/no-GET-mutation scans, and snapshot guards passed; CI runs 30169312557 + 30169313599 passed 14/14. No deployment or live credential change.
+- Release preflight 2026-07-25: the protected credential-manager configuration and dedicated named manager are absent; migration `0025` is not deployed. No credential change was attempted.
+
 ### ✅ WP-KDS-02 — User-assigned Kitchen Display section isolation · **DONE 2026-08-08 · production-active · blocked_by: none**
 
-PR #50 merged the protected configurable user manifest, session-bound exact section claims, assignment-scoped API, removal of global totals/manual section selection, and focused full-width UI as `251e1f2`. PR #51 fixed the uncached live-read deadline mismatch and merged as final production release `0fd988a`. Final KDS/root CI passed 6/6 + 14/14 (`31256752632`, `31256752652`). Exact artifact SHA-256 `86f596aaeaa15c235a7edc918adbedb7155c9141c27a6224984bb74fd4c93b80` and image `sha256:e30f357f0872d3ace10d36e1dc396b5a979ba3d93a17632add3dce76de0f095c` are active. Six code-named accounts under ASM-052 each returned only their matching section; cross-section query escalation returned 400; protected live Chromium, direct browser, privacy, security, and hardened-runtime checks passed.
+PR #50 merged the protected configurable user manifest, session-bound exact section claims, assignment-scoped API, removal of global totals/manual section selection, and focused full-width UI as `251e1f2`. PR #51 fixed the uncached live-read deadline mismatch and merged as final production release `0fd988a`. Final KDS/root CI passed 6/6 + 14/14 (`31256752632`, `31256752652`). Exact artifact SHA-256 `86f596aaeaa15c235a7edc918adbedb7155c9141c27a6224984bb74fd4c93b80` and image `sha256:e30f357f0872d3ace10d36e1dc396b5a979ba3d93a17632add3dce76de0f095c` are active. Six code-named accounts under ASM-056 each returned only their matching section; cross-section query escalation returned 400; protected live Chromium, direct browser, privacy, security, and hardened-runtime checks passed.
 
-### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A17–A19**
+### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A31–A33**
 
 Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; PR #48 corrected the non-root protected-secret mount contract; PR #49 made English/LTR the fresh-device default while preserving the Arabic/RTL toggle and merged as production release `3743aea`. Post-merge KDS CI 6/6 (`31254271648`) and root CI 14/14 (`31254271662`) are green. Exact artifact SHA-256 `afb83d997d45924554de724a43d10d7e8e5568edf97b62f4add01a094db25240` is installed at `/opt/nutrezee-kds/releases/3743aea`; the healthy hardened image is `sha256:505154f8ea522b178e8dd7cd4797c95a24668f6845099228873feaca904014c0`.
 
@@ -73,13 +94,14 @@ Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`
 - ✅ **Customer merge UI — DONE** (PR #33 `0e3cd53`).
 - ✅ **Per-order payment actions — DONE** (PR #35 `5b5a0fb`).
 - ✅ **WP-14 restore drill — DONE** (2026-06-14): latest nightly dump restored to a throwaway DB, schema 13/13 + 62/62 tables + data intact, dropped; live untouched. Backups proven recoverable.
+- ✅ **WP-OPS-01 Partner daily Fleetbase dispatch — JULY 20 OPERATIONAL RUN COMPLETE 2026-07-20 (branch merge pending):** 946/946 distributed across the fixed 11 drivers: 723 real customer pins and 223 clearly labeled known-area fallbacks requiring CALL CUSTOMER FIRST; unknown/country fallbacks 0. Exact rerun produced zero writes. One least-loaded-driver UAT order completed dispatched → started → enroute → completed; post-UAT active 945 / pending 0 / completed 1. Security boundaries passed; unattended timer remains disabled and the A19 exception is not reusable for any other date.
+- ✅ **A23/A24 daily read-only Partner snapshot — DEPLOYED + ENABLED 2026-07-23 (branch merge pending):** separate 01:00 Kuwait timer; two-pass count/digest stability guard; root-only PII-free 30-day aggregate manifests; July 22 live proof 873 orders / 3,781 meal rows with `fleetbase_written=false`. Because 01:00 precedes the previously documented 06:00 publication, completeness stays explicitly non-authoritative. The dispatch timer remains disabled/inactive.
 
 ### 🛑 ENGINEERING FRONTIER EXHAUSTED — what the OS is now waiting on (sponsor/workshop)
 The OS has built every unit that does not require external inputs. To proceed, **the sponsor/workshop must supply** (see `Legacy_Core_Gap_To_Cutover.md` §3 and `wp14_blocker_report.md`):
 - **S1 — legacy export / DB access** → unblocks WP-DATA-01 (real Batch 1/2 migration), then cutover. The single biggest gate.
 - **S2 — workshop pack** → DEC-006 kitchen-routing content (→ routing-rule editor 04c), L1/L2 validator semantics, S8 RBAC matrix sign-off, UAT values, ASM-001..050 sign-off.
 - **WP-14 pilot** → restore drill done; remaining entry items are workshop/sponsor-owned + the UAT run itself.
-**Also operational (user, not engineering):** clear the GitHub Actions billing block so PRs get a real CI gate again.
 On the next `Continue Nutrezee OS Agent`, the correct OS behaviour is to **report this hold**, not fabricate work.
 
 > **After these two, the engineering frontier is exhausted** — all remaining work (WP-DATA-01 real migration, routing content, RBAC sign-off, the rest of WP-14 UAT/pilot) needs sponsor legacy-export access (S1) or the workshop pack (S2). See `Legacy_Core_Gap_To_Cutover.md` §3.

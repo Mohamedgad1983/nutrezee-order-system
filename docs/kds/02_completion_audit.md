@@ -1,7 +1,7 @@
 # WP-KDS-01 — A-to-Z completion audit
 
 **Audit date:** 2026-08-08
-**Verdict:** **PRODUCTION-READY AND LIVE for the authorized Release-1 totals-only scope, including the A21 per-user section-isolation correction.** The standalone software, review, CI, exact artifact/image, protected credentials, hardened VPS runtime, HTTPS route, live Partner totals, privacy/security controls, bilingual browser flow, and all six production account assignments are proven.
+**Verdict:** **PRODUCTION-READY AND LIVE for the authorized Release-1 totals-only scope, including the A35 per-user section-isolation correction.** The standalone software, review, CI, exact artifact/image, protected credentials, hardened VPS runtime, HTTPS route, live Partner totals, privacy/security controls, bilingual browser flow, and all six production account assignments are proven.
 
 Evidence labels in this audit:
 
@@ -21,7 +21,7 @@ Evidence labels in this audit:
 | 6 | Independent PRs merged with all gates green and review defects closed | **PROVEN** | PR #46 merged as `74a703c` after 18/18 review threads resolved; PR #48 merged as `5955054`; PR #49 merged as `3743aea`; assignment PR #50 merged as `251e1f2` after all three findings were addressed; live-read hardening PR #51 merged as `0fd988a`. Final post-merge KDS/root CI passed 6/6 + 14/14 (`31256752632`, `31256752652`). | None. |
 | 7 | Deploy as its own service and hostname | **PROVEN** | Exact artifact SHA-256 `86f596aaeaa15c235a7edc918adbedb7155c9141c27a6224984bb74fd4c93b80` is installed at `/opt/nutrezee-kds/releases/0fd988a`; image `sha256:e30f357f0872d3ace10d36e1dc396b5a979ba3d93a17632add3dce76de0f095c` is running. The independent service is live at `https://kds.13-140-159-201.sslip.io`; Docker health is green. It shares only the reverse-proxy network required by Caddy and otherwise retains its own Compose project/network/image/process/loopback port/credentials. | None. |
 | 8 | Visible bilingual and operational acceptance | **PROVEN** | Fixture Chromium Playwright passed 3/3, including two-user mutual isolation and stale-request suppression. After a fresh final-release restart, protected live Playwright passed the applicable uncached English-default/Arabic totals test. Direct production-browser inspection proved `hot` displays Hot only and `packing` displays Packing only; English/LTR and Arabic/RTL remain available. | None. |
-| 9 | Registers, runbooks, evidence, rollback, and final handoff | **PROVEN** | `README.md`, `docs/kds/01_standalone_section_totals.md`, `docs/kds/03_section_user_assignments.md`, this audit, `NEXT_ACTION_QUEUE.md`, `build_progress_register.md`, `07_BLOCKERS_AND_DECISIONS.md`, A17–A21, and ASM-051/052 record the production topology, exact release, acceptance evidence, credential handoff, rollback, and DONE status. KDS owns no persistent database or migration, so rollback is route removal plus stopping only its Compose service. | None. |
+| 9 | Registers, runbooks, evidence, rollback, and final handoff | **PROVEN** | `README.md`, `docs/kds/01_standalone_section_totals.md`, `docs/kds/03_section_user_assignments.md`, this audit, `NEXT_ACTION_QUEUE.md`, `build_progress_register.md`, `07_BLOCKERS_AND_DECISIONS.md`, A31–A35, and ASM-055/056 record the production topology, exact release, acceptance evidence, credential handoff, rollback, and DONE status. KDS owns no persistent database or migration, so rollback is route removal plus stopping only its Compose service. | None. |
 
 ## Protected inputs and operator handoff
 
@@ -39,7 +39,7 @@ The current display-password handoff is retained only in `/root/nutrezee-kds-dis
 6. Browser/API and container-log scans proved prohibited identifiers, PII, Partner credential, and display password absent; the deployed boundary scan proved the only Partner method is GET and there is no write path.
 7. Protected live Playwright and direct production-browser acceptance passed Arabic/English, totals, session lifecycle, and responsive rendering.
 8. The discovered non-root protected-file defect was fixed in PR #48, all KDS/root CI and affected local/live gates were rerun green, and WP-KDS-01 was promoted to DONE.
-9. A21 replaced the shared board with exact session-bound user assignments in PR #50. The protected live gate then exposed and drove the uncached-read deadline fix in PR #51; release `0fd988a` passed fresh-container Playwright, all six account checks, cross-section rejection, and final runtime/security verification.
+9. A35 replaced the shared board with exact session-bound user assignments in PR #50. The protected live gate then exposed and drove the uncached-read deadline fix in PR #51; release `0fd988a` passed fresh-container Playwright, all six account checks, cross-section rejection, and final runtime/security verification.
 
 ## Release-1 boundary
 

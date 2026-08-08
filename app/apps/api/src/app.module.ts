@@ -45,6 +45,16 @@ import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
 import { BatchRunner } from './modules/m19-migration/batch-runner';
 import { MigrationController } from './modules/m19-migration/migration.controller';
 import { MigrationService } from './modules/m19-migration/migration.service';
+import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controller';
+import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
+import { DriverCredentialController } from './modules/m24-fleetbase/driver-credential.controller';
+import { DriverCredentialService } from './modules/m24-fleetbase/driver-credential.service';
+import { DriverOrderReassignmentController } from './modules/m24-fleetbase/driver-order-reassignment.controller';
+import { DriverOrderReassignmentService } from './modules/m24-fleetbase/driver-order-reassignment.service';
+import { PackingController } from './modules/m20-packing/packing.controller';
+import { PackingService } from './modules/m20-packing/packing.service';
+import { DeliveryController } from './modules/m21-delivery/delivery.controller';
+import { DeliveryService } from './modules/m21-delivery/delivery.service';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
@@ -57,6 +67,8 @@ export const POOL = 'POOL';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
+    PackingController, DeliveryController,
+    FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -238,6 +250,39 @@ export const POOL = 'POOL';
         BatchRunner, CustomerService, CatalogService, SyncRecordService,
         OrderService, PaymentService, SettingsReader,
       ],
+    },
+    // Wave-6 operational foundation (migration track): packing + driver/area assignment.
+    // Each writes only its own tables, reads order/customer data, and audits in-transaction.
+    {
+      provide: PackingService,
+      useFactory: (pool: Pool, audit: AuditService) => new PackingService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      provide: DeliveryService,
+      useFactory: (pool: Pool, audit: AuditService) => new DeliveryService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).
+      provide: FleetbaseService,
+      useFactory: (pool: Pool, audit: AuditService, settings: SettingsReader) =>
+        new FleetbaseService(pool, audit, settings),
+      inject: [POOL, AuditService, SettingsReader],
+    },
+    {
+      // WP-OPS-02 / A21 — server-only driver credential rotation. The service token is
+      // loaded lazily from env so a missing secret fails closed without breaking startup.
+      provide: DriverCredentialService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverCredentialService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      // WP-OPS-03 / A22 — safely chunked, server-verified Fleetbase order reassignment.
+      // A missing order-manager token fails closed without breaking API startup.
+      provide: DriverOrderReassignmentService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverOrderReassignmentService(pool, audit),
+      inject: [POOL, AuditService],
     },
   ],
 })

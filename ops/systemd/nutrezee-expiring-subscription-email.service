@@ -1,0 +1,13 @@
+# Daily expiring-subscription email — oneshot, driven by the .timer (no [Install]).
+# Run manually:  systemctl start nutrezee-expiring-subscription-email.service
+# Schedule:      enable nutrezee-expiring-subscription-email.timer
+# Dry-run vs real send + contact PII are controlled by the host env-file
+# (/opt/nutrezee/expiring-subscription.env), not here.
+[Unit]
+Description=Nutrezee daily expiring-subscription email (internal call list -> Nutrition Doctor)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/run-expiring-subscription-email.sh

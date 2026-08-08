@@ -1,0 +1,37 @@
+{
+  "_note": "WhatsApp renewal-bot readiness segments computed from the MIGRATED staging data (read-only), one row per legacy customer = most-recent subscription. PII-free aggregate. Full per-customer dataset (with phone/name) lives on the VPS at /opt/nutrezee/whatsapp-segments-2026/lifecycle.csv (never committed).",
+  "computed_at": "2026-06-16",
+  "today": "2026-06-16",
+  "source": "staging.customer_order(origin=legacy) + customer + customer_phone + payment_record",
+  "population": {
+    "legacy_customers": 19379,
+    "customers_with_subscription": 7713,
+    "customers_no_order_not_targets": 11666
+  },
+  "segments": {
+    "EXPIRES_TODAY": 31,
+    "ACTIVE_RENEWAL_3_DAYS": 45,
+    "ACTIVE_RENEWAL_7_DAYS": 118,
+    "EXPIRED_1_7_DAYS": 124,
+    "EXPIRED_8_30_DAYS": 388,
+    "EXPIRED_31_90_DAYS": 633,
+    "EXPIRED_90_PLUS": 4005,
+    "PENDING_PAYMENT": 1141,
+    "CANCELLED_EXCLUDE": 554,
+    "ACTIVE_FUTURE_NObot": 674,
+    "INVALID_PHONE_EXCLUDE": 0,
+    "MISSING_DATE_REVIEW": 0,
+    "DUPLICATE_CUSTOMER_REVIEW": 0
+  },
+  "rollups": {
+    "immediate_renewal_targets_today_3d_7d": 194,
+    "recent_winback_expired_1_30d": 512,
+    "renewal_eligible_total": 5344,
+    "excluded_total": 2369
+  },
+  "notes": [
+    "INVALID_PHONE/MISSING_DATE/DUPLICATE_CUSTOMER are 0 among order-holders: import deduped phones (no shared phones remain) and all legacy orders have non-null start/end dates.",
+    "Computed on staging which is ~1,172 orders short of live legacy and slightly stale (active 1,054 vs live 1,026). For the OPERATIONAL bot run, recompute after the corrective re-import + reconciliation.",
+    "ACTIVE_FUTURE_NObot = active subscriptions >7 days from expiry (not yet a messaging target)."
+  ]
+}

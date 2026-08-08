@@ -1,12 +1,28 @@
-import { useState } from 'react';
-import { api, ApiError, humanMessage, type ListResponse } from '../api';
+import { useEffect, useState } from 'react';
+import { api, ApiError, humanMessage, type ListResponse, type OrderListItem } from '../api';
 
 // WP-UI-03a — customer admin: search by phone, guided-create (dup block/warn),
 // view profile (PII/HEALTH masked per the caller's grants — the server decides),
 // edit core fields, add an address. Replaces legacy /users/list/3 + the customer
 // search inside /orders/create. The merge-review screen waits on WP-API-02 wiring.
 
-interface CustomerHit { id: string; full_name_en?: string; phone_normalized?: string; masked?: boolean }
+interface SubscriptionFields {
+  subscription_status?: string;
+  subscription_expire_date?: string | null;
+  days_remaining?: number | null;
+  is_expired?: boolean;
+  is_expiring_soon?: boolean;
+}
+interface CustomerHit extends SubscriptionFields { id: string; full_name_en?: string; phone_normalized?: string; status?: string; masked?: boolean }
+
+// Subscription expiry summary (from fulfillment_day; see subscription_expiry foundation).
+function subscriptionLabel(s: SubscriptionFields): string {
+  if (!s.subscription_expire_date || s.subscription_status === 'unknown' || !s.subscription_status) return '—';
+  const days = typeof s.days_remaining === 'number' ? ` (${s.days_remaining}d)` : '';
+  return `${s.subscription_expire_date} · ${s.subscription_status}${days}`;
+}
+interface CustomerList extends ListResponse<CustomerHit> { page: { limit: number; offset?: number; total?: number } }
+const PAGE = 50;
 interface Phone { phone_normalized?: string; label?: string | null; is_primary?: boolean; whatsapp?: boolean }
 interface Address { id: string; label?: string | null; area_id?: string | null; address_text?: string; active?: boolean }
 interface Profile {
@@ -21,17 +37,50 @@ interface Profile {
   phones?: Phone[];
   addresses?: Address[];
   allergies?: Array<{ name_en?: string; severity?: string | null; note?: string | null }>;
+  subscription?: SubscriptionFields & { source_confidence?: string };
   masked?: boolean;
+}
+
+function CustomerTable({ rows, onOpen }: { rows: CustomerHit[]; onOpen: (id: string) => void }): React.JSX.Element {
+  return (
+    <table className="table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Subscription</th><th></th></tr></thead>
+      <tbody>
+        {rows.map((h) => (
+          <tr key={h.id}>
+            <td>{h.full_name_en ?? '—'}</td>
+            <td className="mono">{h.phone_normalized ?? '—'}</td>
+            <td>{h.status ?? '—'}</td>
+            <td>{subscriptionLabel(h)}</td>
+            <td><button type="button" onClick={() => onOpen(h.id)}>Open</button></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 export function CustomersPage(): React.JSX.Element {
   const [phone, setPhone] = useState('');
   const [hits, setHits] = useState<CustomerHit[] | null>(null);
+  const [list, setList] = useState<CustomerHit[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
   const [merging, setMerging] = useState(false);
+
+  async function loadList(off: number): Promise<void> {
+    setBusy(true); setError(null);
+    try {
+      const res = await api<CustomerList>(`/customers?limit=${PAGE}&offset=${off}`);
+      setList(res.items); setTotal(res.page.total ?? res.items.length); setOffset(off);
+    } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
+  }
+
+  useEffect(() => { void loadList(0); }, []);
 
   async function search(): Promise<void> {
     if (!phone) return;
@@ -49,11 +98,15 @@ export function CustomersPage(): React.JSX.Element {
     } catch (e) { setError(humanMessage(e)); } finally { setBusy(false); }
   }
 
+  function backToList(): void { setHits(null); setProfile(null); setCreating(false); setMerging(false); setPhone(''); }
+
+  const showList = !creating && !merging && !profile && !hits;
   return (
     <section className="intake">
       <section className="toolbar">
-        <input placeholder="Search by phone" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ minHeight: 40, border: '1px solid #cbd5d1', borderRadius: 6, padding: '0 10px' }} />
+        <input placeholder="Search by phone" value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void search(); }} style={{ minHeight: 40, border: '1px solid #cbd5d1', borderRadius: 6, padding: '0 10px' }} />
         <button type="button" onClick={() => void search()} disabled={busy || !phone}>Search</button>
+        <button type="button" onClick={backToList}>All customers</button>
         <button type="button" onClick={() => { setCreating(true); setProfile(null); setHits(null); setMerging(false); }}>New customer</button>
         <button type="button" onClick={() => { setMerging(true); setProfile(null); setHits(null); setCreating(false); }}>Merge duplicates</button>
       </section>
@@ -64,20 +117,27 @@ export function CustomersPage(): React.JSX.Element {
       ) : null}
 
       {hits && !profile ? (
-        hits.length === 0 ? <p className="emptyLine">No match — try New customer.</p> : (
-          <table className="table">
-            <thead><tr><th>Name</th><th>Phone</th><th></th></tr></thead>
-            <tbody>
-              {hits.map((h) => (
-                <tr key={h.id}>
-                  <td>{h.full_name_en ?? '—'}</td>
-                  <td className="mono">{h.phone_normalized ?? '—'}</td>
-                  <td><button type="button" onClick={() => void openProfile(h.id)}>Open</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Search results ({hits.length})</strong>
+            <button type="button" className="linkBtn" onClick={backToList}>← All customers</button>
+          </div>
+          {hits.length === 0 ? <p className="emptyLine">No match — try New customer.</p> : <CustomerTable rows={hits} onOpen={(id) => void openProfile(id)} />}
+        </>
+      ) : null}
+
+      {showList ? (
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>All customers</strong>
+            <span className="hintLine">{total ? `${offset + 1}–${Math.min(offset + list.length, total)} of ${total.toLocaleString()}` : ''}</span>
+          </div>
+          {list.length === 0 ? <p className="emptyLine">{busy ? 'Loading…' : 'No customers yet.'}</p> : <CustomerTable rows={list} onOpen={(id) => void openProfile(id)} />}
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" onClick={() => void loadList(Math.max(offset - PAGE, 0))} disabled={busy || offset === 0}>← Prev</button>
+            <button type="button" onClick={() => void loadList(offset + PAGE)} disabled={busy || offset + list.length >= total}>Next →</button>
+          </div>
+        </>
       ) : null}
 
       {merging ? <MergePanel onClose={() => setMerging(false)} /> : null}
@@ -287,6 +347,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
             <div><dt>Email</dt><dd>{profile.email ?? '—'}</dd></div>
             <div><dt>DOB</dt><dd>{profile.dob ?? '—'}</dd></div>
             <div><dt>Status</dt><dd>{profile.status ?? '—'}</dd></div>
+            <div><dt>Subscription expires</dt><dd>{profile.subscription ? subscriptionLabel(profile.subscription) : '—'}</dd></div>
             <div><dt>Notes</dt><dd>{profile.notes ?? '—'}</dd></div>
           </dl>
           <strong>Phones</strong>
@@ -299,6 +360,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
             {(profile.addresses ?? []).map((a) => <li key={a.id}><span>{a.address_text ?? '—'}{a.active === false ? ' (inactive)' : ''}</span></li>)}
             {(profile.addresses ?? []).length === 0 ? <li><span>—</span></li> : null}
           </ul>
+          <AddAddressForm customerId={profile.id} onAdded={onReload} />
           {profile.allergies !== undefined ? (
             <>
               <strong>Allergies</strong>
@@ -308,6 +370,7 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
               </ul>
             </>
           ) : null}
+          <CustomerOrderHistory customerId={profile.id} />
           <div className="row"><button type="button" className="primary" onClick={() => setEdit(true)}>Edit</button></div>
         </>
       ) : (
@@ -325,5 +388,111 @@ function ProfileCard({ profile, onReload, onClose }: { profile: Profile; onReloa
         </div>
       )}
     </section>
+  );
+}
+
+function AddAddressForm({ customerId, onAdded }: { customerId: string; onAdded: () => void }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add(): Promise<void> {
+    if (!address.trim()) {
+      setError('Address text is required.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/customers/${customerId}/addresses`, {
+        method: 'POST',
+        body: JSON.stringify({
+          label: label.trim() || undefined,
+          address_text: address.trim(),
+          delivery_notes: notes.trim() || undefined,
+        }),
+      });
+      setLabel('');
+      setAddress('');
+      setNotes('');
+      setBusy(false);
+      setOpen(false);
+      onAdded();
+    } catch (e) {
+      setError(humanMessage(e));
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return <button type="button" className="linkBtn" onClick={() => setOpen(true)}>+ Add address</button>;
+  }
+
+  return (
+    <div className="decideRow" style={{ marginTop: 8 }}>
+      <strong>Add address</strong>
+      {error ? <p className="error">{error}</p> : null}
+      <div className="grid2">
+        <label className="field"><span>Label</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home, office, branch" /></label>
+        <label className="field"><span>Address</span><input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
+      </div>
+      <label className="field"><span>Delivery notes</span><input value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+      <div className="row">
+        <button type="button" onClick={() => { setOpen(false); setError(null); }} disabled={busy}>Cancel</button>
+        <button type="button" className="primary" onClick={() => void add()} disabled={busy || !address.trim()}>Save address</button>
+      </div>
+      <p className="hintLine">Area stays optional until the workshop supplies the final area list.</p>
+    </div>
+  );
+}
+
+function CustomerOrderHistory({ customerId }: { customerId: string }): React.JSX.Element {
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    setError(null);
+    api<ListResponse<OrderListItem>>(`/orders?customer_id=${encodeURIComponent(customerId)}&limit=10`)
+      .then((d) => {
+        if (cancelled) return;
+        setOrders(d.items);
+        setTotal(d.page.total ?? d.items.length);
+      })
+      .catch((e) => { if (!cancelled) setError(humanMessage(e)); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [customerId]);
+
+  return (
+    <div>
+      <strong>Order history</strong>
+      {error ? <p className="hintLine">Order history unavailable: {error}</p> : null}
+      {!error && busy ? <p className="emptyLine">Loading orders…</p> : null}
+      {!error && !busy && orders.length === 0 ? <p className="emptyLine">No orders for this customer yet.</p> : null}
+      {orders.length > 0 ? (
+        <table className="table">
+          <thead><tr><th>Order</th><th>Dates</th><th>Payment</th><th>Status</th><th>Total</th></tr></thead>
+          <tbody>
+            {orders.map((o) => (
+              <tr key={o.id}>
+                <td className="mono">{o.order_number}</td>
+                <td>{o.start_date} → {o.end_date}</td>
+                <td>{o.payment_status ? <span className={`badge st-${o.payment_status}`}>{o.payment_status}</span> : '—'}</td>
+                <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
+                <td>{typeof o.total === 'number' ? (o.total / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }) : o.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {total > orders.length ? <p className="hintLine">Showing latest {orders.length} of {total.toLocaleString()} orders.</p> : null}
+    </div>
   );
 }

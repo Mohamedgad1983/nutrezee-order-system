@@ -140,15 +140,26 @@ export function activePlanImporter(
   return async (client: PoolClient, row, rowNo, batchId): Promise<RowResult> => {
     const messages: string[] = [];
     const legacyKey = String(row['legacy_id'] ?? `row-${rowNo}`);
+    // Frozen legacy delivery snapshot (method/time/area) — also backfilled onto already-imported
+    // orders so a delivery-only re-import enriches existing rows idempotently.
+    const delivery = {
+      deliveryMethodFrozen: stringField(row['delivery_method']) ?? undefined,
+      deliveryTimeFrozen: stringField(row['delivery_time']) ?? undefined,
+      deliveryAreaFrozen: stringField(row['area']) ?? undefined,
+    };
     const existing = await sync.lookup(client, 'order', legacyKey);
-    if (existing) return { rowNo, action: 'matched', targetRef: existing, messages: ['sync_record'] };
+    if (existing) {
+      const filled = await orders.setFrozenDeliveryInTx(client, IMPORT_ACTOR.staffId, existing, delivery);
+      return { rowNo, action: 'matched', targetRef: existing, messages: filled ? ['sync_record', 'delivery_backfilled'] : ['sync_record'] };
+    }
 
     const orderNumber = String(row['order_number'] ?? legacyKey).trim();
     if (!orderNumber) return { rowNo, action: 'error', messages: ['missing order_number'] };
     const byOrderNumber = await orders.findByOrderNumberInTx(client, orderNumber);
     if (byOrderNumber) {
       await sync.record(client, 'order', legacyKey, byOrderNumber);
-      return { rowNo, action: 'matched', targetRef: byOrderNumber, messages: ['order_number match'] };
+      const filled = await orders.setFrozenDeliveryInTx(client, IMPORT_ACTOR.staffId, byOrderNumber, delivery);
+      return { rowNo, action: 'matched', targetRef: byOrderNumber, messages: filled ? ['order_number match', 'delivery_backfilled'] : ['order_number match'] };
     }
 
     const customerId = await resolveCustomer(client, customers, sync, row, defaultCountryCode);
@@ -188,6 +199,7 @@ export function activePlanImporter(
         address_text: stringField(row['address']) ?? null,
         area: stringField(row['area']) ?? null,
       },
+      ...delivery,
     });
     await sync.record(client, 'order', legacyKey, created.id);
 

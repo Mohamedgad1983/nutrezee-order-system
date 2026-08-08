@@ -1,0 +1,21 @@
+[Unit]
+Description=Nutrezee m22 meal-history scrape (STAGING, VPS-only, GET-only) — built, DISABLED, manual-run
+Documentation=file:///opt/nutrezee/legacy-meal-history/run-meal-history-scrape.sh
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# flock -n: a still-running scrape makes a new invocation exit immediately (no overlap, no hammering legacy)
+ExecStart=/usr/bin/flock -n /tmp/nutrezee-meal-history-scrape.lock /opt/nutrezee/legacy-meal-history/run-meal-history-scrape.sh
+Nice=15
+TimeoutStartSec=3600
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nutrezee/legacy-meal-history /run
+PrivateTmp=false
+
+# NO [Install] section — there is intentionally no timer enablement. Manual `systemctl start` only,
+# and even that stays disabled until a deliberate, signed-off scrape run.

@@ -26,93 +26,155 @@ const PAYMENT_REQUEST_TARGETS = ['paid', 'link_sent', 'cod_pending', 'collected'
 
 const short = (s: string | null | undefined): string => (s ? (s.length > 12 ? `${s.slice(0, 12)}…` : s) : '—');
 
+const TABS: Array<{ key: string; label: string }> = [
+  { key: '', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'expired', label: 'Expired' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'rejected', label: 'Pending' },
+  { key: 'paused', label: 'Paused' },
+  { key: 'completed', label: 'Completed' },
+];
+const PAGE = 50;
+const kwd = (v: number | string | null | undefined): string => {
+  const num = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(num) ? (num / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
+};
+
+type PanelTab = 'view' | 'schedule' | 'transition' | 'change' | 'exception' | 'payment';
+
 export function OrdersPage(): React.JSX.Element {
   const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [submittedQ, setSubmittedQ] = useState('');
   const [items, setItems] = useState<OrderListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<{ order: OrderDetail; days: Day[] } | null>(null);
+  const [open, setOpen] = useState<{ order: OrderDetail; days: Day[]; tab: PanelTab } | null>(null);
   const seq = useRef(0);
 
-  const reload = useCallback(() => {
+  const load = useCallback((st: string, query: string, off: number) => {
     const mine = ++seq.current;
-    setBusy(true);
-    setError(null);
-    api<ListResponse<OrderListItem>>(status ? `/orders?status=${status}` : '/orders')
-      .then((d) => { if (seq.current === mine) setItems(d.items); })
+    setBusy(true); setError(null);
+    const params = new URLSearchParams();
+    if (st) params.set('status', st);
+    if (query.trim()) params.set('q', query.trim());
+    params.set('limit', String(PAGE)); params.set('offset', String(off));
+    api<ListResponse<OrderListItem>>(`/orders?${params.toString()}`)
+      .then((d) => { if (seq.current !== mine) return; setItems(d.items); setTotal(d.page.total ?? d.items.length); setOffset(off); })
       .catch((e: unknown) => { if (seq.current === mine) setError(humanMessage(e)); })
       .finally(() => { if (seq.current === mine) setBusy(false); });
-  }, [status]);
+  }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { load(status, submittedQ, 0); }, [load, status, submittedQ]);
 
-  async function openOrder(id: string): Promise<void> {
+  async function openOrder(id: string, tab: PanelTab = 'view'): Promise<void> {
     setError(null);
     try {
       const [order, daysRes] = await Promise.all([
         api<OrderDetail>(`/orders/${id}`),
         api<ListResponse<Day>>(`/orders/${id}/fulfillment-days`),
       ]);
-      setOpen({ order, days: daysRes.items });
-    } catch (e) {
-      setError(humanMessage(e));
-    }
+      setOpen({ order, days: daysRes.items, tab });
+    } catch (e) { setError(humanMessage(e)); }
+  }
+
+  function exportCsv(): void {
+    const head = ['Order', 'Customer', 'Phone', 'Package', 'Start', 'End', 'Payment', 'Status', 'Amount(KWD)'];
+    const esc = (v: unknown): string => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [head.join(',')].concat(items.map((o) => [
+      o.order_number, o.customer_name ?? o.customer_id, o.customer_phone ?? '', o.package_name ?? '',
+      o.start_date, o.end_date, o.payment_status ?? '', o.status, kwd(o.total),
+    ].map(esc).join(',')));
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `orders-${status || 'all'}-${offset + 1}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   return (
     <section>
+      <div className="ordersTabs">
+        {TABS.map((t) => (
+          <button key={t.key} type="button" className={`tabBtn${status === t.key ? ' on' : ''}`} onClick={() => setStatus(t.key)}>{t.label}</button>
+        ))}
+      </div>
       <section className="toolbar">
-        <label>
-          <span>Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">all</option>
-            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={reload} disabled={busy}>Refresh</button>
-        <span className="countLine">{busy ? 'Loading…' : `${items.length} order${items.length === 1 ? '' : 's'}`}</span>
+        <input
+          placeholder="Search order #, name or phone" value={q}
+          onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setSubmittedQ(q); }}
+          style={{ minHeight: 40, border: '1px solid var(--line)', borderRadius: 8, padding: '0 12px', minWidth: 260 }}
+        />
+        <button type="button" onClick={() => setSubmittedQ(q)} disabled={busy}>Search</button>
+        {submittedQ ? <button type="button" onClick={() => { setQ(''); setSubmittedQ(''); }}>Clear</button> : null}
+        <button type="button" onClick={() => load(status, submittedQ, offset)} disabled={busy}>↻ Refresh</button>
+        <button type="button" onClick={exportCsv} disabled={!items.length}>⬇ CSV</button>
+        <span className="countLine">{busy ? 'Loading…' : `${total.toLocaleString()} order${total === 1 ? '' : 's'}`}</span>
       </section>
       {error ? <p className="error">{error}</p> : null}
-      {!busy && items.length === 0 ? <p className="emptyLine">No orders yet — approved drafts become orders.</p> : null}
+      {!busy && items.length === 0 ? <p className="emptyLine">No orders match this filter.</p> : null}
       {items.length > 0 ? (
         <table className="table">
           <thead>
-            <tr><th>Order</th><th>Status</th><th>Customer</th><th>Start</th><th>End</th><th>Total</th><th></th></tr>
+            <tr><th>Order</th><th>Customer</th><th>Package</th><th>Start</th><th>End</th><th>Payment</th><th>Status</th><th>Amount</th><th></th></tr>
           </thead>
           <tbody>
             {items.map((o) => (
               <tr key={o.id}>
                 <td className="mono">{o.order_number}</td>
-                <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
-                <td className="mono">{short(o.customer_id)}</td>
+                <td>
+                  <div style={{ fontWeight: 600 }}>{o.customer_name ?? short(o.customer_id)}</div>
+                  {o.customer_phone ? <div className="mono" style={{ fontSize: 12, color: 'var(--muted)' }}>{o.customer_phone}</div> : null}
+                </td>
+                <td>{o.package_name ?? '—'}</td>
                 <td>{o.start_date}</td>
                 <td>{o.end_date}</td>
-                <td>{typeof o.total === 'number' ? o.total.toLocaleString() : o.total}</td>
-                <td><button type="button" onClick={() => void openOrder(o.id)}>Open</button></td>
+                <td>{o.payment_status ? <span className={`badge st-${o.payment_status}`}>{o.payment_status}</span> : '—'}</td>
+                <td><span className={`badge st-${o.status}`}>{o.status}</span></td>
+                <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{kwd(o.total)}</td>
+                <td>
+                  <div className="rowOps">
+                    <button type="button" className="iconBtn view" title="View order" aria-label="View order" onClick={() => void openOrder(o.id, 'view')}>👁</button>
+                    <button type="button" className="iconBtn sched" title="Day schedule" aria-label="Day schedule" onClick={() => void openOrder(o.id, 'schedule')}>🗓</button>
+                    <button type="button" className="iconBtn ops" title="Day operations" aria-label="Day operations" onClick={() => void openOrder(o.id, 'transition')}>⚙️</button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : null}
+      {total > PAGE ? (
+        <div className="row" style={{ padding: '4px 24px 24px', gap: 10, alignItems: 'center' }}>
+          <button type="button" onClick={() => load(status, submittedQ, Math.max(offset - PAGE, 0))} disabled={busy || offset === 0}>← Prev</button>
+          <span className="countLine">{offset + 1}–{Math.min(offset + items.length, total)} of {total.toLocaleString()}</span>
+          <button type="button" onClick={() => load(status, submittedQ, offset + PAGE)} disabled={busy || offset + items.length >= total}>Next →</button>
+        </div>
+      ) : null}
 
       {open ? (
-        <OrderPanel order={open.order} days={open.days} onClose={() => setOpen(null)} onDone={() => { setOpen(null); reload(); }} />
+        <OrderPanel order={open.order} days={open.days} initialTab={open.tab} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(status, submittedQ, offset); }} />
       ) : null}
     </section>
   );
 }
 
 function OrderPanel({
-  order, days, onClose, onDone,
+  order, days, onClose, onDone, initialTab,
 }: {
   order: OrderDetail;
   days: Day[];
   onClose: () => void;
   onDone: () => void;
+  initialTab: PanelTab;
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'view' | 'transition' | 'change' | 'exception' | 'payment'>('view');
+  const [tab, setTab] = useState<PanelTab>(initialTab);
 
   // transition
   const [target, setTarget] = useState('');
@@ -186,38 +248,42 @@ function OrderPanel({
   }), 'Requested — sent to Finance review.');
 
   return (
-    <section className="card reviewPanel">
+    <div className="modalOverlay" onClick={onClose} role="presentation">
+      <section className="card reviewPanel modalCard" onClick={(e) => e.stopPropagation()}>
       <div className="panelHead">
         <h2>Order <span className="mono">{order.order_number ?? short(order.id)}</span></h2>
-        <button type="button" className="linkBtn" onClick={onClose}>Close</button>
+        <button type="button" className="linkBtn" onClick={onClose}>Close ✕</button>
       </div>
       {error ? <p className="error">{error}</p> : null}
 
-      <dl className="kv">
-        <div><dt>Status</dt><dd><span className={`badge st-${order.status}`}>{order.status}</span></dd></div>
-        <div><dt>Customer</dt><dd className="mono">{short(order.customer_id)}</dd></div>
-        <div><dt>Start</dt><dd>{order.start_date ?? '—'}</dd></div>
-        <div><dt>End</dt><dd>{order.end_date ?? '—'}</dd></div>
-        <div><dt>Total</dt><dd>{typeof order.total === 'number' ? order.total.toLocaleString() : (order.total ?? '—')}</dd></div>
-      </dl>
-
-      <strong>Fulfillment days ({days.length})</strong>
-      {days.length === 0 ? <p className="emptyLine">No days generated.</p> : (
-        <table className="table">
-          <thead><tr><th>Date</th><th>Status</th></tr></thead>
-          <tbody>{days.map((d) => <tr key={d.id}><td>{d.date}</td><td><span className={`badge st-${d.status}`}>{d.status}</span></td></tr>)}</tbody>
-        </table>
-      )}
-
-      <div className="segmented" style={{ marginTop: 12 }}>
-        {(['view', 'transition', 'change', 'exception', 'payment'] as const).map((t) => (
+      <div className="segmented" style={{ marginTop: 4 }}>
+        {(['view', 'schedule', 'transition', 'change', 'exception', 'payment'] as const).map((t) => (
           <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {({ view: 'Details', transition: 'Change status', change: 'Change request', exception: 'Raise exception', payment: 'Payment' } as const)[t]}
+            {({ view: 'Details', schedule: 'Schedule', transition: 'Change status', change: 'Change request', exception: 'Raise exception', payment: 'Payment' } as const)[t]}
           </button>
         ))}
       </div>
 
-      {tab === 'transition' ? (
+      {tab === 'view' ? (
+        <dl className="kv">
+          <div><dt>Order #</dt><dd className="mono">{order.order_number ?? '—'}</dd></div>
+          <div><dt>Status</dt><dd><span className={`badge st-${order.status}`}>{order.status}</span></dd></div>
+          <div><dt>Customer</dt><dd className="mono">{short(order.customer_id)}</dd></div>
+          <div><dt>Start</dt><dd>{order.start_date ?? '—'}</dd></div>
+          <div><dt>End</dt><dd>{order.end_date ?? '—'}</dd></div>
+          <div><dt>Total</dt><dd>{typeof order.total === 'number' ? order.total.toLocaleString() : (order.total ?? '—')}</dd></div>
+        </dl>
+      ) : tab === 'schedule' ? (
+        <div>
+          <strong>Fulfillment days ({days.length})</strong>
+          {days.length === 0 ? <p className="emptyLine">No days generated for this order.</p> : (
+            <table className="table">
+              <thead><tr><th>Date</th><th>Status</th></tr></thead>
+              <tbody>{days.map((d) => <tr key={d.id}><td>{d.date}</td><td><span className={`badge st-${d.status}`}>{d.status}</span></td></tr>)}</tbody>
+            </table>
+          )}
+        </div>
+      ) : tab === 'transition' ? (
         <div className="decideRow">
           <label className="field">
             <span>New status</span>
@@ -285,6 +351,7 @@ function OrderPanel({
           <div className="row"><button type="button" className="primary" onClick={() => void doStatusRequest()} disabled={busy || !reqStatus}>Request status change</button></div>
         </div>
       ) : null}
-    </section>
+      </section>
+    </div>
   );
 }

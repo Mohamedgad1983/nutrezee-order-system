@@ -27,17 +27,31 @@ export class CustomerController {
   ) {}
 
   @Get()
-  async search(@Req() req: Request, @Query('phone') phone?: string) {
+  async search(
+    @Req() req: Request,
+    @Query('phone') phone?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
     const ctx = await this.ctx(req);
     await requirePermission(this.access, ctx, 'customer.read');
-    if (!phone) throw new BadRequestException({ error_code: 'validation_failed', field: 'phone' });
     const grants = await this.access.visibilityGrants(ctx.roles);
-    const rows = await this.wrap(() => this.customers.searchByPhone(phone));
-    const items = rows.map((r) => {
+    const mask = (r: Record<string, unknown>) => {
       const { data, masked } = maskFields(r, { full_name_en: 'pii', phone_normalized: 'pii' }, grants);
       return { ...data, masked };
-    });
-    return { items, page: { limit: 100 } };
+    };
+    if (phone) {
+      const rows = await this.wrap(() => this.customers.searchByPhone(phone));
+      return { items: rows.map(mask), page: { limit: 100 } };
+    }
+    // no phone → paginated list (legacy /users/list parity); PII still masked per grants
+    const lim = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const off = Math.max(Number(offset) || 0, 0);
+    const [rows, total] = await Promise.all([
+      this.wrap(() => this.customers.listCustomers(lim, off)),
+      this.wrap(() => this.customers.countCustomers()),
+    ]);
+    return { items: rows.map(mask), page: { limit: lim, offset: off, total } };
   }
 
   @Get(':id')

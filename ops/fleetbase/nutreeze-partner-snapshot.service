@@ -1,0 +1,30 @@
+[Unit]
+Description=Nutrezee Partner API read-only daily order snapshot
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+StateDirectory=nutreeze-partner-snapshots
+StateDirectoryMode=0700
+ExecStartPre=/opt/fleetbase/integrations/nutreeze-orders/healthcheck.sh
+ExecStart=/opt/fleetbase/integrations/nutreeze-orders/daily-snapshot.sh
+TimeoutStartSec=30min
+Restart=on-failure
+RestartSec=5min
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nutreeze-partner-snapshots
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true

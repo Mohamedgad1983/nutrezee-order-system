@@ -4,11 +4,11 @@
 
 ## WP-KDS-02 user-assigned section isolation — resolved 2026-08-08
 
-A21 corrects the Kitchen Display from one shared all-sections credential to one or more exact section assignments per authenticated user. PR #50 merged the server session claims, assignment-scoped totals API, and redesigned section-focused UI as `251e1f2`; PR #51 corrected the uncached live-read deadline mismatch and merged as final production release `0fd988a`. Final KDS/root CI is green (`31256752632`, `31256752652`). The protected six-user manifest is active, every current Partner section account returned exactly its own section, a cross-section query was rejected with HTTP 400, and protected Chromium plus direct browser/API isolation passed. The container is healthy with zero restarts and zero error logs. There is no remaining KDS blocker.
+A35 corrects the Kitchen Display from one shared all-sections credential to one or more exact section assignments per authenticated user. PR #50 merged the server session claims, assignment-scoped totals API, and redesigned section-focused UI as `251e1f2`; PR #51 corrected the uncached live-read deadline mismatch and merged as final production release `0fd988a`. Final KDS/root CI is green (`31256752632`, `31256752652`). The protected six-user manifest is active, every current Partner section account returned exactly its own section, a cross-section query was rejected with HTTP 400, and protected Chromium plus direct browser/API isolation passed. The container is healthy with zero restarts and zero error logs. There is no remaining KDS blocker.
 
 ## WP-KDS-01 production activation — resolved 2026-08-08
 
-The standalone Kitchen Display is production-active at `https://kds.13-140-159-201.sslip.io` on final release `0fd988a`. The user supplied the dedicated production Partner credential and explicitly directed autonomous production activation. It is held only in the protected server-side secret file; it was never committed, printed, returned to the browser, or found in the container logs. The protected user manifest stores independently salted scrypt hashes plus exact section assignments, and the current temporary plaintext handoff remains root-only at `/root/nutrezee-kds-display-initial-password`; its literal value is intentionally excluded from source control and documentation. User-directed A19 makes English/LTR the initial login/display language while retaining an explicit persistent Arabic/RTL toggle.
+The standalone Kitchen Display is production-active at `https://kds.13-140-159-201.sslip.io` on final release `0fd988a`. The user supplied the dedicated production Partner credential and explicitly directed autonomous production activation. It is held only in the protected server-side secret file; it was never committed, printed, returned to the browser, or found in the container logs. The protected user manifest stores independently salted scrypt hashes plus exact section assignments, and the current temporary plaintext handoff remains root-only at `/root/nutrezee-kds-display-initial-password`; its literal value is intentionally excluded from source control and documentation. User-directed A33 makes English/LTR the initial login/display language while retaining an explicit persistent Arabic/RTL toggle.
 
 The production service is healthy with zero restarts, non-root runtime user `node`, read-only root filesystem, `cap_drop=ALL`, no direct secret environment entries, and only a read-only `/run/secrets` bind. HTTPS, security headers, unauthenticated 401, secure/HttpOnly/SameSite=Strict session cookie, logout revocation, unsafe-method 405, invalid-query 400, Arabic RTL, English LTR, and 390px responsive rendering all passed.
 
@@ -27,9 +27,9 @@ For Kuwait delivery date `2026-08-08`, an independent server-side GET-only verif
 
 | Item | Status |
 |---|---|
-| CI | ✅ Workflow live since WP-00 (`.github/workflows/ci.yml`); `gh` CLI verified locally; latest WP-13 merge run 27297588422 = 13/13 jobs green |
-| Staging | ❌ **Deferred** — blocked by the PG-region/data-residency item below; provisioning checklist ready (`16_Deployment/environment_plan.md` §3) |
-| Local environment | ✅ Verified (typecheck/lint/tests/build/smoke); Docker compose authored but **unvalidated locally** (Docker not installed) |
+| CI | ✅ Workflow live; draft parent PR #43 is clean/mergeable and push/PR runs 30170042208 + 30170050086 passed 14/14. |
+| Staging | ✅ **Live and healthy** at `https://13-140-159-201.sslip.io`; Nutrezee database currently has 22 migrations through `0023_address_block.sql`. WP-OPS-02/03 are not deployed. |
+| Local environment | ✅ Current operational branch is clean and pushed; full app checks and 313 tests passed during WP-OPS-03 closeout. |
 | Workshop / assumption-carry | ✅ **Assumption-carry accepted 2026-06-10 for WP-07+** (`20_Decisions/NOTE_assumption_carry_wp07_plus.md`, `ASSUMPTION_REGISTER.md`); workshop itself still outstanding and all assumptions stay sponsor-review-required |
 | PG region / data residency | ◐ **Interim staging region noted 2026-06-10**: AWS me-south-1 (`NOTE_pg_staging_region_interim.md`); final production region revisited pre-launch (residency check stays open toward Phase 6) |
 
@@ -63,6 +63,6 @@ Still standing, clearly scoped:
 
 ## Exact next action
 
-> **2026-06-12 — superseded: staging inputs were supplied and executed.** Sponsor provided a VPS in place of STG-1/2; STG-3/4 satisfied by on-host PG 16 container + nightly dumps (deviation note `20_Decisions/NOTE_vps_staging_host.md`); STG-5 by Caddy/Let's Encrypt at `13-140-159-201.sslip.io`; STG-6 supplied in-session. Deployed → migrated → bootstrapped → **smoke 10/10** → gate ④ flipped. One live defect (D7, bare `/kitchen` 301) found and fixed during smoke — checklist §3.
+> **2026-07-25 — WP-OPS-02/03 release gate verified:** provision separate least-privilege Fleetbase service identities for credential rotation and order reassignment, store their tokens only in `/opt/nutrezee/.env` mode `0600`, and identify the named human Logistics Manager account. The three required integration variables are currently unset; no dedicated Logistics Manager exists; migrations `0025/0026` are not deployed. Draft PR #43 is green and mergeable but must remain unmerged until those inputs exist and its broad operational parent diff is reviewed. Then merge PR #43, deploy migrations `0024–0026`, and run the required staging Playwright and Navigator proof. Do not use the UAT seed account or silently add logistics privileges to the existing super-admin as a substitute.
 
 **WP-14's remaining critical path** is now the non-infrastructure items per `19_Roadmap/wp14_blocker_report.md` §4: the workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix), assumption-register sign-off, and the staging **restore drill** (environment_plan §4). UAT/pilot can now exercise the live staging URL.

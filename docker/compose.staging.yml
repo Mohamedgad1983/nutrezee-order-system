@@ -25,6 +25,9 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://nutrezee:${POSTGRES_PASSWORD}@postgres:5432/nutrezee
+      FLEETBASE_INTERNAL_API_BASE: ${FLEETBASE_INTERNAL_API_BASE:-}
+      FLEETBASE_CREDENTIAL_MANAGER_TOKEN: ${FLEETBASE_CREDENTIAL_MANAGER_TOKEN:-}
+      FLEETBASE_ORDER_MANAGER_TOKEN: ${FLEETBASE_ORDER_MANAGER_TOKEN:-}
     ports: !override
       - "127.0.0.1:3000:3000"
 

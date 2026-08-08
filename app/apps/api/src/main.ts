@@ -7,7 +7,9 @@ import { OutboxDispatcher } from './platform/outbox/outbox.service';
 import { AuditReadQueue } from './platform/audit/audit.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody:true preserves the exact request bytes (req.rawBody) so the m24-fleetbase
+  // webhook can verify Fleetbase's HMAC-SHA256 "Signature" over the raw payload.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   app.use(cookieParser());
   // Deployed topology (D1/D2): the API sits behind the admin nginx proxy /
   // platform TLS terminator — trust the first hop so req.ip (login audit

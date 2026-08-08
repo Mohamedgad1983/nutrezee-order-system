@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { freshDb } from '../helpers/db';
 import { newId } from '../../apps/api/src/platform/ids';
+import { OrderService } from '../../apps/api/src/modules/m03-orders/order.service';
 
 let pool: Pool;
 let orderId: string;
@@ -67,5 +68,43 @@ describe('TS-I integration — WP-09 order persistence guards', () => {
        VALUES ($1,$2,'2099-01-01','{}','test')`,
       [newId(), orderId],
     )).rejects.toThrow(/duplicate key/);
+  });
+
+  it('filters rich order lists by customer_id and safely returns no rows for unknown customers', async () => {
+    const customerA = newId();
+    const customerB = newId();
+    await pool.query(
+      `INSERT INTO customer (id, full_name_en, created_by) VALUES
+        ($1,'Filter Customer A','test'), ($2,'Filter Customer B','test')`,
+      [customerA, customerB],
+    );
+    await pool.query(
+      `INSERT INTO customer_order
+        (id, order_number, customer_id, status, start_date, end_date, channel, total, created_by)
+       VALUES
+        ($1,'N-I-FILTER-A',$2,'approved','2099-02-01','2099-02-03','phone',1000,'test'),
+        ($3,'N-I-FILTER-B',$4,'approved','2099-02-01','2099-02-03','phone',2000,'test')`,
+      [newId(), customerA, newId(), customerB],
+    );
+    const orders = new OrderService(
+      pool,
+      {} as ConstructorParameters<typeof OrderService>[1],
+      {} as ConstructorParameters<typeof OrderService>[2],
+      { get: vi.fn().mockResolvedValue('none') } as unknown as ConstructorParameters<typeof OrderService>[3],
+      { registerValidator: vi.fn() } as unknown as ConstructorParameters<typeof OrderService>[4],
+      {} as ConstructorParameters<typeof OrderService>[5],
+      {} as ConstructorParameters<typeof OrderService>[6],
+      {} as ConstructorParameters<typeof OrderService>[7],
+      {} as ConstructorParameters<typeof OrderService>[8],
+    );
+
+    const filtered = await orders.listOrdersRich({ customerId: customerA, limit: 50, offset: 0 });
+    expect(filtered.total).toBe(1);
+    expect(filtered.rows).toHaveLength(1);
+    expect(filtered.rows[0]).toMatchObject({ order_number: 'N-I-FILTER-A', customer_id: customerA });
+
+    const unknown = await orders.listOrdersRich({ customerId: newId(), limit: 50, offset: 0 });
+    expect(unknown.total).toBe(0);
+    expect(unknown.rows).toEqual([]);
   });
 });

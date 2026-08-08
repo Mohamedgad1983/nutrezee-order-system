@@ -29,7 +29,7 @@ test('2 — status filter re-queries without error', async ({ page }) => {
   await signIn(page);
   await page.goto('/app/orders');
   const load = page.waitForResponse((r) => r.url().includes('/orders?status=active') && r.status() === 200);
-  await page.locator('select').first().selectOption('active');
+  await page.getByRole('button', { name: 'Active' }).click();
   await load;
   await expect(page.locator('.content .error')).toHaveCount(0);
   await page.screenshot({ path: `${SHOTS}/02-orders-filtered.png`, fullPage: true });

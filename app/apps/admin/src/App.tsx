@@ -15,6 +15,8 @@ import { SettingsPage } from './pages/Settings';
 import { DashboardPage } from './pages/Dashboard';
 import { StaffPage } from './pages/Staff';
 import { ExceptionsPage } from './pages/Exceptions';
+import { PackingPage } from './pages/Packing';
+import { DeliveryPage } from './pages/Delivery';
 import { AuditPage } from './pages/Audit';
 import { DraftsPage } from './pages/lists';
 import { NotFoundPage, PlaceholderPage } from './pages/Placeholder';
@@ -53,6 +55,7 @@ function Routed(): React.JSX.Element | null {
     return <Redirect to="/app/kitchen" />;
   }
 
+  const shellPath = path.startsWith('/app/dashboard/') ? '/app/dashboard' : path;
   let page: React.JSX.Element;
   switch (path) {
     case '/app/dashboard':
@@ -60,6 +63,12 @@ function Routed(): React.JSX.Element | null {
       break;
     case '/app/kitchen':
       page = <KitchenBoardPage />;
+      break;
+    case '/app/packing':
+      page = <PackingPage />;
+      break;
+    case '/app/delivery':
+      page = <DeliveryPage />;
       break;
     case '/app/drafts':
       page = <DraftsPage />;
@@ -98,7 +107,11 @@ function Routed(): React.JSX.Element | null {
       page = <AuditPage />;
       break;
     default:
-      page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
+      if (path.startsWith('/app/dashboard/')) {
+        page = <DashboardPage metricSlug={path.slice('/app/dashboard/'.length)} />;
+      } else {
+        page = NAV.some((n) => n.path === path) ? <PlaceholderPage path={path} /> : <NotFoundPage />;
+      }
   }
-  return <Shell path={path}>{page}</Shell>;
+  return <Shell path={shellPath}>{page}</Shell>;
 }

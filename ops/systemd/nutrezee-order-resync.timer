@@ -1,0 +1,12 @@
+# Daily order-resync plan-only monitor at 07:30 Asia/Kuwait. DISABLED by default —
+# enable only after a legacy refresh ([A]) is wired, otherwise it re-plans a static archive.
+#   systemctl enable --now nutrezee-order-resync.timer
+[Unit]
+Description=Nutrezee daily order-resync plan-only monitor
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Kuwait
+Persistent=true
+
+[Install]
+WantedBy=timers.target

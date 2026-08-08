@@ -2,6 +2,56 @@
 
 Main instruction file for AI agents (Claude Code / Codex) working in this repository. **Read this first, every session.** Companion docs: `00_AGENT_OPERATING_SYSTEM.md` (how agents operate), `19_Roadmap/AUTO_EXECUTION_RULES.md` (the autonomous rulebook), `19_Roadmap/SPRINT_MODE.md` (the six modes + sprint loop), `19_Roadmap/NEXT_ACTION_QUEUE.md` (the live next-work cursor), `03_EXECUTION_MODES.md` (original modes), `05_TEST_COMMANDS.md` (commands), `07_BLOCKERS_AND_DECISIONS.md` (live blockers).
 
+## Driver-authentication source amendment
+
+AMENDMENT 2026-07-18 — Mohamed authorized modifying Navigator app source (/src) for the
+driver-authentication feature ONLY. Scope: login screen(s), auth service calls, secure
+credential storage, biometric unlock. AGPL-3.0 compliance: modified source provided to app
+users (Nutreeze staff) on request; fork lives in the private repo. Everything else in /src
+and all of /legacy remains OFF-LIMITS. Config-only rule still applies outside this scope.
+
+## Partner daily dispatch amendment
+
+AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →
+Fleetbase → Navigator daily-delivery bridge for the 11 existing drivers. Scope is limited
+to `ops/fleetbase/` integration scripts/configuration, date-scoped integration-owned
+Fleetbase records, assignment verification, and Navigator evidence. Partner and legacy
+systems remain read-only; `/legacy`, Fleetbase vendor source, driver phone numbers, and
+the deferred unit/SIM redesign remain OFF-LIMITS. Source rows without a real location pin
+must stay visibly held and unassigned.
+
+## July 20 address-and-call dispatch amendment
+
+AMENDMENT 2026-07-20 — Mohamed authorized a one-day exception for delivery date
+2026-07-20 only: otherwise-approved Partner rows without a valid customer pin may be
+assigned by their known routing area when the source address and customer phone are
+present, with a visible warning that the driver must call the customer for the exact
+location. The area centroid must remain labeled as a fallback, never as a customer pin.
+The exception requires an exact manual runtime confirmation, must reject unknown-area
+country fallbacks, and must not be added to the unattended timer or reused for any other
+date. All other A18 boundaries remain in force.
+
+## Daily read-only snapshot amendment
+
+AMENDMENT 2026-07-23 — Mohamed authorized an unattended daily read-only
+Partner API snapshot after the documented 06:00 source publication. The job may
+perform two complete date-scoped API reads and retain only a root-protected,
+PII-free aggregate manifest containing counts, digest, hold/location totals,
+capture time, and an explicit non-authoritative completeness label. It must not
+write to Partner/legacy or Fleetbase, retain raw source rows, enable the dispatch
+timer, or reuse the one-day A19 address-call exception. Sanitized retention is
+governed by ASM-054 pending an operations-owned retention policy.
+
+## Daily snapshot 01:00 schedule amendment
+
+AMENDMENT 2026-07-23 — Mohamed changed the unattended read-only Partner snapshot
+schedule from 06:30 to **01:00 Kuwait** (`22:00 UTC` on the preceding calendar
+day). This explicitly supersedes A23's after-06:00 schedule even though 01:00 is
+earlier than the previously documented 06:00 source publication. The resulting
+manifest must remain labeled non-authoritative and must not enable or feed the
+dispatch timer. All A23 storage, PII, write-prohibition, and A19 boundaries remain
+in force.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

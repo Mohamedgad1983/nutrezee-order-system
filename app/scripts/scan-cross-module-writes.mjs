@@ -45,6 +45,18 @@ const OWNERSHIP = {
   notification_template: 'm11-notifications', notification_log: 'm11-notifications',
   // wave 5 (WP-13)
   reconciliation_run: 'm18-bridge',
+
+  // wave 6 — operational foundation (packing + driver/area), migration track
+  packing_batch: 'm20-packing', packing_batch_order: 'm20-packing', packing_item: 'm20-packing',
+  packing_label: 'm20-packing', packing_status_history: 'm20-packing',
+  driver: 'm21-delivery', driver_area: 'm21-delivery', driver_shift: 'm21-delivery',
+  delivery_route: 'm21-delivery', delivery_route_order: 'm21-delivery',
+  driver_assignment_history: 'm21-delivery',
+
+  // wave 6 — m22 customer meal-history controlled transfer (no bridge)
+  legacy_meal_history_raw: 'm22-meal-history', customer_meal_history: 'm22-meal-history',
+  customer_meal_history_items: 'm22-meal-history', customer_meal_history_import_runs: 'm22-meal-history',
+  customer_meal_history_exceptions: 'm22-meal-history',
 };
 
 const WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+("?)([a-z_]+)\2/gi;
