@@ -66,7 +66,7 @@ KDS_PUBLIC_ORIGIN=https://kds.13-140-159-201.sslip.io \
 curl --fail http://127.0.0.1:8180/health
 ```
 
-Add the reverse-proxy route in `deploy/Caddyfile.fragment`, validate Caddy, and reload it without restarting or editing the order, delivery, or label services.
+`compose.staging.yml` creates its own default network and also joins only the KDS container to the existing reverse-proxy network (`nutrezee_default`, override with `KDS_REVERSE_PROXY_NETWORK`). This is the single infrastructure link required for Caddy; KDS remains a separate Compose project, image, process, port, credential set, and hostname. Add the route in `deploy/Caddyfile.fragment`, validate Caddy, and reload it without restarting or editing the order, delivery, or label services.
 
 ## Live acceptance
 

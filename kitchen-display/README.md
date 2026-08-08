@@ -88,7 +88,7 @@ docker compose -f compose.yml up --build -d
 curl --fail http://127.0.0.1:8180/health
 ```
 
-Staging uses `compose.staging.yml`, `/opt/nutrezee-kds/secrets/`, and a dedicated reverse-proxy hostname. The container is read-only, drops every Linux capability, enables `no-new-privileges`, exposes only a loopback host port, and runs as the unprivileged Node user.
+Staging uses `compose.staging.yml`, `/opt/nutrezee-kds/secrets/`, and a dedicated reverse-proxy hostname. The KDS container has its own default network and joins the existing external reverse-proxy network only so Caddy can reach its service alias; it remains a separate Compose project and application. The container is read-only, drops every Linux capability, enables `no-new-privileges`, exposes only a loopback host port, and runs as the unprivileged Node user.
 
 ## Operations and safe failure
 

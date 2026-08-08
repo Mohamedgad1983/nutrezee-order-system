@@ -1,6 +1,7 @@
-# Add this route to the staging Caddy configuration. The KDS container is a separate
-# service and is not joined to the order-system/Fleet-Ops application network.
+# Add this route to the staging Caddy configuration. KDS is an independently
+# deployed service; its only shared infrastructure boundary is the reverse-proxy
+# network that lets Caddy reach this container by its Compose service alias.
 kds.13-140-159-201.sslip.io {
   encode zstd gzip
-  reverse_proxy host.docker.internal:8180
+  reverse_proxy kitchen-display:8080
 }
