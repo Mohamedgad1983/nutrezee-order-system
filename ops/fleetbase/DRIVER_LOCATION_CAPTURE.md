@@ -1,7 +1,8 @@
 # A30 — assigned-driver missing-location recovery
 
-Status: code complete and CI green in draft PR #47; staging/device proof pending. Production
-activation remains prohibited until explicit release approval.
+Status: staging software deployed and Fleet-Ops browser proof green in draft PR #47; physical
+Android device proof pending. Production activation remains prohibited until explicit release
+approval.
 
 ## Operating rule
 
@@ -35,6 +36,22 @@ customer's exact pin, and the customer identity behind a known-stop anchor is ne
 - A valid Partner pin always wins and is never overwritten or written back.
 - The daily bridge may read the latest approved capture only for a missing/invalid Partner pin.
 - No unattended dispatch or production activation is part of the implementation unit.
+
+## Staging proof — 2026-08-08
+
+- Verified pre-deployment database and Fleet-Ops backups plus rollback image tags.
+- Applied additive migration `0029_driver_customer_location.sql` only; blocked migrations
+  `0024`–`0026` remain absent.
+- Deployed the A30 API and supported Console extension. Local/public health, route registration,
+  unauthenticated `401` boundaries and cache-busted extension discovery passed.
+- Authenticated Fleet-Ops browser proof loaded the bilingual `Nutrezee Driver Locations` page,
+  its append-only correction warning and the correct empty state with no console errors.
+- No driver capture, Fleet-Ops correction, dispatch write or production activation was performed.
+- Physical Navigator proof remains open because no Android device was connected for ADB UAT.
+- The complete manual Partner dry-run read 3,210 meal rows and 739 orders, preserved 549
+  authoritative Partner pins, identified 172 same-area known-stop anchors, loaded zero saved
+  captures and completed with `fleetbase_written=false`. Database counts were unchanged and the
+  unattended dispatch timer remained disabled/inactive.
 
 ## Predeclared implementation files
 
