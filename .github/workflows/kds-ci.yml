@@ -106,8 +106,10 @@ jobs:
           printf '%s\n' 'ci-only-read-key' | sudo tee "$secret_dir/kds_partner_api_key" >/dev/null
           printf '%s\n' 'scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q' \
             | sudo tee "$secret_dir/kds_display_password_hash" >/dev/null
-          sudo chown root:"$secret_gid" "$secret_dir"/*
-          sudo chmod 0640 "$secret_dir"/*
+          sudo chown root:"$secret_gid" \
+            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_display_password_hash"
+          sudo chmod 0640 \
+            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_display_password_hash"
           docker run --detach --name "$container" --network none --read-only \
             --tmpfs /tmp:size=16m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true \
             --group-add "$secret_gid" --volume "$secret_dir:/run/secrets:ro" \
