@@ -101,14 +101,22 @@ async function assertLiveTotals(page: import('@playwright/test').Page): Promise<
     throw new Error('KDS_E2E_DELIVERY_DATE must use YYYY-MM-DD');
   }
 
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === 'GET'
-      && new URL(response.url()).pathname === '/api/section-totals'
-  ));
-  if (requestedDate) {
-    await page.getByLabel('Delivery date').fill(requestedDate);
+  const dateInput = page.getByLabel('Delivery date');
+  const refreshButton = page.getByRole('button', { name: 'Refresh now' });
+  await expect(refreshButton).toBeEnabled({ timeout: 45_000 });
+  const currentDate = await dateInput.inputValue();
+  const expectedDate = requestedDate ?? currentDate;
+  const responsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.pathname === '/api/section-totals'
+      && (!expectedDate || url.searchParams.get('date') === expectedDate);
+  });
+  if (requestedDate && requestedDate !== currentDate) {
+    await dateInput.fill(requestedDate);
+  } else {
+    await refreshButton.click();
   }
-  await page.getByRole('button', { name: 'Refresh now' }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(200);
 
