@@ -14,7 +14,7 @@ type AuthState = 'checking' | 'signed_in' | 'signed_out';
 const COPY = {
   ar: {
     appName: 'شاشة إنتاج المطبخ',
-    appSubtitle: 'الكميات المطلوبة للقسم المخصّص لهذا المستخدم فقط',
+    appSubtitle: 'الكميات المطلوبة للأقسام المخصّصة لهذا المستخدم فقط',
     checkSession: 'جاري التحقق من الجلسة…',
     date: 'تاريخ التسليم',
     kitchen: 'المطبخ',
@@ -32,9 +32,9 @@ const COPY = {
     packing: 'تجهيز',
     unroutedWarning: 'يوجد عناصر غير موجّهة لقسم. يجب مراجعة التوجيه قبل الإنتاج.',
     signIn: 'تسجيل دخول المطبخ',
-    signInHint: 'كل مستخدم يرى فقط القسم المخصّص له.',
-    loginHeroTitle: 'كل قسم. شاشة مستقلة.',
-    loginHeroText: 'سجّل الدخول بحساب القسم لعرض الوجبات والكميات المطلوبة لهذا القسم فقط.',
+    signInHint: 'كل مستخدم يرى فقط الأقسام المخصّصة له.',
+    loginHeroTitle: 'أقسامك. شاشة واحدة مركّزة.',
+    loginHeroText: 'سجّل الدخول بحسابك لعرض الوجبات والكميات المطلوبة من الأقسام المخصّصة لك فقط.',
     username: 'اسم المستخدم',
     password: 'كلمة المرور',
     signingIn: 'جاري الدخول…',
@@ -47,7 +47,7 @@ const COPY = {
   },
   en: {
     appName: 'Kitchen Production Display',
-    appSubtitle: 'Required quantities for this user’s assigned section only',
+    appSubtitle: 'Required quantities for this user’s assigned sections only',
     checkSession: 'Checking session…',
     date: 'Delivery date',
     kitchen: 'Kitchen',
@@ -65,9 +65,9 @@ const COPY = {
     packing: 'Packing',
     unroutedWarning: 'Some items have no section route. Review routing before production.',
     signIn: 'Kitchen sign in',
-    signInHint: 'Each user sees only their assigned section.',
-    loginHeroTitle: 'One section. One focused screen.',
-    loginHeroText: 'Sign in with the section account to see only the meals and quantities required from that section.',
+    signInHint: 'Each user sees only their assigned sections.',
+    loginHeroTitle: 'Your sections. One focused screen.',
+    loginHeroText: 'Sign in with your assigned account to see only the meals and quantities required from your sections.',
     username: 'Username',
     password: 'Password',
     signingIn: 'Signing in…',
@@ -320,7 +320,7 @@ function Board({
         <>
           <section className="summaryStrip" aria-label={copy.sections}>
             <Metric label={copy.assignedQuantity} value={data.summary.assigned_quantity_total} language={language} />
-            <Metric label={copy.sections} value={data.summary.assigned_section_count} language={language} />
+            <Metric label={copy.sections} value={config?.assigned_sections.length ?? 0} language={language} />
           </section>
           {data.sections.length === 0 ? <div className="emptyState">{copy.empty}</div> : (
             <section className={`sectionGrid${data.sections.length === 1 ? ' single' : ''}`}>

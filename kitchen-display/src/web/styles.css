@@ -201,7 +201,8 @@ button:disabled { cursor: wait; opacity: .6; }
 .loginCard .errorBanner { margin: 0; }
 
 @media (max-width: 720px) {
-  .topbar { align-items: flex-start; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; }
+  .topActions { width: 100%; justify-content: flex-end; gap: .5rem; }
   .titleBlock p { display: none; }
   .ghostButton { min-height: 40px; padding: .5rem .7rem; font-size: .85rem; }
   .summaryStrip { grid-template-columns: 1fr 1fr; }
@@ -210,7 +211,8 @@ button:disabled { cursor: wait; opacity: .6; }
   .controlBar input, .controlBar select { width: 100%; }
   .refreshButton { flex: 1 1 100%; }
   .timestamps { width: 100%; margin: 0; }
-  .userAccess { display: none; }
+  .userAccess { min-width: 0; margin-inline-end: auto; padding: .4rem .55rem; }
+  .userAccess span, .userAccess small { display: none; }
   .sectionGrid.single .sectionCard > header { min-height: 120px; padding: 1.25rem; }
   .sectionGrid.single .sectionTotal { min-width: 90px; font-size: clamp(3rem, 18vw, 5rem); }
   .sectionGrid.single .mealList { grid-template-columns: 1fr; padding: .8rem 1.25rem 1.2rem; }

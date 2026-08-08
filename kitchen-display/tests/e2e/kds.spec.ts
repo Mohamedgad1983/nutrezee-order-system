@@ -43,6 +43,7 @@ test('English-default and Arabic totals-only kitchen display', async ({ page }) 
   expect(totalsRequests).toBe(requestsBeforeLanguageToggle);
   await page.setViewportSize({ width: 390, height: 800 });
   await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible();
+  await expect(page.getByText('hot-user')).toBeVisible();
 });
 
 test('different users receive only their server-assigned section', async ({ page }) => {
