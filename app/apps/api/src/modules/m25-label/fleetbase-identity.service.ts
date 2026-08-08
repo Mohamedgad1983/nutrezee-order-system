@@ -9,12 +9,33 @@ export interface FleetbaseOrderProjection {
   status?: string | null;
   meta?: Record<string, unknown> | null;
   driver_assigned?: { id?: string; public_id?: string; internal_id?: string; name?: string } | null;
+  customer?: {
+    name?: string | null;
+    phone?: string | null;
+    meta?: Record<string, unknown> | null;
+  } | null;
+  payload?: {
+    meta?: Record<string, unknown> | null;
+    dropoff?: {
+      name?: string | null;
+      phone?: string | null;
+      location?: { type?: string; coordinates?: unknown } | null;
+    } | null;
+  } | null;
 }
 
 export interface FleetbaseAssignedOrder {
   fleetbaseOrderId: string;
   localOrderId?: string;
   orderNumber?: string;
+  sourceCustomerRef?: string;
+  customerName?: string;
+  phone?: string;
+  area?: string;
+  callCustomerRequired?: boolean;
+  authoritativePinValid?: boolean;
+  fallbackSource?: 'known_stop_anchor' | 'area_centroid';
+  fallbackLocation?: { latitude: number; longitude: number };
 }
 
 export interface FleetbaseDriverContext {
@@ -347,10 +368,73 @@ function toAssignedOrder(order: FleetbaseOrderProjection): FleetbaseAssignedOrde
     ?? order.internal_id?.trim()
     ?? undefined;
   if (!localOrderId && !orderNumber) return null;
-  return { fleetbaseOrderId: order.id, localOrderId, orderNumber };
+  const payloadMeta = order.payload?.meta;
+  const sourceCustomerRef = stringMeta(order.meta, 'source_customer_ref')
+    ?? stringMeta(order.customer?.meta, 'source_customer_ref')
+    ?? stringMeta(payloadMeta, 'source_customer_ref');
+  const customerName = cleanString(order.customer?.name) ?? cleanString(order.payload?.dropoff?.name);
+  const phone = cleanString(order.customer?.phone) ?? cleanString(order.payload?.dropoff?.phone);
+  const area = stringMeta(order.meta, 'routing_area')
+    ?? stringMeta(order.meta, 'area_en')
+    ?? stringMeta(payloadMeta, 'routing_area')
+    ?? stringMeta(payloadMeta, 'area_en');
+  const callCustomerRequired = booleanMeta(order.meta, 'call_customer_required')
+    ?? booleanMeta(payloadMeta, 'call_customer_required');
+  const pinSource = stringMeta(order.meta, 'pin_source') ?? stringMeta(payloadMeta, 'pin_source');
+  const locationAccuracy = stringMeta(order.meta, 'location_accuracy')
+    ?? stringMeta(payloadMeta, 'location_accuracy');
+  const authoritativePinValid = pinSource === 'vendor' && locationAccuracy === 'customer_pin';
+  const fallbackSourceRaw = stringMeta(order.meta, 'fallback_source')
+    ?? stringMeta(payloadMeta, 'fallback_source')
+    ?? pinSource;
+  const fallbackSource = fallbackSourceRaw === 'known_stop_anchor'
+    ? 'known_stop_anchor' : (fallbackSourceRaw === 'area_fallback' ? 'area_centroid' : undefined);
+  const fallbackLocation = coordinateMeta(order.meta)
+    ?? coordinateMeta(payloadMeta)
+    ?? geoJsonPoint(order.payload?.dropoff?.location?.coordinates);
+  const assignment: FleetbaseAssignedOrder = { fleetbaseOrderId: order.id, localOrderId, orderNumber };
+  if (sourceCustomerRef) assignment.sourceCustomerRef = sourceCustomerRef;
+  if (customerName) assignment.customerName = customerName;
+  if (phone) assignment.phone = phone;
+  if (area) assignment.area = area;
+  if (callCustomerRequired !== undefined) assignment.callCustomerRequired = callCustomerRequired;
+  if (pinSource || locationAccuracy) assignment.authoritativePinValid = authoritativePinValid;
+  if (fallbackSource) assignment.fallbackSource = fallbackSource;
+  if (fallbackLocation) assignment.fallbackLocation = fallbackLocation;
+  return assignment;
 }
 
 function stringMeta(meta: Record<string, unknown> | null | undefined, key: string): string | undefined {
   const value = meta?.[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function booleanMeta(
+  meta: Record<string, unknown> | null | undefined,
+  key: string,
+): boolean | undefined {
+  const value = meta?.[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function coordinateMeta(
+  meta: Record<string, unknown> | null | undefined,
+): { latitude: number; longitude: number } | undefined {
+  const latitude = meta?.fallback_latitude;
+  const longitude = meta?.fallback_longitude;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude)
+    || typeof longitude !== 'number' || !Number.isFinite(longitude)) return undefined;
+  return { latitude, longitude };
+}
+
+function geoJsonPoint(value: unknown): { latitude: number; longitude: number } | undefined {
+  if (!Array.isArray(value) || value.length < 2) return undefined;
+  const [longitude, latitude] = value;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude)
+    || typeof longitude !== 'number' || !Number.isFinite(longitude)) return undefined;
+  return { latitude, longitude };
 }

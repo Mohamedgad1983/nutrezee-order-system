@@ -3,7 +3,8 @@
 This separately identifiable AGPL-3.0-or-later Ember engine adds:
 
 - a `Label & Barcode` tab to the existing Fleet-Ops order-details screen; and
-- a `Batch Labels` page in the existing Fleet-Ops **Resources** sidebar.
+- a `Batch Labels` page in the existing Fleet-Ops **Resources** sidebar; and
+- a `Driver Locations` page in the same sidebar for A30 append-only review and correction.
 
 Fleet-Ops 0.7.48 treats `/fleet-ops/operations/:value` as an order-details route, so its
 `operations` extension section cannot host a virtual page. The supported `management`
@@ -19,6 +20,11 @@ the day's operational total.
 It uses the already-authenticated Fleetbase bearer token and same-origin
 `/nz/fleet-ops/labels/*` endpoints. It does not add an administration shell,
 login page, or independent customer/driver authorization model.
+
+Driver Locations uses the same Fleetbase operator bearer against
+`/nz/fleet-ops/driver-locations*`. It shows opaque customer references and exact coordinates, not
+customer names or phones. A correction requires a reason, creates a new linked ledger row and HIGH
+audit event, and leaves the previous coordinate immutable. Valid Partner pins remain authoritative.
 
 Opening the print dialog does not record a print. The operator must separately confirm that the
 physical batch completed; cancelled dialogs therefore create no print events. A mixed or complete

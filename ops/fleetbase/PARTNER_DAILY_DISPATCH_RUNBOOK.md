@@ -38,6 +38,16 @@ write to the Partner API or the legacy application.
   customer pin. Unknown-area country fallbacks remain held. The unattended
   daily script does not contain this option, and the program rejects it for
   every other date.
+- Amendment A30 adds the recurring, still-manual missing-location recovery path. With the exact
+  `--confirm-location-recovery=YYYY-MM-DD` confirmation, the host runner exports only the latest
+  append-only Nutrezee captures (opaque Partner customer reference, coordinate, capture id) into a
+  root-owned mode-0600 ephemeral file. For a missing/invalid Partner pin, the bridge uses an exact
+  approved capture when present; otherwise it selects a same-area known operational stop nearest
+  the published area centroid and labels it as a fallback requiring a customer call. If no known
+  stop exists, the area centroid remains the final fallback. A valid Partner pin always wins. The
+  anchor customer's identity is never exported or stored on the target order, and the ephemeral
+  file is removed after the run. The unattended daily script does not supply the A30 confirmation;
+  production activation remains prohibited until explicit release approval.
 - The 70-entry A19 area lookup was built from the textual routing-area names in
   the complete July 19 source manifest plus the July 20-only Abbasiya and
   Qadsiya labels. Area names alone (no customer names, phones, detailed
@@ -114,6 +124,17 @@ to both the manifest dry-run and the write:
 ```sh
 --confirm-address-call-dispatch=2026-07-20
 ```
+
+For an A30 staging/manual proof, append the exact operating date to both passes. The wrapper builds
+the governed capture export itself; callers cannot provide their own capture file:
+
+```sh
+--confirm-location-recovery=YYYY-MM-DD
+```
+
+The summary must keep the Partner-only `source_digest`, and separately report
+`orders_dispatchable_saved_pin`, `orders_location_known_stop_anchor`, and
+`approved_location_captures_loaded`. Never treat fallback counts as exact customer pins.
 
 The source summary must show `orders_location_country_fallback_held=0` before
 claiming that every otherwise-approved July 20 delivery was assigned. Do not

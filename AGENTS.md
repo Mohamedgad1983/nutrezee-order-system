@@ -88,6 +88,26 @@ current-day order/assignment authority, and production/Partner writes, secret ge
 unattended dispatch activation, Fleetbase vendor-source edits, and Navigator `/legacy` remain
 prohibited.
 
+## Assigned-driver missing-location recovery amendment
+
+AMENDMENT A30 2026-08-08 — Mohamed authorized completing the recurring missing-customer-
+location workflow for the Nutreeze Driver App and the existing Fleet-Ops admin. For a currently
+assigned Fleetbase order whose authoritative Partner location is missing or invalid, Navigator may
+route the assigned driver to the nearest safe known operational anchor in the same routing area,
+clearly labeled as a fallback rather than the customer's pin. The driver then calls the customer,
+captures the exact location from current GPS or a customer-shared coordinates/maps link, and submits
+it to the Nutrezee API. Fleetbase identity and current assignment remain the sole driver authority.
+
+Accepted locations are stored in an append-only audited ledger keyed by the stable Partner customer
+reference and may be reused on later Partner rows only when their authoritative pin is still missing
+or invalid. A valid Partner pin always wins and is never overwritten; corrections to an accepted
+capture require an audited Fleet-Ops review action. The driver may see customer name, area and phone
+only for their own current work. Anchor-customer identity must never be exposed. Partner and legacy
+remain read-only; no location is written back to either source. Implementation and staging proof are
+authorized, but production activation, unattended dispatch, Fleetbase vendor-source edits,
+Navigator `/legacy`, secret generation and paid-license purchase remain prohibited until explicit
+release approval.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →

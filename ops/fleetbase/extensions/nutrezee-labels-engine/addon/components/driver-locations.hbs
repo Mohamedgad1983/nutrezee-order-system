@@ -1,0 +1,54 @@
+<section class="nz-location-panel" data-test-nutrezee-driver-locations>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Driver Locations / مواقع السائقين</h2>
+            <p>Exact coordinates captured by the assigned driver. Partner pins always take priority.</p>
+        </div>
+        <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.load}}>Reload / تحديث</button>
+    </header>
+
+    <div class="nz-label-state nz-label-state--warning">
+        Corrections are append-only and require a reason. Never paste customer names, phones or map links into the reason.
+        / التصحيح لا يمسح السجل السابق ويتطلب سببًا. لا تضع اسم العميل أو هاتفه أو رابط الموقع في السبب.
+    </div>
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Loading saved locations…</div>
+    {{else if this.error}}
+        <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
+    {{else if (not this.items.length)}}
+        <div class="nz-label-state">No driver-captured locations yet. / لا توجد مواقع محفوظة من السائقين حتى الآن.</div>
+    {{else}}
+        <div class="nz-location-table-wrap">
+            <table class="nz-location-table">
+                <thead><tr><th>Delivery date</th><th>Order</th><th>Driver</th><th>Customer ref</th><th>Coordinates</th><th>Source</th><th>Captured</th><th></th></tr></thead>
+                <tbody>
+                    {{#each this.items as |item|}}
+                        <tr>
+                            <td>{{item.delivery_date}}</td><td>{{item.source_order_number}}</td><td>{{item.fleetbase_driver_id}}</td>
+                            <td><code>{{item.partner_customer_ref}}</code></td><td>{{item.latitude}}, {{item.longitude}}</td>
+                            <td>{{item.capture_method}}</td><td>{{item.captured_at}}</td>
+                            <td><button type="button" class="btn btn-default btn-xs" {{on "click" (fn this.select item)}}>Correct / تصحيح</button></td>
+                        </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
+    {{/if}}
+
+    {{#if this.selected}}
+        <div class="nz-location-correction">
+            <h3>Correct {{this.selected.source_order_number}} / تصحيح الموقع</h3>
+            <div class="nz-location-correction__grid">
+                <label><span>Latitude / خط العرض</span><input value={{this.latitude}} inputmode="decimal" {{on "input" this.updateLatitude}} /></label>
+                <label><span>Longitude / خط الطول</span><input value={{this.longitude}} inputmode="decimal" {{on "input" this.updateLongitude}} /></label>
+            </div>
+            <label class="nz-location-reason"><span>Required reason / سبب التصحيح المطلوب</span><textarea value={{this.reason}} maxlength="500" {{on "input" this.updateReason}}></textarea></label>
+            <button type="button" class="btn btn-primary" disabled={{this.saving}} {{on "click" this.saveCorrection}}>
+                {{#if this.saving}}Saving…{{else}}Save audited correction / حفظ التصحيح{{/if}}
+            </button>
+        </div>
+    {{/if}}
+
+    {{#if this.notice}}<div class="nz-label-state nz-label-state--success">{{this.notice}}</div>{{/if}}
+</section>

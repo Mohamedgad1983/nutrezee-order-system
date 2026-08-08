@@ -60,6 +60,7 @@ import { BarcodeService } from './modules/m25-label/barcode.service';
 import { LabelService } from './modules/m25-label/label.service';
 import { CollectionService } from './modules/m25-label/collection.service';
 import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
+import { DriverLocationService } from './modules/m25-label/driver-location.service';
 import {
   PartnerLabelSource, type PartnerLabelMealSourceGateway,
 } from './modules/m25-label/partner-label-source';
@@ -305,6 +306,14 @@ export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
       // driver's assignments directly from Fleetbase. No second Nutrezee driver identity exists.
       provide: FleetbaseIdentityService,
       useFactory: () => new FleetbaseIdentityService(),
+    },
+    {
+      // A30 — append-only exact locations captured only by the currently assigned Fleetbase
+      // driver, with Fleet-Ops-only audited corrections.
+      provide: DriverLocationService,
+      useFactory: (pool: Pool, audit: AuditService, idem: IdempotencyService) =>
+        new DriverLocationService(pool, audit, idem),
+      inject: [POOL, AuditService, IdempotencyService],
     },
     {
       // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).

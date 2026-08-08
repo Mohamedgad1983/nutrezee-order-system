@@ -37,8 +37,8 @@ const VENDOR_BASE = 'https://nutreeze.com/integration';
 const DEFAULT_PREFIX = 'NUTREEZE-PARTNER';
 const DEFAULT_DAILY_PREFIX = 'NUTREEZE-PARTNER-DAY';
 const DEFAULT_LIMIT = 200;
-const MAPPING_VERSION = 1;
-const DAILY_MAPPING_VERSION = 1;
+const MAPPING_VERSION = 2;
+const DAILY_MAPPING_VERSION = 2;
 const INTEGRATION_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config';
 const DAILY_DISPATCHABLE_MEAL_STATUSES = ['ordered', 'driver_assigned'];
 const DAILY_DISPATCHABLE_ORDER_STATUSES = ['success'];
@@ -48,6 +48,7 @@ const DAILY_PROVEN_HISTORY_FLOOR = '2026-01-01T00:00:00+03:00';
 // the unattended timer deliberately never supplies it.
 const ADDRESS_CALL_AUTHORIZED_DATES = ['2026-07-20'];
 const ADDRESS_CALL_AUTHORIZATION = 'A19';
+const LOCATION_RECOVERY_AUTHORIZATION = 'A30';
 const ADDRESS_CALL_INSTRUCTION = 'NO EXACT PIN - CALL CUSTOMER / لا يوجد موقع دقيق - اتصل بالعميل';
 const ADDRESS_CALL_PLACE_PREFIX = 'CALL CUSTOMER FIRST / اتصل بالعميل أولا - ';
 
@@ -151,6 +152,22 @@ function resolveEffectivePin(array $row): array
             'lng' => $row['pin']['lng'],
             'pin_source' => 'vendor',
             'fallback_scope' => null,
+        ];
+    }
+    if (isset($row['recovery_pin']) && is_array($row['recovery_pin'])) {
+        return [
+            'lat' => $row['recovery_pin']['lat'],
+            'lng' => $row['recovery_pin']['lng'],
+            'pin_source' => 'driver_capture',
+            'fallback_scope' => null,
+        ];
+    }
+    if (isset($row['recovery_anchor']) && is_array($row['recovery_anchor'])) {
+        return [
+            'lat' => $row['recovery_anchor']['lat'],
+            'lng' => $row['recovery_anchor']['lng'],
+            'pin_source' => 'known_stop_anchor',
+            'fallback_scope' => 'area',
         ];
     }
     foreach ([$row['area_en'], $row['area_ar'], $row['routing_area']] as $candidate) {
@@ -457,6 +474,15 @@ function parsePin(mixed $value): ?array
 
 function pinHoldReason(array $row): ?string
 {
+    if (($row['pin'] ?? null) !== null || ($row['recovery_pin'] ?? null) !== null) {
+        return null;
+    }
+    return sourcePinHoldReason($row);
+}
+
+/** The Partner-only pin state, kept separate so operational summaries never count A30 data as source. */
+function sourcePinHoldReason(array $row): ?string
+{
     if (($row['pin'] ?? null) !== null) {
         return null;
     }
@@ -491,13 +517,12 @@ function rowHasAddressCallContext(array $row): bool
 function rowRequiresCustomerCall(array $row, bool $allowAddressCall = false): bool
 {
     if (!$allowAddressCall
-        || !in_array((string) ($row['delivery_date'] ?? ''), ADDRESS_CALL_AUTHORIZED_DATES, true)
         || !in_array(dailyHoldReason($row), ['no_real_location_pin', 'invalid_source_location_pin'], true)
         || !rowHasAddressCallContext($row)) {
         return false;
     }
     $effectivePin = resolveEffectivePin($row);
-    return $effectivePin['pin_source'] === 'area_fallback'
+    return in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
         && $effectivePin['fallback_scope'] === 'area';
 }
 
@@ -520,6 +545,54 @@ function resolveAddressCallAuthorization(?string $deliveryDate, mixed $confirmat
         throw new RuntimeException('daily_address_call_date_not_authorized');
     }
     return true;
+}
+
+function resolveLocationRecoveryAuthorization(?string $deliveryDate, mixed $confirmation): bool
+{
+    if ($confirmation === null) {
+        return false;
+    }
+    if ($deliveryDate === null
+        || !is_string($confirmation)
+        || !hash_equals($deliveryDate, $confirmation)) {
+        throw new RuntimeException('daily_location_recovery_confirmation_guard');
+    }
+    return true;
+}
+
+function addressCallAuthorization(array $row, bool $allowAddressCall = false): ?string
+{
+    if (!rowRequiresCustomerCall($row, $allowAddressCall)) {
+        return null;
+    }
+    return in_array((string) ($row['delivery_date'] ?? ''), ADDRESS_CALL_AUTHORIZED_DATES, true)
+        && !isset($row['recovery_anchor'])
+        ? ADDRESS_CALL_AUTHORIZATION
+        : LOCATION_RECOVERY_AUTHORIZATION;
+}
+
+function navigationModeForRow(array $row, bool $allowAddressCall = false): string
+{
+    if (rowRequiresCustomerCall($row, $allowAddressCall)) {
+        return 'fallback_then_call_customer';
+    }
+    if (($row['recovery_pin'] ?? null) !== null) {
+        return 'saved_customer_pin';
+    }
+    return rowIsDailyRoutable($row, $allowAddressCall) ? 'verified_customer_pin' : 'held';
+}
+
+function locationAccuracyForRow(array $row, bool $allowAddressCall = false): string
+{
+    if (rowRequiresCustomerCall($row, $allowAddressCall)) {
+        return ($row['recovery_anchor'] ?? null) !== null
+            ? 'known_stop_not_customer_pin'
+            : 'area_fallback_not_customer_pin';
+    }
+    if (($row['recovery_pin'] ?? null) !== null) {
+        return 'captured_customer_pin';
+    }
+    return rowIsDailyRoutable($row, $allowAddressCall) ? 'customer_pin' : 'not_routable';
 }
 
 function dailyHeldOrderStatus(?string $holdReason): string
@@ -813,6 +886,103 @@ function loadLockedJson(string $path, string $errorPrefix): array
         throw new RuntimeException($errorPrefix . '_json');
     }
     return $decoded;
+}
+
+/**
+ * Read the PII-minimised A30 export produced by the host runner. It contains only an opaque
+ * Partner customer reference, coordinates and the append-only capture id; never names or phones.
+ */
+function loadLocationCaptures(string $path): array
+{
+    $rows = loadLockedJson($path, 'location_captures');
+    $captures = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)
+            || !is_string($row['partner_customer_ref'] ?? null)
+            || trim($row['partner_customer_ref']) === ''
+            || mb_strlen(trim($row['partner_customer_ref'])) > 255
+            || !is_string($row['capture_id'] ?? null)
+            || trim($row['capture_id']) === '') {
+            throw new RuntimeException('location_captures_shape');
+        }
+        $ref = trim($row['partner_customer_ref']);
+        $lat = $row['latitude'] ?? null;
+        $lng = $row['longitude'] ?? null;
+        if ((!is_float($lat) && !is_int($lat))
+            || (!is_float($lng) && !is_int($lng))
+            || parsePin((string) $lat . ',' . (string) $lng) === null
+            || isset($captures[$ref])) {
+            throw new RuntimeException('location_captures_coordinate_or_duplicate');
+        }
+        $captures[$ref] = [
+            'lat' => (float) $lat,
+            'lng' => (float) $lng,
+            'capture_id' => trim($row['capture_id']),
+        ];
+    }
+    return $captures;
+}
+
+/**
+ * Apply A30 precedence without mutating the Partner source values:
+ * valid Partner pin > latest approved Nutrezee capture > same-area known-stop anchor > centroid.
+ * Anchor identity is deliberately discarded; only its coordinate survives on the target row.
+ */
+function applyLocationRecoveryData(array $rows, array $captures): array
+{
+    foreach ($rows as &$row) {
+        $ref = (string) ($row['customer_ref'] ?? '');
+        if (($row['pin'] ?? null) === null && isset($captures[$ref])) {
+            $row['recovery_pin'] = [
+                'lat' => $captures[$ref]['lat'],
+                'lng' => $captures[$ref]['lng'],
+            ];
+            $row['recovery_capture_id'] = $captures[$ref]['capture_id'];
+        }
+    }
+    unset($row);
+
+    $knownByArea = [];
+    foreach ($rows as $row) {
+        // An anchor must be a real stop in today's dispatchable workload. A valid coordinate from
+        // a cancelled, incomplete or otherwise held row is not an operational stop.
+        if (dailyHoldReason($row) !== null) {
+            continue;
+        }
+        $area = mb_strtolower(trim((string) ($row['routing_area'] ?? '')));
+        if ($area === '') {
+            continue;
+        }
+        $pin = resolveEffectivePin($row);
+        $knownByArea[$area][] = ['lat' => $pin['lat'], 'lng' => $pin['lng']];
+    }
+
+    foreach ($rows as &$row) {
+        if (sourcePinHoldReason($row) === null || ($row['recovery_pin'] ?? null) !== null) {
+            continue;
+        }
+        $area = mb_strtolower(trim((string) ($row['routing_area'] ?? '')));
+        $candidates = $knownByArea[$area] ?? [];
+        if ($candidates === []) {
+            continue;
+        }
+        // With no customer coordinate to measure from, choose the known stop nearest the area's
+        // published centroid. This is deterministic and cannot disclose the anchor customer.
+        $centroid = resolveEffectivePin($row);
+        if (($centroid['fallback_scope'] ?? null) !== 'area') {
+            continue;
+        }
+        usort($candidates, function (array $left, array $right) use ($centroid): int {
+            $leftDistance = (($left['lat'] - $centroid['lat']) ** 2) + (($left['lng'] - $centroid['lng']) ** 2);
+            $rightDistance = (($right['lat'] - $centroid['lat']) ** 2) + (($right['lng'] - $centroid['lng']) ** 2);
+            return $leftDistance <=> $rightDistance
+                ?: $left['lat'] <=> $right['lat']
+                ?: $left['lng'] <=> $right['lng'];
+        });
+        $row['recovery_anchor'] = $candidates[0];
+    }
+    unset($row);
+    return $rows;
 }
 
 function loadDriverRoster(string $path, string $companyUuid): array
@@ -1982,6 +2152,7 @@ final class FleetbaseWriter
                 'mapping_version' => MAPPING_VERSION,
                 'source_order_id' => $row['order_id'],
                 'source_order_number' => $row['order_number'],
+                'source_customer_ref' => $row['customer_ref'],
                 'source_updated_at' => $row['updated_at'],
                 'routing_area' => $row['routing_area'],
                 'area_en' => $row['area_en'],
@@ -1989,6 +2160,13 @@ final class FleetbaseWriter
                 'address_text' => $row['address_text'],
                 'source_location_pin' => $row['location_pin'],
                 'pin_source' => $effectivePin['pin_source'],
+                'fallback_source' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['pin_source'] : null,
+                'fallback_latitude' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['lat'] : null,
+                'fallback_longitude' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['lng'] : null,
+                'location_capture_id' => $row['recovery_capture_id'] ?? null,
             ]),
         ]);
         $payload->setAttribute('deleted_at', null);
@@ -2024,12 +2202,14 @@ final class FleetbaseWriter
                 'mapping_version' => MAPPING_VERSION,
                 'integration_key' => $this->prefix . '-PLACE-' . $row['order_id'],
                 'source_order_id' => $row['order_id'],
+                'source_customer_ref' => $row['customer_ref'],
                 'source_updated_at' => $row['updated_at'],
                 'routing_area' => $row['routing_area'],
                 'area_en' => $row['area_en'],
                 'area_ar' => $row['area_ar'],
                 'pin_source' => $effectivePin['pin_source'],
                 'fallback_scope' => $effectivePin['fallback_scope'],
+                'location_capture_id' => $row['recovery_capture_id'] ?? null,
             ]),
         ]);
         $place->setAttribute('deleted_at', null);
@@ -2060,6 +2240,7 @@ final class FleetbaseWriter
                 'mapping_version' => MAPPING_VERSION,
                 'source_order_id' => $row['order_id'],
                 'source_order_number' => $row['order_number'],
+                'source_customer_ref' => $row['customer_ref'],
                 'source_status' => $row['status'],
                 'source_created_at' => $row['created_at'],
                 'source_updated_at' => $row['updated_at'],
@@ -2068,6 +2249,13 @@ final class FleetbaseWriter
                 'area_ar' => $row['area_ar'],
                 'source_location_present' => $row['pin'] !== null,
                 'pin_source' => $effectivePin['pin_source'],
+                'fallback_source' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['pin_source'] : null,
+                'fallback_latitude' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['lat'] : null,
+                'fallback_longitude' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                    ? $effectivePin['lng'] : null,
+                'location_capture_id' => $row['recovery_capture_id'] ?? null,
             ]),
         ]);
         $order->setAttribute('deleted_at', null);
@@ -2871,6 +3059,7 @@ final class DailyDispatchWriter
         $sourceHoldReason = dailyHoldReason($row);
         $routable = rowIsDailyRoutable($row, $this->allowAddressCall);
         $callCustomerRequired = rowRequiresCustomerCall($row, $this->allowAddressCall);
+        $effectivePin = resolveEffectivePin($row);
         $holdReason = $routable ? null : $sourceHoldReason;
         $allowedStates = ['created', 'dispatched'];
         if ($sourceHoldReason === 'source_order_canceled') {
@@ -2905,18 +3094,21 @@ final class DailyDispatchWriter
             'meal_qty' => $row['meal_qty'],
             'meal_updated_at' => $row['meal_updated_at'],
             'source_order_status' => $row['source_order_status'],
+            'source_customer_ref' => $row['customer_ref'],
             'daily_source_hash' => $row['_source_hash'],
             'daily_meal_hash' => dailyMealHash($row),
             'pickup_coordinate_source' => $this->pickup['coordinate_source'],
             'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
             'call_customer_required' => $callCustomerRequired,
-            'navigation_mode' => $callCustomerRequired
-                ? 'address_then_call_customer'
-                : ($routable ? 'verified_customer_pin' : 'held'),
-            'location_accuracy' => $callCustomerRequired
-                ? 'area_fallback_not_customer_pin'
-                : ($routable ? 'customer_pin' : 'not_routable'),
-            'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
+            'navigation_mode' => navigationModeForRow($row, $this->allowAddressCall),
+            'location_accuracy' => locationAccuracyForRow($row, $this->allowAddressCall),
+            'address_call_authorization' => addressCallAuthorization($row, $this->allowAddressCall),
+            'pin_source' => $effectivePin['pin_source'],
+            'fallback_source' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                ? $effectivePin['pin_source'] : null,
+            'fallback_latitude' => $callCustomerRequired ? $effectivePin['lat'] : null,
+            'fallback_longitude' => $callCustomerRequired ? $effectivePin['lng'] : null,
+            'location_capture_id' => $row['recovery_capture_id'] ?? null,
         ]);
         $payloadChanged = saveWithoutActivity($payload);
         $this->touchedSubjectIds['payload'][] = $payload->getKey();
@@ -2968,6 +3160,7 @@ final class DailyDispatchWriter
             'meal_qty' => $row['meal_qty'],
             'meal_updated_at' => $row['meal_updated_at'],
             'source_order_status' => $row['source_order_status'],
+            'source_customer_ref' => $row['customer_ref'],
             'daily_source_hash' => $row['_source_hash'],
             'daily_meal_hash' => dailyMealHash($row),
             'assignment_mode' => $callCustomerRequired
@@ -2977,13 +3170,15 @@ final class DailyDispatchWriter
             'hold_reason' => $holdReason,
             'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
             'call_customer_required' => $callCustomerRequired,
-            'navigation_mode' => $callCustomerRequired
-                ? 'address_then_call_customer'
-                : ($routable ? 'verified_customer_pin' : 'held'),
-            'location_accuracy' => $callCustomerRequired
-                ? 'area_fallback_not_customer_pin'
-                : ($routable ? 'customer_pin' : 'not_routable'),
-            'address_call_authorization' => $callCustomerRequired ? ADDRESS_CALL_AUTHORIZATION : null,
+            'navigation_mode' => navigationModeForRow($row, $this->allowAddressCall),
+            'location_accuracy' => locationAccuracyForRow($row, $this->allowAddressCall),
+            'address_call_authorization' => addressCallAuthorization($row, $this->allowAddressCall),
+            'pin_source' => $effectivePin['pin_source'],
+            'fallback_source' => in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
+                ? $effectivePin['pin_source'] : null,
+            'fallback_latitude' => $callCustomerRequired ? $effectivePin['lat'] : null,
+            'fallback_longitude' => $callCustomerRequired ? $effectivePin['lng'] : null,
+            'location_capture_id' => $row['recovery_capture_id'] ?? null,
             'dispatch_time_local' => $this->pickup['dispatch_time'],
             'dispatch_timezone' => 'Asia/Kuwait',
             'pickup_coordinate_source' => $this->pickup['coordinate_source'],
@@ -3239,18 +3434,15 @@ final class DailyDispatchWriter
             $scheduledRaw = (string) $order->getRawOriginal('scheduled_at');
             $expectedRoutable = rowIsDailyRoutable($row, $this->allowAddressCall);
             $expectedCallRequired = rowRequiresCustomerCall($row, $this->allowAddressCall);
-            $expectedNavigationMode = $expectedCallRequired
-                ? 'address_then_call_customer'
-                : ($expectedRoutable ? 'verified_customer_pin' : 'held');
-            $expectedLocationAccuracy = $expectedCallRequired
-                ? 'area_fallback_not_customer_pin'
-                : ($expectedRoutable ? 'customer_pin' : 'not_routable');
+            $expectedNavigationMode = navigationModeForRow($row, $this->allowAddressCall);
+            $expectedLocationAccuracy = locationAccuracyForRow($row, $this->allowAddressCall);
             if (($meta['daily_mapping_version'] ?? null) !== DAILY_MAPPING_VERSION
                 || ($meta['delivery_date'] ?? null) !== $row['delivery_date']
                 || ($meta['meal_status'] ?? null) !== $row['meal_status']
                 || ($meta['meal_item_count'] ?? null) !== $row['meal_item_count']
                 || ($meta['meal_qty'] ?? null) !== $row['meal_qty']
                 || ($meta['source_order_status'] ?? null) !== $row['source_order_status']
+                || ($meta['source_customer_ref'] ?? null) !== $row['customer_ref']
                 || ($meta['daily_source_hash'] ?? null) !== $row['_source_hash']
                 || ($meta['daily_meal_hash'] ?? null) !== dailyMealHash($row)
                 || ($meta['call_customer_required'] ?? null) !== $expectedCallRequired
@@ -3259,8 +3451,8 @@ final class DailyDispatchWriter
                 || ($meta['source_location_exception'] ?? null) !== (
                     $expectedCallRequired ? dailyHoldReason($row) : null
                 )
-                || ($meta['address_call_authorization'] ?? null) !== (
-                    $expectedCallRequired ? ADDRESS_CALL_AUTHORIZATION : null
+                || ($meta['address_call_authorization'] ?? null) !== addressCallAuthorization(
+                    $row, $this->allowAddressCall
                 )) {
                 throw new RuntimeException('daily_verify_order_mapping');
             }
@@ -3277,6 +3469,7 @@ final class DailyDispatchWriter
             if (($payloadMeta['delivery_date'] ?? null) !== $row['delivery_date']
                 || ($payloadMeta['meal_qty'] ?? null) !== $row['meal_qty']
                 || ($payloadMeta['source_order_status'] ?? null) !== $row['source_order_status']
+                || ($payloadMeta['source_customer_ref'] ?? null) !== $row['customer_ref']
                 || ($payloadMeta['daily_source_hash'] ?? null) !== $row['_source_hash']
                 || ($payloadMeta['daily_meal_hash'] ?? null) !== dailyMealHash($row)
                 || ($payloadMeta['call_customer_required'] ?? null) !== $expectedCallRequired
@@ -3285,8 +3478,8 @@ final class DailyDispatchWriter
                 || ($payloadMeta['source_location_exception'] ?? null) !== (
                     $expectedCallRequired ? dailyHoldReason($row) : null
                 )
-                || ($payloadMeta['address_call_authorization'] ?? null) !== (
-                    $expectedCallRequired ? ADDRESS_CALL_AUTHORIZATION : null
+                || ($payloadMeta['address_call_authorization'] ?? null) !== addressCallAuthorization(
+                    $row, $this->allowAddressCall
                 )) {
                 throw new RuntimeException('daily_verify_payload_mapping');
             }
@@ -3609,8 +3802,7 @@ function runSelfTest(): array
         || rowRequiresCustomerCall($authorizedCountryFallback, true)
         || rowRequiresCustomerCall($authorizedUnapproved, true)
         || rowRequiresCustomerCall(['address_text' => ''] + $authorizedFallback, true)
-        || rowRequiresCustomerCall(['customer_phone' => ''] + $authorizedFallback, true)
-        || rowRequiresCustomerCall(['delivery_date' => '2026-07-21'] + $authorizedFallback, true)) {
+        || rowRequiresCustomerCall(['customer_phone' => ''] + $authorizedFallback, true)) {
         throw new RuntimeException('self_test_daily_address_call_policy');
     }
     $authorizedAllocation = allocateDailyDrivers(
@@ -3641,6 +3833,45 @@ function runSelfTest(): array
                 throw $exception;
             }
         }
+    }
+    $recoveryRows = applyLocationRecoveryData(
+        [
+            ['routing_area' => 'Farwaniya', 'pin' => ['lat' => 29.28, 'lng' => 47.96]] + $authorizedRealPin,
+            ['routing_area' => 'Farwaniya'] + $authorizedFallback,
+        ],
+        [],
+    );
+    if (($recoveryRows[1]['recovery_anchor'] ?? null) === null
+        || resolveEffectivePin($recoveryRows[1])['pin_source'] !== 'known_stop_anchor'
+        || !rowRequiresCustomerCall($recoveryRows[1], true)
+        || addressCallAuthorization($recoveryRows[1], true) !== LOCATION_RECOVERY_AUTHORIZATION
+        || locationAccuracyForRow($recoveryRows[1], true) !== 'known_stop_not_customer_pin') {
+        throw new RuntimeException('self_test_location_recovery_anchor');
+    }
+    $heldAnchorRows = applyLocationRecoveryData(
+        [
+            ['routing_area' => 'Farwaniya'] + $pendingOrderDaily[0],
+            ['routing_area' => 'Farwaniya'] + $authorizedFallback,
+        ],
+        [],
+    );
+    if (($heldAnchorRows[1]['recovery_anchor'] ?? null) !== null) {
+        throw new RuntimeException('self_test_location_recovery_held_anchor');
+    }
+    $capturedRows = applyLocationRecoveryData(
+        [$authorizedFallback],
+        ['SYN-2' => ['lat' => 29.281, 'lng' => 47.961, 'capture_id' => 'capture-test']],
+    );
+    if (resolveEffectivePin($capturedRows[0])['pin_source'] !== 'driver_capture'
+        || dailyHoldReason($capturedRows[0]) !== null
+        || rowRequiresCustomerCall($capturedRows[0], true)
+        || navigationModeForRow($capturedRows[0], true) !== 'saved_customer_pin'
+        || locationAccuracyForRow($capturedRows[0], true) !== 'captured_customer_pin') {
+        throw new RuntimeException('self_test_location_recovery_capture');
+    }
+    if (!resolveLocationRecoveryAuthorization('2026-08-08', '2026-08-08')
+        || resolveLocationRecoveryAuthorization('2026-08-08', null)) {
+        throw new RuntimeException('self_test_location_recovery_confirmation');
     }
     $repeatedMealItems = buildDailyRows([$mealBase, $mealBase], $dailyOrders, '2026-07-19');
     if (count($repeatedMealItems) !== 1
@@ -3689,7 +3920,7 @@ function runSelfTest(): array
     if (buildDailyRows([], [], '2026-07-19') !== []) {
         throw new RuntimeException('self_test_daily_zero');
     }
-    return ['passed' => 23, 'total' => 23];
+    return ['passed' => 26, 'total' => 26];
 }
 
 $stage = 'startup';
@@ -3703,7 +3934,7 @@ try {
         'confirm-since-override:', 'backfill-display', 'confirm-backfill:',
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
-        'confirm-address-call-dispatch:',
+        'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -3715,10 +3946,18 @@ try {
     $deliveryDate = isset($options['delivery-date'])
         ? validateDeliveryDate((string) $options['delivery-date'])
         : null;
-    $allowAddressCall = resolveAddressCallAuthorization(
+    $allowA19AddressCall = resolveAddressCallAuthorization(
         $deliveryDate,
         $options['confirm-address-call-dispatch'] ?? null,
     );
+    $allowLocationRecovery = resolveLocationRecoveryAuthorization(
+        $deliveryDate,
+        $options['confirm-location-recovery'] ?? null,
+    );
+    $allowAddressCall = $allowA19AddressCall || $allowLocationRecovery;
+    if (isset($options['location-captures']) !== $allowLocationRecovery) {
+        throw new RuntimeException('daily_location_captures_authorization_guard');
+    }
     $dailyPrefix = $deliveryDate === null
         ? null
         : DEFAULT_DAILY_PREFIX . '-' . str_replace('-', '', $deliveryDate);
@@ -3847,20 +4086,31 @@ try {
                 throw new RuntimeException('vendor_future_timestamp');
             }
         }
+        // The manifest digest remains Partner-only. A capture or anchor change must never be
+        // misrepresented as a changed Partner snapshot.
+        $sourceDigest = dailySourceDigest($dailyRows);
+        $locationCaptures = [];
+        if ($allowLocationRecovery) {
+            $locationCaptures = loadLocationCaptures((string) $options['location-captures']);
+            $dailyRows = applyLocationRecoveryData($dailyRows, $locationCaptures);
+        }
         $sourceRealPinCount = count(array_filter($dailyRows, fn (array $row): bool => $row['pin'] !== null));
+        $recoveredPinCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => ($row['recovery_pin'] ?? null) !== null,
+        ));
         $routableCount = count(array_filter(
             $dailyRows,
             fn (array $row): bool => rowIsDailyRoutable($row, $allowAddressCall),
         ));
         $heldCount = count($dailyRows) - $routableCount;
-        $sourceDigest = dailySourceDigest($dailyRows);
         $sourceMissingPinCount = count(array_filter(
             $dailyRows,
-            fn (array $row): bool => pinHoldReason($row) === 'no_real_location_pin',
+            fn (array $row): bool => sourcePinHoldReason($row) === 'no_real_location_pin',
         ));
         $sourceInvalidPinCount = count(array_filter(
             $dailyRows,
-            fn (array $row): bool => pinHoldReason($row) === 'invalid_source_location_pin',
+            fn (array $row): bool => sourcePinHoldReason($row) === 'invalid_source_location_pin',
         ));
         $addressCallCount = count(array_filter(
             $dailyRows,
@@ -3874,6 +4124,10 @@ try {
                 true,
             )
                 && resolveEffectivePin($row)['fallback_scope'] === 'area',
+        ));
+        $locationKnownStopAnchorCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => ($row['recovery_anchor'] ?? null) !== null,
         ));
         $locationCountryFallbackCount = count(array_filter(
             $dailyRows,
@@ -3928,10 +4182,13 @@ try {
             'orders_with_real_pin' => $sourceRealPinCount,
             'orders_dispatchable' => $routableCount,
             'orders_dispatchable_real_pin' => $routableCount - $addressCallCount,
+            'orders_dispatchable_partner_pin' => $sourceRealPinCount,
+            'orders_dispatchable_saved_pin' => $recoveredPinCount,
             'orders_dispatchable_address_call' => $addressCallCount,
             'source_orders_missing_pin' => $sourceMissingPinCount,
             'source_orders_invalid_pin' => $sourceInvalidPinCount,
             'orders_location_area_fallback' => $locationAreaFallbackCount,
+            'orders_location_known_stop_anchor' => $locationKnownStopAnchorCount,
             'orders_location_country_fallback_held' => $locationCountryFallbackCount,
             // General routing-area labels only; no customer identity, phone, or
             // detailed address is written to the operational log.
@@ -3942,7 +4199,10 @@ try {
             'orders_held_unapproved_order_status' => $unapprovedOrderStatusCount,
             'orders_held_source_canceled' => $sourceCanceledCount,
             'address_call_override' => $allowAddressCall,
-            'address_call_authorization' => $allowAddressCall ? ADDRESS_CALL_AUTHORIZATION : null,
+            'address_call_authorization' => $allowLocationRecovery
+                ? LOCATION_RECOVERY_AUTHORIZATION
+                : ($allowA19AddressCall ? ADDRESS_CALL_AUTHORIZATION : null),
+            'approved_location_captures_loaded' => count($locationCaptures),
             'expected_count' => $expectedCount,
             'source_digest' => $sourceDigest,
             'expected_digest' => $expectedDigest,

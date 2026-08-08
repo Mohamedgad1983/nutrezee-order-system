@@ -9,6 +9,17 @@
     padding: 1rem;
 }
 
+.nz-location-panel { padding: 1rem; }
+.nz-location-table-wrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 0.375rem; background: #fff; }
+.nz-location-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.nz-location-table th, .nz-location-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid #e5e7eb; text-align: start; white-space: nowrap; }
+.nz-location-correction { margin-top: 1rem; padding: 1rem; border: 1px solid #60a5fa; border-radius: 0.375rem; background: #eff6ff; }
+.nz-location-correction h3 { margin: 0 0 0.75rem; }
+.nz-location-correction__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.nz-location-correction label > span { display: block; margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 600; }
+.nz-location-correction input, .nz-location-correction textarea { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background: #fff; }
+.nz-location-reason { display: block; margin: 0.75rem 0; }
+
 .nz-label-panel__header,
 .nz-label-actions {
     display: flex;

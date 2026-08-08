@@ -13,6 +13,7 @@ import { CollectionError, CollectionService } from './collection.service';
 import {
   FleetbaseIdentityError, FleetbaseIdentityService,
 } from './fleetbase-identity.service';
+import { DriverLocationError, DriverLocationService } from './driver-location.service';
 
 // m25-label — exact legacy label, permanent customer barcode, daily box collection (A27/A28).
 //
@@ -31,6 +32,7 @@ export class LabelController {
     private readonly barcodes: BarcodeService,
     private readonly collection: CollectionService,
     private readonly fleetbaseIdentity: FleetbaseIdentityService,
+    private readonly driverLocations: DriverLocationService,
   ) {}
 
   // ---- labels ----
@@ -256,6 +258,63 @@ export class LabelController {
     });
   }
 
+  // ---- assigned-driver missing-location recovery (A30) ----
+
+  @Get('collection/locations')
+  async driverLocationManifest(@Req() req: Request, @Query('date') date?: string) {
+    return this.wrap(async () => {
+      const deliveryDate = await this.collection.currentDay(date);
+      const driver = await this.fleetbaseIdentity.driverContext(this.bearer(req), deliveryDate);
+      return this.driverLocations.manifest(driver, deliveryDate);
+    });
+  }
+
+  @Post('collection/locations/capture')
+  @HttpCode(200)
+  async captureDriverLocation(
+    @Req() req: Request,
+    @Body() body: DriverLocationCaptureBody,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.wrap(async () => {
+      const deliveryDate = await this.collection.currentDay(body?.delivery_date);
+      const driver = await this.fleetbaseIdentity.driverContext(this.bearer(req), deliveryDate);
+      return this.driverLocations.capture(driver, deliveryDate, {
+        fleetbase_order_id: body?.fleetbase_order_id,
+        latitude: body?.latitude,
+        longitude: body?.longitude,
+        capture_method: body?.capture_method,
+        accuracy_meters: body?.accuracy_meters,
+      }, idempotencyKey);
+    });
+  }
+
+  @Get('fleet-ops/driver-locations')
+  async fleetOpsDriverLocations(@Req() req: Request, @Query('date') date?: string) {
+    return this.wrap(async () => {
+      await this.fleetbaseIdentity.operatorContext(this.bearer(req));
+      return this.driverLocations.listForOperator(date);
+    });
+  }
+
+  @Post('fleet-ops/driver-locations/:captureId/correct')
+  @HttpCode(201)
+  async correctDriverLocation(
+    @Req() req: Request,
+    @Param('captureId') captureId: string,
+    @Body() body: DriverLocationCorrectionBody,
+  ) {
+    return this.wrap(async () => {
+      const actor = await this.fleetbaseIdentity.operatorContext(this.bearer(req));
+      return this.driverLocations.correct(actor, captureId, {
+        latitude: body?.latitude,
+        longitude: body?.longitude,
+        accuracy_meters: body?.accuracy_meters,
+        reason: body?.reason,
+      });
+    });
+  }
+
   // ---- plumbing ----
 
   private async ctx(req: Request): Promise<StaffContext> {
@@ -296,6 +355,12 @@ export class LabelController {
         if (e.code === 'forbidden') throw new ForbiddenException({ error_code: e.code, detail: e.detail });
         throw new BadRequestException({ error_code: e.code, detail: e.detail });
       }
+      if (e instanceof DriverLocationError) {
+        if (e.code === 'not_found') throw new NotFoundException({ error_code: e.code, detail: e.detail });
+        if (e.code === 'conflict') throw new ConflictException({ error_code: e.code, detail: e.detail });
+        if (e.code === 'forbidden') throw new ForbiddenException({ error_code: e.code, detail: e.detail });
+        throw new BadRequestException({ error_code: e.code, detail: e.detail });
+      }
       throw e;
     }
   }
@@ -314,6 +379,20 @@ interface FleetbaseBatchBody {
 interface FleetbaseBatchPrintBody extends FleetbaseBatchBody { reason?: string }
 interface ReplaceBody { reason: string }
 interface ScanBody { barcode: string; delivery_date?: string; device_ref?: string }
+interface DriverLocationCaptureBody {
+  fleetbase_order_id: string;
+  delivery_date?: string;
+  latitude: number;
+  longitude: number;
+  capture_method: 'current_gps' | 'shared_coordinates';
+  accuracy_meters?: number;
+}
+interface DriverLocationCorrectionBody {
+  latitude: number;
+  longitude: number;
+  accuracy_meters?: number;
+  reason: string;
+}
 
 function batchOptionsResponse(
   deliveryDate: string,
