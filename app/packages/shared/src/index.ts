@@ -132,7 +132,7 @@ export interface LabelNutritionTotalsContract {
  * Why a label has no meal rows. `no_dish_source` is the honest state for a delivery date whose
  * dish detail was never captured — the label prints an explicit marker instead of invented values.
  */
-export type LabelMealSource = 'dish_day' | 'no_dish_source';
+export type LabelMealSource = 'dish_day' | 'partner_api_v2' | 'no_dish_source';
 
 export interface LabelAddressContract {
   area: string | null;

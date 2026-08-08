@@ -60,10 +60,14 @@ import { BarcodeService } from './modules/m25-label/barcode.service';
 import { LabelService } from './modules/m25-label/label.service';
 import { CollectionService } from './modules/m25-label/collection.service';
 import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
+import {
+  PartnerLabelSource, type PartnerLabelMealSourceGateway,
+} from './modules/m25-label/partner-label-source';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
+export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
 
 @Module({
   controllers: [
@@ -279,10 +283,16 @@ export const POOL = 'POOL';
       inject: [POOL, AuditService],
     },
     {
+      provide: PARTNER_LABEL_SOURCE,
+      useFactory: (): PartnerLabelMealSourceGateway | null => PartnerLabelSource.fromEnv(),
+    },
+    {
       provide: LabelService,
-      useFactory: (pool: Pool, audit: AuditService, barcodes: BarcodeService) =>
-        new LabelService(pool, audit, barcodes),
-      inject: [POOL, AuditService, BarcodeService],
+      useFactory: (
+        pool: Pool, audit: AuditService, barcodes: BarcodeService,
+        partnerMeals: PartnerLabelMealSourceGateway | null,
+      ) => new LabelService(pool, audit, barcodes, partnerMeals),
+      inject: [POOL, AuditService, BarcodeService, PARTNER_LABEL_SOURCE],
     },
     {
       provide: CollectionService,

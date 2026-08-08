@@ -73,6 +73,21 @@ by authorized operations staff, but must never be inferred or fabricated. Partne
 remain read-only; production writes, Navigator `/legacy`, secret generation, paid-license
 purchase and unattended dispatch activation remain prohibited.
 
+## Partner v2 label-source amendment
+
+AMENDMENT A29 2026-08-08 — Mohamed instructed Codex to close the verified label-data gap
+immediately after the production Partner key and Kitchen & Labels v2 documentation were
+provided. The label service may perform server-side, read-only GET requests to
+`/integration/order-items` and `/integration/meal-catalog-v2`, join only by the documented
+`meal_id`, and select an order only by its exact delivery date and order number. The API key
+must remain server-held and must never be returned, logged, or committed. Partner data must
+not be inferred, name-matched, fabricated, or written back; a missing or incomplete upstream
+nutrition row must block printing with an explicit error. Existing authoritative local
+dish-day records remain valid for historical/manual-entry operation. Fleetbase remains the
+current-day order/assignment authority, and production/Partner writes, secret generation,
+unattended dispatch activation, Fleetbase vendor-source edits, and Navigator `/legacy` remain
+prohibited.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →

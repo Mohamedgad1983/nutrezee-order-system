@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { freshDb } from '../helpers/db';
 import { newId } from '../../apps/api/src/platform/ids';
@@ -10,6 +10,7 @@ import { BarcodeService } from '../../apps/api/src/modules/m25-label/barcode.ser
 import { LabelService } from '../../apps/api/src/modules/m25-label/label.service';
 import { isValidBarcodeValue } from '../../apps/api/src/modules/m25-label/code128';
 import type { StaffContext } from '../../apps/api/src/platform/auth/session.service';
+import { PartnerLabelSourceError } from '../../apps/api/src/modules/m25-label/partner-label-source';
 
 // TS-I — permanent customer barcode + exact legacy label (WP-LBL-01/02, amendment A27).
 // Covers the A27 completion gates: same customer keeps one barcode across dates, different
@@ -20,6 +21,7 @@ let pool: Pool;
 let barcodes: BarcodeService;
 let labels: LabelService;
 let merges: MergeService;
+let audit: AuditService;
 
 const actor: StaffContext = {
   staffId: 'ops-1', name: 'Ops One', email: 'o@t', locale: 'en',
@@ -33,7 +35,7 @@ interface Seeded { customerId: string; orderId: string; orderNo: string }
 
 beforeAll(async () => {
   pool = await freshDb();
-  const audit = new AuditService();
+  audit = new AuditService();
   barcodes = new BarcodeService(pool, audit);
   labels = new LabelService(pool, audit, barcodes);
   merges = new MergeService(pool, audit, new OutboxService(), new SettingsReader(pool));
@@ -302,6 +304,67 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
     expect(doc.totals.protein).toBe(10);
     expect(doc.totals.carbs).toBeNull();
     expect(doc.totals.complete).toBe(false);
+  });
+
+  it('uses exact Partner v2 rows only when the local authoritative dish day is absent', async () => {
+    const remoteOnly = await seed('Partner Source', 'N-LBL-PARTNER');
+    const partnerMeals = {
+      mealsForOrder: vi.fn(async () => [{
+        dish_name: 'Partner exact meal', qty: 1,
+        protein: 31, carbs: 42, fat: 7, calories: 355,
+      }]),
+    };
+    const partnerLabels = new LabelService(pool, audit, barcodes, partnerMeals);
+    const remoteDoc = await partnerLabels.build(actor, remoteOnly.orderId, DATE_A);
+    expect(partnerMeals.mealsForOrder).toHaveBeenCalledWith('N-LBL-PARTNER', DATE_A);
+    expect(remoteDoc.meal_source).toBe('partner_api_v2');
+    expect(remoteDoc.meals[0]?.dish_name).toBe('Partner exact meal');
+    expect(remoteDoc.totals).toEqual({
+      protein: 31, carbs: 42, fat: 7, calories: 355, complete: true,
+    });
+
+    const local = await seed('Local Priority', 'N-LBL-LOCAL-PRIORITY');
+    const dayId = newId();
+    await pool.query(
+      `INSERT INTO customer_dish_day
+         (id, customer_id, customer_order_id, legacy_internal_id, meal_date)
+       VALUES ($1,$2,$3,'local-priority',$4)`,
+      [dayId, local.customerId, local.orderId, DATE_A],
+    );
+    await pool.query(
+      `INSERT INTO customer_dish_day_item
+         (id, customer_dish_day_id, dish_name, quantity, protein, carbs, fat, calories)
+       VALUES ($1,$2,'Local exact meal',1,10,20,5,165)`,
+      [newId(), dayId],
+    );
+    partnerMeals.mealsForOrder.mockClear();
+    const localDoc = await partnerLabels.build(actor, local.orderId, DATE_A);
+    expect(localDoc.meal_source).toBe('dish_day');
+    expect(localDoc.meals[0]?.dish_name).toBe('Local exact meal');
+    expect(partnerMeals.mealsForOrder).not.toHaveBeenCalled();
+  });
+
+  it('blocks render and direct print confirmation when configured Partner nutrition is incomplete', async () => {
+    const s = await seed('Blocked Partner Source', 'N-LBL-PARTNER-BLOCK');
+    const partnerLabels = new LabelService(pool, audit, barcodes, {
+      mealsForOrder: vi.fn(async () => {
+        throw new PartnerLabelSourceError('nutrition_incomplete');
+      }),
+    });
+
+    await expect(partnerLabels.build(actor, s.orderId, DATE_A)).rejects.toMatchObject({
+      code: 'conflict',
+      detail: { reason: 'partner_label_source_nutrition_incomplete' },
+    });
+    await expect(partnerLabels.recordPrint(actor, s.orderId, DATE_A, { kind: 'print' }))
+      .rejects.toMatchObject({
+        code: 'conflict',
+        detail: { reason: 'partner_label_source_nutrition_incomplete' },
+      });
+    const events = await pool.query(
+      `SELECT count(*)::int AS n FROM label_print_event WHERE order_id=$1`, [s.orderId],
+    );
+    expect(events.rows[0].n).toBe(0);
   });
 });
 

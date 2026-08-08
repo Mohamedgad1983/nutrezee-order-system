@@ -11,6 +11,9 @@ import type { StaffContext } from '../../platform/auth/session.service';
 import { newId } from '../../platform/ids';
 import { BarcodeService } from './barcode.service';
 import type { FleetbaseOrderProjection } from './fleetbase-identity.service';
+import {
+  PartnerLabelSourceError, type PartnerLabelMealSourceGateway,
+} from './partner-label-source';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -18,10 +21,10 @@ import type { FleetbaseOrderProjection } from './fleetbase-identity.service';
 // writes ONLY label_print_event (single write path). Barcode issuance is delegated to
 // BarcodeService, so a label render can never mint a second barcode for a customer.
 //
-// Nutrition rule (A27, binding): every meal value is read from customer_dish_day_item. There is no
-// fallback, no averaging and no name-matching against the catalog — a date whose dish detail was
-// never captured renders meal_source='no_dish_source' with zero rows, and the label prints an
-// explicit marker rather than an invented number.
+// Nutrition rule (A27/A29, binding): authoritative local dish-day rows take priority. When none
+// exist, the optional server-only Partner v2 source joins exact order/date/meal ids. There is no
+// averaging or name matching. Missing/incomplete configured Partner data blocks printing rather
+// than falling through to an invented value.
 
 export class LabelError extends Error {
   constructor(
@@ -76,6 +79,7 @@ export class LabelService {
     private readonly pool: Pool,
     private readonly audit: AuditService,
     private readonly barcodes: BarcodeService,
+    private readonly partnerMeals: PartnerLabelMealSourceGateway | null = null,
   ) {}
 
   /**
@@ -129,7 +133,9 @@ export class LabelService {
     if (rows.length === 0) throw new LabelError('not_found', { order_id: orderId });
     const r = rows[0] as Record<string, unknown>;
 
-    const [meals, mealSource] = await this.mealRows(orderId, deliveryDate);
+    const [meals, mealSource] = await this.mealRows(
+      orderId, r.order_number as string, deliveryDate,
+    );
     const driverRef = source && 'driverRef' in source
       ? source.driverRef ?? null
       : await this.driverRef(orderId, deliveryDate);
@@ -388,7 +394,7 @@ export class LabelService {
     const cleanReason = String(reason ?? '').trim();
     const orderIds = candidates.map((candidate) => candidate.localOrderId);
     const { rows } = await this.pool.query(
-      `SELECT co.id AS order_id, co.customer_id
+      `SELECT co.id AS order_id, co.customer_id, co.order_number
          FROM customer_order co
         WHERE co.id = ANY($1::text[])`,
       [orderIds],
@@ -396,18 +402,32 @@ export class LabelService {
     if (rows.length !== orderIds.length) {
       throw new LabelError('not_found', { reason: 'batch_order_missing' });
     }
-    const customerByOrder = new Map(rows.map((raw) => {
+    const orderInfo = new Map(rows.map((raw) => {
       const row = raw as Record<string, unknown>;
-      return [row.order_id as string, row.customer_id as string];
+      return [row.order_id as string, {
+        customerId: row.customer_id as string,
+        orderNumber: row.order_number as string,
+      }];
     }));
+
+    // A29: confirmation is a separate request, so source readiness is revalidated here. A caller
+    // cannot bypass the Partner nutrition check by posting directly to the confirmation endpoint.
+    for (let start = 0; start < candidates.length; start += 8) {
+      const chunk = candidates.slice(start, start + 8);
+      await Promise.all(chunk.map(async (candidate) => {
+        const info = orderInfo.get(candidate.localOrderId);
+        if (!info) throw new LabelError('not_found', { order_id: candidate.localOrderId });
+        await this.mealRows(candidate.localOrderId, info.orderNumber, deliveryDate);
+      }));
+    }
 
     const barcodeByOrder = new Map<string, string>();
     for (let start = 0; start < candidates.length; start += 8) {
       const chunk = candidates.slice(start, start + 8);
       const issued = await Promise.all(chunk.map(async (candidate) => {
-        const customerId = customerByOrder.get(candidate.localOrderId);
-        if (!customerId) throw new LabelError('not_found', { order_id: candidate.localOrderId });
-        const barcode = await this.barcodes.issueFor(actor, customerId);
+        const info = orderInfo.get(candidate.localOrderId);
+        if (!info) throw new LabelError('not_found', { order_id: candidate.localOrderId });
+        const barcode = await this.barcodes.issueFor(actor, info.customerId);
         return [candidate.localOrderId, barcode.barcode_value] as const;
       }));
       for (const [orderId, value] of issued) barcodeByOrder.set(orderId, value);
@@ -444,7 +464,7 @@ export class LabelService {
       }> = [];
       let reprinted = 0;
       for (const candidate of candidates) {
-        const customerId = customerByOrder.get(candidate.localOrderId)!;
+        const customerId = orderInfo.get(candidate.localOrderId)!.customerId;
         const kind: 'print' | 'reprint' =
           (priorByOrder.get(candidate.localOrderId) ?? 0) > 0 ? 'reprint' : 'print';
         const id = newId();
@@ -535,10 +555,12 @@ export class LabelService {
     if (opts.kind === 'reprint' && !reason) throw new LabelError('validation_failed', { field: 'reason' });
 
     const { rows } = await this.pool.query(
-      'SELECT customer_id FROM customer_order WHERE id=$1', [orderId],
+      'SELECT customer_id, order_number FROM customer_order WHERE id=$1', [orderId],
     );
     if (rows.length === 0) throw new LabelError('not_found', { order_id: orderId });
-    const customerId = (rows[0] as Record<string, unknown>).customer_id as string;
+    const order = rows[0] as Record<string, unknown>;
+    const customerId = order.customer_id as string;
+    await this.mealRows(orderId, order.order_number as string, deliveryDate);
     const barcode = await this.barcodes.issueFor(actor, customerId);
 
     return withTransaction(this.pool, async (client) => {
@@ -591,10 +613,14 @@ export class LabelService {
 
   /**
    * The label's meal rows for this order+date. Deleted dish rows are excluded. Returns
-   * `no_dish_source` when the date has no captured dish detail — the caller must render an
-   * explicit empty state, never substitute values.
+   * `no_dish_source` only when neither a local authoritative row nor a configured Partner source
+   * exists. A configured Partner source fails closed on missing/incomplete rows.
    */
-  private async mealRows(orderId: string, deliveryDate: string): Promise<[LabelMealRowContract[], LabelMealSource]> {
+  private async mealRows(
+    orderId: string,
+    orderNumber: string,
+    deliveryDate: string,
+  ): Promise<[LabelMealRowContract[], LabelMealSource]> {
     const { rows } = await this.pool.query(
       `SELECT i.dish_name, i.quantity, i.protein, i.carbs, i.fat, i.calories
          FROM customer_dish_day d
@@ -604,19 +630,33 @@ export class LabelService {
         ORDER BY d.legacy_order_meal_id NULLS LAST, i.sort_order NULLS LAST, i.created_at, i.id`,
       [orderId, deliveryDate],
     );
-    if (rows.length === 0) return [[], 'no_dish_source'];
-    const meals = rows.map((raw) => {
-      const r = raw as Record<string, unknown>;
-      return {
-        dish_name: (r.dish_name as string) ?? '',
-        qty: r.quantity === null || r.quantity === undefined ? 1 : Number(r.quantity),
-        protein: numOrNull(r.protein),
-        carbs: numOrNull(r.carbs),
-        fat: numOrNull(r.fat),
-        calories: numOrNull(r.calories),
-      };
-    });
-    return [meals, 'dish_day'];
+    if (rows.length > 0) {
+      const meals = rows.map((raw) => {
+        const r = raw as Record<string, unknown>;
+        return {
+          dish_name: (r.dish_name as string) ?? '',
+          qty: r.quantity === null || r.quantity === undefined ? 1 : Number(r.quantity),
+          protein: numOrNull(r.protein),
+          carbs: numOrNull(r.carbs),
+          fat: numOrNull(r.fat),
+          calories: numOrNull(r.calories),
+        };
+      });
+      return [meals, 'dish_day'];
+    }
+    if (!this.partnerMeals) return [[], 'no_dish_source'];
+
+    try {
+      const meals = await this.partnerMeals.mealsForOrder(orderNumber, deliveryDate);
+      if (meals.length === 0) throw new PartnerLabelSourceError('order_items_missing');
+      if (!totalsOf(meals).complete) {
+        throw new PartnerLabelSourceError('nutrition_incomplete');
+      }
+      return [meals, 'partner_api_v2'];
+    } catch (error) {
+      const code = error instanceof PartnerLabelSourceError ? error.code : 'unavailable';
+      throw new LabelError('conflict', { reason: `partner_label_source_${code}` });
+    }
   }
 
   /** The legacy-style driver reference for this order's route on this date, when assigned. */
