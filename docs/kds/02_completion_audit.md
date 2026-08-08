@@ -27,7 +27,7 @@ Evidence labels in this audit:
 
 The credential gate is resolved. The Partner credential and display-password hash are non-empty, root-owned, mode `0640`, group `61001`, inside a root-owned mode-`0750` group-`61001` directory. Compose supplies only that supplemental group to the non-root runtime. Neither secret is stored directly in container environment variables.
 
-The initial display password was generated on the server and retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root. The operator retrieves it through root SSH, rotates the display credential after secure handoff, and removes the plaintext handoff file. Its value must never be copied into source control, documentation, ordinary chat, browser evidence, or logs.
+The current display-password handoff is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root. The operator retrieves it through root SSH, rotates away from temporary credentials after secure handoff, and removes the plaintext handoff file. Its literal value must never be copied into source control, documentation, browser evidence, or logs.
 
 ## Executed completion sequence
 

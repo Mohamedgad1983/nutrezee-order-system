@@ -70,7 +70,7 @@ Host layout:
 
 `KDS_SECRET_GID` defaults to the dedicated numeric group `61001`. The Compose service adds that supplemental group to its non-root Node user. Do not use root-only `0600` files with the directory bind mount: the non-root runtime cannot read them. Do not grant world-readable permissions.
 
-The initial display password plaintext is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root, for secure operator retrieval. Retrieve it through root SSH, rotate the display credential after handoff, then remove the plaintext handoff file. The Partner key and password hash remain mode `0640` root:61001 inside the mode-`0750` root:61001 secrets directory.
+The current display password plaintext handoff is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root, for secure operator retrieval. Its literal value is never recorded in Git. Retrieve it through root SSH, rotate away from temporary credentials promptly, then remove the plaintext handoff file. The Partner key and password hash remain mode `0640` root:61001 inside the mode-`0750` root:61001 secrets directory.
 
 Deployment sequence:
 
