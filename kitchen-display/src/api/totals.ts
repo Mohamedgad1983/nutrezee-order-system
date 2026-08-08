@@ -31,6 +31,7 @@ const UNROUTED: PartnerSection = {
   stepNo: null,
   isPacking: false,
 };
+const QUANTITY_SCALE = 1_000_000;
 
 export class TotalsService {
   constructor(
@@ -194,11 +195,14 @@ function mergeSectionMetadata(section: MutableSection, route: PartnerSection): v
 }
 
 function add(left: number, right: number): number {
-  const result = left + right;
-  if (!Number.isFinite(result) || result > Number.MAX_SAFE_INTEGER) {
+  const leftUnits = left * QUANTITY_SCALE;
+  const rightUnits = right * QUANTITY_SCALE;
+  if (!Number.isSafeInteger(leftUnits) || !Number.isSafeInteger(rightUnits)) {
     throw new TotalsError('response_invalid');
   }
-  return Number(result.toFixed(6));
+  const resultUnits = leftUnits + rightUnits;
+  if (!Number.isSafeInteger(resultUnits)) throw new TotalsError('response_invalid');
+  return resultUnits / QUANTITY_SCALE;
 }
 
 function sectionSort(a: MutableSection, b: MutableSection): number {

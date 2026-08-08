@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run build:api && npm run build:web",
     "build:api": "tsc -p tsconfig.api.json",
-    "build:web": "vite build",
+    "build:web": "tsc -p tsconfig.web.json --noEmit && vite build",
     "dev": "vite",
     "hash-password": "node scripts/hash-password.mjs",
     "lint": "node scripts/verify-boundaries.mjs",
@@ -32,6 +32,6 @@
     "vitest": "^3.0.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   }
 }

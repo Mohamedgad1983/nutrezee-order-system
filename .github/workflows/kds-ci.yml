@@ -15,13 +15,18 @@ defaults:
   run:
     working-directory: kitchen-display
 
+permissions:
+  contents: read
+
 jobs:
   boundaries:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+        with: { node-version: 22.12.0, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
       - run: npm ci
       - run: npm run lint
 
@@ -29,8 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+        with: { node-version: 22.12.0, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
       - run: npm ci
       - run: npm run typecheck
 
@@ -38,8 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+        with: { node-version: 22.12.0, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
       - run: npm ci
       - run: npm test
 
@@ -47,8 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+        with: { node-version: 22.12.0, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
       - run: npm ci
       - run: npm run build
 
@@ -56,8 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+        with: { node-version: 22.12.0, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -69,9 +82,37 @@ jobs:
         working-directory: .
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: docker compose -f kitchen-display/compose.yml config --quiet
       - name: validate protected-file staging compose
         run: KDS_PUBLIC_ORIGIN=https://kds.example.com docker compose -f kitchen-display/compose.staging.yml config --quiet
       - run: docker build -f kitchen-display/Dockerfile -t nutrezee-kds:ci kitchen-display
       - name: verify runtime ESM entrypoint loads
         run: docker run --rm nutrezee-kds:ci node -e "import('./dist/api/api/server.js')"
+      - name: smoke-test hardened runtime health
+        run: |
+          set -euo pipefail
+          container=nutrezee-kds-ci-smoke
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run --detach --name "$container" --network none --read-only \
+            --tmpfs /tmp:size=16m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true \
+            -e NODE_ENV=production \
+            -e KDS_PUBLIC_ORIGIN=https://kds.example.com \
+            -e KDS_COOKIE_SECURE=true \
+            -e KDS_PARTNER_API_BASE=https://nutreeze.com/integration \
+            -e KDS_PARTNER_API_KEY=ci-only-read-key \
+            -e KDS_DISPLAY_USERNAME=ci-display \
+            -e 'KDS_DISPLAY_PASSWORD_HASH=scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q' \
+            -e KDS_KITCHENS=main \
+            nutrezee-kds:ci
+          for attempt in {1..20}; do
+            if docker exec "$container" node -e \
+              "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "$container"
+          exit 1

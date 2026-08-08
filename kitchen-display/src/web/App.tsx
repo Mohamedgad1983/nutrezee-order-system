@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KdsDisplayConfig, KdsSectionTotals } from '../contracts';
 import { ApiError, request } from './api';
 import { formatQuantity, initialLanguage, kuwaitToday, type Language } from './model';
@@ -72,6 +72,7 @@ export function App(): React.JSX.Element {
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [auth, setAuth] = useState<AuthState>('checking');
   const copy = COPY[language];
+  const handleUnauthorized = useCallback(() => setAuth('signed_out'), []);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -112,7 +113,7 @@ export function App(): React.JSX.Element {
     <Board
       language={language}
       languageButton={languageButton}
-      onUnauthorized={() => setAuth('signed_out')}
+      onUnauthorized={handleUnauthorized}
     />
   );
 }
@@ -172,6 +173,11 @@ function Board({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const copy = COPY[language];
+  const languageRef = useRef(language);
+  const requestId = useRef(0);
+  const selectionRef = useRef('');
+  languageRef.current = language;
+  selectionRef.current = `${date}\u0000${kitchen}`;
 
   useEffect(() => {
     let active = true;
@@ -184,33 +190,44 @@ function Board({
       .catch((caught) => {
         if (!active) return;
         if (caught instanceof ApiError && caught.status === 401) onUnauthorized();
-        else setError(copy.configError);
+        else setError(COPY[languageRef.current].configError);
       });
     return () => { active = false; };
-  }, [copy.configError, onUnauthorized]);
+  }, [onUnauthorized]);
 
   const load = useCallback(async () => {
     if (!date || !kitchen) return;
+    const selection = `${date}\u0000${kitchen}`;
+    const currentRequest = ++requestId.current;
     setBusy(true);
     setError(null);
     try {
       const result = await request<KdsSectionTotals>(
         `/api/section-totals?date=${encodeURIComponent(date)}&kitchen=${encodeURIComponent(kitchen)}`,
       );
+      if (currentRequest !== requestId.current || selection !== selectionRef.current) return;
       setData(result);
     } catch (caught) {
+      if (currentRequest !== requestId.current || selection !== selectionRef.current) return;
       setData(null);
       if (caught instanceof ApiError && caught.status === 401) {
         onUnauthorized();
         return;
       }
-      setError(errorMessage(caught, language));
+      setError(errorMessage(caught, languageRef.current));
     } finally {
-      setBusy(false);
+      if (currentRequest === requestId.current && selection === selectionRef.current) setBusy(false);
     }
-  }, [date, kitchen, language, onUnauthorized]);
+  }, [date, kitchen, onUnauthorized]);
 
   useEffect(() => { if (kitchen) void load(); }, [kitchen, load]);
+  useEffect(() => {
+    if (date && kitchen) return;
+    requestId.current += 1;
+    setBusy(false);
+    setData(null);
+  }, [date, kitchen]);
+  useEffect(() => () => { requestId.current += 1; }, []);
   useEffect(() => {
     if (!config || !kitchen) return undefined;
     const timer = window.setInterval(() => void load(), config.refresh_seconds * 1000);

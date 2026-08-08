@@ -3,7 +3,7 @@
   background: #f4f0e8;
   font-family: Inter, "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
 }
 
 * { box-sizing: border-box; }
@@ -132,7 +132,7 @@ button:disabled { cursor: wait; opacity: .6; }
 @media (max-width: 720px) {
   .topbar { align-items: flex-start; }
   .titleBlock p { display: none; }
-  .ghostButton { display: none; }
+  .ghostButton { min-height: 40px; padding: .5rem .7rem; font-size: .85rem; }
   .summaryStrip { grid-template-columns: 1fr 1fr; }
   .summaryStrip .metric:last-child { grid-column: 1 / -1; }
   .controlBar { align-items: stretch; }

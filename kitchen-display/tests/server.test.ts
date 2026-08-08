@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -6,7 +6,7 @@ import type { Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthManager, createPasswordHash } from '../src/api/auth.js';
 import { PartnerSourceError, type PartnerSourceGateway } from '../src/api/partner-source.js';
-import { createKdsServer, type KdsServerOptions } from '../src/api/server.js';
+import { createKdsServer, LoginLimiter, type KdsServerOptions } from '../src/api/server.js';
 
 const USERNAME = 'kitchen-display';
 const PASSWORD = 'test-only-secure-password';
@@ -21,6 +21,9 @@ describe('standalone KDS HTTP boundary', () => {
   beforeEach(async () => {
     webRoot = await mkdtemp(join(tmpdir(), 'nutrezee-kds-test-'));
     await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>KDS</title>');
+    await writeFile(join(webRoot, 'manifest.webmanifest'), '{}');
+    await mkdir(join(webRoot, 'assets'));
+    await writeFile(join(webRoot, 'assets', 'app-hash.js'), 'export {};');
     const source: PartnerSourceGateway = {
       itemsForDay: async () => ({
         serverTime: '2026-08-08T10:00:00+03:00',
@@ -78,6 +81,10 @@ describe('standalone KDS HTTP boundary', () => {
     const page = await fetch(`${origin}/some/client/route`);
     expect(page.status).toBe(200);
     expect(await page.text()).toContain('<title>KDS</title>');
+    expect(page.headers.get('cache-control')).toBe('no-cache');
+    expect((await fetch(`${origin}/manifest.webmanifest`)).headers.get('cache-control')).toBe('no-cache');
+    expect((await fetch(`${origin}/assets/app-hash.js`)).headers.get('cache-control'))
+      .toBe('public, max-age=31536000, immutable');
   });
 
   it('requires its own session, origin-checks login, and sets an opaque strict cookie', async () => {
@@ -149,6 +156,32 @@ describe('standalone KDS HTTP boundary', () => {
     expect(await invalidSource.json()).toEqual({ error_code: 'kds_source_response_invalid' });
   });
 
+  it('uses the rightmost valid proxy address for account throttling', async () => {
+    options.trustProxy = true;
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      const response = await fetch(`${origin}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          Origin: origin,
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `198.51.100.${attempt}, 203.0.113.7`,
+        },
+        body: JSON.stringify({ username: USERNAME, password: 'wrong' }),
+      });
+      expect(response.status).toBe(401);
+    }
+    const limited = await fetch(`${origin}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        Origin: origin,
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': '198.51.100.99, 203.0.113.7',
+      },
+      body: JSON.stringify({ username: USERNAME, password: 'wrong' }),
+    });
+    expect(limited.status).toBe(429);
+  });
+
   async function signIn(): Promise<Response> {
     return fetch(`${origin}/api/auth/login`, {
       method: 'POST',
@@ -156,6 +189,18 @@ describe('standalone KDS HTTP boundary', () => {
       body: JSON.stringify({ username: USERNAME, password: PASSWORD }),
     });
   }
+});
+
+describe('login limiter capacity', () => {
+  it('evicts only the least-recently-used counter and preserves a live limit', () => {
+    const limiter = new LoginLimiter(3);
+    expect(limiter.allowed('protected', 2, 0)).toBe(true);
+    expect(limiter.allowed('old', 10, 1)).toBe(true);
+    expect(limiter.allowed('protected', 2, 2)).toBe(true);
+    expect(limiter.allowed('new', 10, 3)).toBe(true);
+    expect(limiter.allowed('newer', 10, 4)).toBe(true);
+    expect(limiter.allowed('protected', 2, 5)).toBe(false);
+  });
 });
 
 function cookieFrom(response: Response): string {

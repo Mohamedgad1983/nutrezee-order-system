@@ -5,6 +5,8 @@ export class ApiError extends Error {
   }
 }
 
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body !== undefined) headers.set('Content-Type', 'application/json');
@@ -12,6 +14,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     credentials: 'include',
     headers,
+    signal: init?.signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error_code?: string } | null;

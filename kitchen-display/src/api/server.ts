@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { KdsApiError, KdsDisplayConfig } from '../contracts.js';
@@ -31,20 +32,28 @@ interface RuntimeConfig extends KdsServerOptions {
 
 interface Attempt {
   count: number;
+  lastSeenAt: number;
   resetAt: number;
 }
 
-class LoginLimiter {
+export class LoginLimiter {
   private readonly attempts = new Map<string, Attempt>();
 
+  constructor(private readonly maxEntries = 10_000) {
+    if (!Number.isSafeInteger(maxEntries) || maxEntries < 2) throw new Error('invalid_limiter_capacity');
+  }
+
   allowed(key: string, maximum: number, now = Date.now()): boolean {
-    this.prune(now);
+    if (this.attempts.size >= Math.min(1_000, this.maxEntries)) this.pruneExpired(now);
     const current = this.attempts.get(key);
     if (!current || current.resetAt <= now) {
-      this.attempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+      if (current) this.attempts.delete(key);
+      while (this.attempts.size >= this.maxEntries) this.evictOldest();
+      this.attempts.set(key, { count: 1, lastSeenAt: now, resetAt: now + 15 * 60 * 1000 });
       return true;
     }
     current.count += 1;
+    current.lastSeenAt = now;
     return current.count <= maximum;
   }
 
@@ -52,12 +61,22 @@ class LoginLimiter {
     this.attempts.delete(key);
   }
 
-  private prune(now: number): void {
-    if (this.attempts.size < 1000) return;
+  private pruneExpired(now: number): void {
     for (const [key, attempt] of this.attempts) {
       if (attempt.resetAt <= now) this.attempts.delete(key);
     }
-    if (this.attempts.size > 10_000) this.attempts.clear();
+  }
+
+  private evictOldest(): void {
+    let oldestKey: string | undefined;
+    let oldestSeen = Number.POSITIVE_INFINITY;
+    for (const [key, attempt] of this.attempts) {
+      if (attempt.lastSeenAt < oldestSeen) {
+        oldestKey = key;
+        oldestSeen = attempt.lastSeenAt;
+      }
+    }
+    if (oldestKey !== undefined) this.attempts.delete(oldestKey);
   }
 }
 
@@ -72,6 +91,15 @@ export function createKdsServer(options: KdsServerOptions): Server {
   return createServer(async (request, response) => {
     const started = Date.now();
     let pathname = 'invalid';
+    response.once('close', () => logger({
+      level: 'info',
+      event: 'request',
+      method: request.method,
+      path: pathname,
+      status: response.statusCode,
+      completed: response.writableFinished,
+      duration_ms: Date.now() - started,
+    }));
     try {
       setSecurityHeaders(response, options.secureCookies);
       const url = new URL(request.url ?? '/', options.publicOrigin);
@@ -137,17 +165,10 @@ export function createKdsServer(options: KdsServerOptions): Server {
       return await serveWeb(response, request.method, pathname, options.webRoot);
     } catch (error) {
       if (error instanceof RequestError) return sendError(response, error.status, error.code);
+      // Library/upstream messages are not a proven secret-free surface, so only safe
+      // request metadata is logged for unexpected failures.
       logger({ level: 'error', event: 'request_failed', method: request.method, path: pathname });
       return sendError(response, 500, 'internal_error');
-    } finally {
-      response.once('finish', () => logger({
-        level: 'info',
-        event: 'request',
-        method: request.method,
-        path: pathname,
-        status: response.statusCode,
-        duration_ms: Date.now() - started,
-      }));
     }
   });
 }
@@ -230,7 +251,10 @@ async function serveWeb(
     const body = await readFile(target);
     response.statusCode = 200;
     response.setHeader('Content-Type', contentType(target));
-    response.setHeader('Cache-Control', relative === 'index.html' ? 'no-cache' : 'public, max-age=31536000, immutable');
+    response.setHeader(
+      'Cache-Control',
+      relative.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+    );
     response.end(method === 'HEAD' ? undefined : body);
   } catch {
     sendError(response, 404, 'not_found');
@@ -292,8 +316,14 @@ function validOrigin(request: IncomingMessage, expected: string): boolean {
 function clientAddress(request: IncomingMessage, trustProxy: boolean): string {
   if (trustProxy) {
     const forwarded = request.headers['x-forwarded-for'];
-    const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
-    if (first?.trim()) return first.trim().slice(0, 80);
+    const chain = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
+    if (chain && chain.length <= 4096) {
+      const candidates = chain.split(',').map((value) => value.trim());
+      for (let index = candidates.length - 1; index >= 0; index -= 1) {
+        const candidate = candidates[index];
+        if (candidate && isIP(candidate)) return candidate.slice(0, 80);
+      }
+    }
   }
   return request.socket.remoteAddress?.slice(0, 80) ?? 'unknown';
 }
@@ -358,7 +388,15 @@ async function main(): Promise<void> {
   server.listen(config.port, '0.0.0.0', () => {
     console.info(JSON.stringify({ level: 'info', event: 'server_started', port: config.port }));
   });
-  const shutdown = () => server.close(() => process.exit(0));
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
+    const forced = setTimeout(() => process.exit(1), 10_000);
+    forced.unref();
+    server.close(() => process.exit(0));
+    server.closeIdleConnections();
+  };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
 }

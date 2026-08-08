@@ -7,7 +7,9 @@ const DEFAULT_BASE_URL = 'https://nutreeze.com/integration';
 const PAGE_LIMIT = 1000;
 const MAX_PAGES = 50;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+const MAX_TOTAL_RESPONSE_BYTES = 25 * 1024 * 1024;
 const MAX_TOTAL_ITEMS = PAGE_LIMIT * MAX_PAGES;
+const QUANTITY_SCALE = 1_000_000;
 
 export type PartnerSourceErrorCode =
   | 'auth_failed'
@@ -59,6 +61,7 @@ export interface PartnerSourceConfig {
   baseUrl: string;
   cacheTtlMs?: number;
   fetchImpl?: FetchLike;
+  maxTotalResponseBytes?: number;
   now?: () => number;
   timeoutMs?: number;
 }
@@ -66,6 +69,7 @@ export interface PartnerSourceConfig {
 interface PageEnvelope {
   data: unknown[];
   nextCursor: string | number | null;
+  responseBytes: number;
   serverTime: string;
 }
 
@@ -82,6 +86,7 @@ export class PartnerSource implements PartnerSourceGateway {
   private readonly cacheTtlMs: number;
   private readonly fetchImpl: FetchLike;
   private readonly inFlight = new Map<string, Promise<PartnerDay>>();
+  private readonly maxTotalResponseBytes: number;
   private readonly now: () => number;
   private readonly timeoutMs: number;
 
@@ -90,6 +95,11 @@ export class PartnerSource implements PartnerSourceGateway {
     this.base = normalizeBaseUrl(config.baseUrl);
     this.cacheTtlMs = config.cacheTtlMs ?? 15_000;
     this.fetchImpl = config.fetchImpl ?? fetch;
+    this.maxTotalResponseBytes = config.maxTotalResponseBytes ?? MAX_TOTAL_RESPONSE_BYTES;
+    if (!Number.isSafeInteger(this.maxTotalResponseBytes) || this.maxTotalResponseBytes < 1
+      || this.maxTotalResponseBytes > MAX_TOTAL_RESPONSE_BYTES) {
+      throw new PartnerSourceError('response_invalid');
+    }
     this.now = config.now ?? Date.now;
     this.timeoutMs = config.timeoutMs ?? 30_000;
   }
@@ -130,6 +140,7 @@ export class PartnerSource implements PartnerSourceGateway {
     const itemRefs = new Set<string>();
     const seenCursors = new Set<string>();
     let cursor: string | number | null = null;
+    let responseBytes = 0;
     let serverTime = '';
 
     for (let page = 1; page <= MAX_PAGES; page += 1) {
@@ -140,6 +151,8 @@ export class PartnerSource implements PartnerSourceGateway {
       if (cursor !== null) url.searchParams.set('cursor', String(cursor));
 
       const envelope = await this.requestPage(url);
+      responseBytes += envelope.responseBytes;
+      if (responseBytes > this.maxTotalResponseBytes) throw new PartnerSourceError('pagination_invalid');
       items.push(...normalizeItems(envelope.data, deliveryDate, itemRefs));
       if (items.length > MAX_TOTAL_ITEMS) throw new PartnerSourceError('pagination_invalid');
       serverTime = envelope.serverTime;
@@ -169,8 +182,8 @@ export class PartnerSource implements PartnerSourceGateway {
         throw new PartnerSourceError('auth_failed');
       }
       if (!response.ok) throw new PartnerSourceError('upstream_http');
-      const payload = await readJsonLimited(response);
-      return validateEnvelope(payload);
+      const decoded = await readJsonLimited(response);
+      return { ...validateEnvelope(decoded.payload), responseBytes: decoded.bytes };
     } catch (error) {
       if (error instanceof PartnerSourceError) throw error;
       throw new PartnerSourceError('unavailable');
@@ -194,7 +207,7 @@ function validateProductionEndpoint(raw: string, nodeEnv: string | undefined): v
   }
 }
 
-function validateEnvelope(payload: unknown): PageEnvelope {
+function validateEnvelope(payload: unknown): Omit<PageEnvelope, 'responseBytes'> {
   if (!isRecord(payload) || !Array.isArray(payload.data)
     || payload.mode !== 'live'
     || !Number.isInteger(payload.count) || Number(payload.count) < 0
@@ -249,7 +262,7 @@ function normalizeItems(
   });
 }
 
-async function readJsonLimited(response: Response): Promise<unknown> {
+async function readJsonLimited(response: Response): Promise<{ payload: unknown; bytes: number }> {
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
     throw new PartnerSourceError('response_invalid');
@@ -270,7 +283,7 @@ async function readJsonLimited(response: Response): Promise<unknown> {
       chunks.push(value);
     }
     const body = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
-    return JSON.parse(body) as unknown;
+    return { payload: JSON.parse(body) as unknown, bytes };
   } catch (error) {
     if (error instanceof PartnerSourceError) throw error;
     throw new PartnerSourceError('response_invalid');
@@ -281,8 +294,8 @@ async function readJsonLimited(response: Response): Promise<unknown> {
 
 function normalizeSection(raw: unknown): PartnerSection {
   if (!isRecord(raw)) throw new PartnerSourceError('response_invalid');
-    const sectionId = sourceId(raw.section_id);
-    const code = nonEmptyString(raw.code);
+  const sectionId = sourceId(raw.section_id);
+  const code = nonEmptyString(raw.code);
   if (!sectionId || !code || !SECTION_CODE_RE.test(code)) throw new PartnerSourceError('response_invalid');
   const stepNo = raw.step_no === null || raw.step_no === undefined
     ? null
@@ -357,10 +370,11 @@ function scalarString(value: unknown): string | null {
 function positiveQuantity(value: unknown): number | null {
   const parsed = typeof value === 'number'
     ? value
-    : typeof value === 'string' && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.trim())
+    : typeof value === 'string' && /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(value.trim())
       ? Number(value)
       : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= Number.MAX_SAFE_INTEGER ? parsed : null;
+  const scaled = parsed * QUANTITY_SCALE;
+  return Number.isFinite(parsed) && parsed > 0 && Number.isSafeInteger(scaled) ? parsed : null;
 }
 
 function nonEmptyString(value: unknown): string | null {

@@ -4,6 +4,7 @@ const SCRYPT_N = 16_384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const MAX_PASSWORD_LENGTH = 256;
+const SESSION_TOKEN_RE = /^[A-Za-z0-9_-]{43,128}$/;
 
 interface ParsedHash {
   digest: Buffer;
@@ -63,13 +64,13 @@ export class AuthManager {
 
     this.prune();
     const token = this.randomToken();
-    if (!/^[A-Za-z0-9_-]{43,128}$/.test(token)) throw new AuthConfigError('invalid_session_token');
+    if (!SESSION_TOKEN_RE.test(token)) throw new AuthConfigError('invalid_session_token');
     this.sessions.set(hashToken(token), this.now() + this.sessionTtlMs);
     return token;
   }
 
   isAuthenticated(token: string | null): boolean {
-    if (!token || !/^[A-Za-z0-9_-]{43,128}$/.test(token)) return false;
+    if (!token || !SESSION_TOKEN_RE.test(token)) return false;
     const key = hashToken(token);
     const expiresAt = this.sessions.get(key);
     if (!expiresAt) return false;
@@ -81,7 +82,7 @@ export class AuthManager {
   }
 
   logout(token: string | null): void {
-    if (token && /^[A-Za-z0-9_-]{43,128}$/.test(token)) this.sessions.delete(hashToken(token));
+    if (token && SESSION_TOKEN_RE.test(token)) this.sessions.delete(hashToken(token));
   }
 
   private prune(): void {

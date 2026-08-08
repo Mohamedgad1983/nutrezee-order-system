@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:22.12-alpine AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -7,7 +7,7 @@ COPY public ./public
 COPY src ./src
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+FROM node:22.12-alpine AS runtime
 ENV NODE_ENV=production KDS_PORT=8080
 WORKDIR /app
 COPY --from=build --chown=node:node /build/package.json ./package.json

@@ -34,7 +34,7 @@ The process keeps sessions and a 15-second Partner response cache in memory. A r
 
 ## Local verification
 
-Requires Node.js 22 or later.
+Requires Node.js 22.12.0 or later.
 
 ```bash
 npm ci

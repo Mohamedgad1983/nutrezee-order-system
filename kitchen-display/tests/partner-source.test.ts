@@ -193,6 +193,51 @@ describe('PartnerSource read-only boundary', () => {
     await expect(source.itemsForDay(DATE, 'main')).rejects.toMatchObject({ code: 'response_invalid' });
   });
 
+  it('accepts at most six quantity decimals and rejects finer precision', async () => {
+    const accepted = new PartnerSource({
+      baseUrl: 'https://partner.example/integration',
+      apiKey: 'key',
+      fetchImpl: vi.fn(async () => envelope([item('one', { qty: '0.000001' })])),
+    });
+    await expect(accepted.itemsForDay(DATE, 'main')).resolves.toMatchObject({
+      items: [{ quantity: 0.000001 }],
+    });
+
+    const rejected = new PartnerSource({
+      baseUrl: 'https://partner.example/integration',
+      apiKey: 'key',
+      fetchImpl: vi.fn(async () => envelope([item('one', { qty: '0.0000004' })])),
+    });
+    await expect(rejected.itemsForDay(DATE, 'main')).rejects.toMatchObject({ code: 'response_invalid' });
+  });
+
+  it('rejects a paginated response whose cumulative decoded size exceeds the bound', async () => {
+    const firstBody = JSON.stringify({
+      data: [item('one')],
+      count: 1,
+      mode: 'live',
+      server_time: '2026-08-08T10:00:00+03:00',
+      next_cursor: 'next',
+    });
+    const secondBody = JSON.stringify({
+      data: [item('two')],
+      count: 1,
+      mode: 'live',
+      server_time: '2026-08-08T10:00:00+03:00',
+      next_cursor: null,
+    });
+    const responses = [firstBody, secondBody];
+    const fetchMock = vi.fn(async () => new Response(responses.shift(), { status: 200 }));
+    const source = new PartnerSource({
+      baseUrl: 'https://partner.example/integration',
+      apiKey: 'key',
+      fetchImpl: fetchMock,
+      maxTotalResponseBytes: Buffer.byteLength(firstBody) + 1,
+    });
+    await expect(source.itemsForDay(DATE, 'main')).rejects.toMatchObject({ code: 'pagination_invalid' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects an oversized upstream page before parsing it', async () => {
     const source = new PartnerSource({
       baseUrl: 'https://partner.example/integration',

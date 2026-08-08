@@ -33,7 +33,8 @@ Out of scope:
 | Unit + HTTP integration | `npm test` | all tests pass |
 | Production artifacts | `npm run build` | API and Vite bundles generated |
 | Visible bilingual journey | `npm run test:e2e` | Chromium login → Arabic totals → English totals; unrouted visible; PII absent |
-| Container | `docker build -f Dockerfile -t nutrezee-kds:verify .` | image builds; `/health` passes |
+| Container image | `docker build -f Dockerfile -t nutrezee-kds:verify .` | hardened runtime image builds and its ESM entrypoint imports |
+| Runtime health | Start the image with test-only configuration, then request `/health` inside the isolated container | HTTP 200 with `service=nutrezee-kds`; no Partner request is made |
 
 ## Staging provisioning
 

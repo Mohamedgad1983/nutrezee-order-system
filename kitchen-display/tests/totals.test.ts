@@ -112,4 +112,15 @@ describe('totals-only section projection', () => {
     }, DATE, 'main', new Date().toISOString());
     expect(totals.sections[0]?.total_qty).toBe(0.3);
   });
+
+  it('keeps six-decimal scaled totals internally consistent', () => {
+    const hot = route('hot-id', 'hot', 1);
+    const totals = aggregateDay({
+      serverTime: new Date().toISOString(),
+      items: [row('one', 0.000001, [hot]), row('two', 0.000002, [hot])],
+    }, DATE, 'main', new Date().toISOString());
+    expect(totals.summary.source_quantity_total).toBe(0.000003);
+    expect(totals.sections[0]?.total_qty).toBe(0.000003);
+    expect(totals.sections[0]?.meals[0]?.total_qty).toBe(0.000003);
+  });
 });
