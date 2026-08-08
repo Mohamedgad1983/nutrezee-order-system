@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-08
 **Mode:** Fix Mode
-**Status:** IN PROGRESS
+**Status:** COMPLETE — deployed and read-only verified on staging
 
 ## Verified defect
 
@@ -65,3 +65,45 @@ value is in scope.
 - API typecheck/build plus repository security/secret scans.
 - Staging read-only proof using the protected production key, without printing or changing any
   real order/customer/Partner row.
+
+## Implementation and test result
+
+- Commit: `0147c86` on `build/wp-lbl-a27-legacy-label-barcode` (PR #44).
+- Full local regression: 70 files / 393 tests passed.
+- Focused final A29 source + label integration: 28/28 passed.
+- Lint, API typecheck/build, cross-module-write scan, no-GET-mutation scan and Partner snapshot
+  guards passed. Local Docker was unavailable; CI supplied the authoritative Docker validation.
+- GitHub CI run `31244633933`: all 14 jobs passed, including clean-install full typecheck,
+  Docker/Compose builds, eight suite jobs and both boundary scans.
+
+The client performs GET only, requires `mode=live`, pins the production base host, paginates both
+endpoints, validates count/cursor/server-time envelopes, deduplicates concurrent date loads, and
+does not cache errors. The service keeps local authoritative dish-day priority, uses Partner only
+when local rows are absent, and repeats the readiness check at print confirmation so a direct POST
+cannot bypass it.
+
+## Staging deployment proof
+
+| Check | Result |
+|---|---|
+| Source archive | commit `0147c86`; SHA-256 `fbc33b0845cd…` |
+| New API image | `sha256:d7108de4f1bf…` |
+| Rollback image | `nutrezee-api:pre-a29-20260808` → `sha256:d6db705521a3…` |
+| Secret posture | existing 48-character key copied to `/opt/nutrezee/.env`; root-owned mode `0600`; container/file values matched; log secret scan clean |
+| Runtime guard | production without key returned `not_configured`; configured process returned `configured` |
+| Compiled client live read | complete real order returned 4 rows; incomplete real order returned `nutrition_incomplete` |
+| Label-service live read | mapped real order returned `meal_source=partner_api_v2`, 4 rows, `complete=true` |
+| Public boundary | `/nz/health` HTTP 200; unauthenticated Fleet-Ops render HTTP 401 JSON |
+| Database safety | before = after: customers 19,483; orders 20,204; print events 1; barcodes 1; collections 1 |
+
+Only the Nutrezee API container was recreated. Admin, Console, Caddy, PostgreSQL, Fleetbase,
+Partner and legacy services were not written or restarted. No label preview/print was triggered,
+no migration ran, and unattended dispatch remains disabled.
+
+## Honest residual boundary
+
+The data-source defect is closed, but the API cannot fabricate the 187 incomplete upstream
+orders: operations must correct their missing protein/fat values in the authoritative Partner
+source before those labels can print. Driver/area batch availability still depends on a complete
+current-day Fleetbase dispatch/assignment feed. Exact physical 100 × 70 mm scaling and Code 128
+camera decoding still require the paper/device pilot; this session does not claim physical proof.
