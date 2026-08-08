@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals IN PROGRESS under user-authorized A17.** The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated, but this new, separate Kitchen Display unit is explicitly eligible. Local implementation and bilingual evidence plus independent KDS/root CI are green; PR review/merge/deploy/live acceptance remain. The order-system staging/UAT state is unchanged.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is software-complete and credential-blocked at live acceptance under user-authorized A17.** PR #46 is merged and every independent KDS/root CI gate is green. The exact merge artifact and image are staged on the VPS, but the service and proxy route intentionally remain inactive until the two dedicated protected credentials exist. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
 
 ---
 
@@ -28,9 +28,9 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ▶ WP-KDS-01 — Standalone Kitchen Display section totals · **IN PROGRESS 2026-08-08 · user-authorized A17**
+### ⏸ WP-KDS-01 — Standalone Kitchen Display section totals · **BLOCKED 2026-08-08 on dedicated credentials · user-authorized A17**
 
-Completely independent subproject on `build/wp-kds-01-standalone`, based directly on `origin/main`. PR review remediation is locally green: 31 Vitest cases, 2 Chromium journeys (including stale-date race and mobile sign-out), separation/privacy scan, typecheck/build, npm audit, and unchanged root baseline (204 tests) plus scans. Earlier KDS CI 6/6 and root CI 14/14 are green; the review-fix rerun is pending. PR #46 is independent and mergeable. Remaining ordered gates: review-fix CI + thread resolution → merge → dedicated service/hostname deployment with dedicated protected credentials → live Partner arithmetic/privacy/write audit → protected HTTPS bilingual Playwright → final runbooks/evidence. No driver/logistics/label dependency or write capability is in scope.
+Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; final pre-merge and post-merge KDS/root workflows are green. The exact merge archive and hardened image are staged under `/opt/nutrezee-kds`, and the combined Caddy configuration validates without touching the live proxy. No KDS container, port, or route is active. **Single unblock action:** securely provision non-empty mode-0600 files `/opt/nutrezee-kds/secrets/kds_partner_api_key` (a dedicated read-only Partner key, not the label key) and `/opt/nutrezee-kds/secrets/kds_display_password_hash` (operator-selected password, scrypt hash). Then start the isolated Compose service, add/reload only its validated hostname route, and complete live health, exact arithmetic, PII/prohibited-field, GET-only/no-write, and protected Arabic/English Playwright acceptance. No driver/logistics/label dependency or write capability is in scope.
 
 ### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.

@@ -1,6 +1,15 @@
 # WP-KDS-01 — Standalone section totals release
 
-**Evidence state:** implementation and independent KDS/root CI verified 2026-08-08; PR review/merge, staging deployment, and live Partner acceptance remain required before DONE.
+**Evidence state:** software merged and independently CI-green 2026-08-08; exact merge artifact and hardened image staged on the VPS. Dedicated credentials, service activation, and live Partner/HTTPS acceptance remain required before DONE.
+
+## Release evidence
+
+- PR #46 merged as `74a703c` after all 18 review threads were resolved.
+- Final pre-merge KDS workflows passed 6/6 and root workflows passed 14/14; post-merge runs `31251266861` and `31251266863` passed 6/6 and 14/14 respectively.
+- Artifact SHA-256: `1e3b0f572a1c73b86538f20f457d64cc03064422db0b9c3220af6d2e9c2c500d`.
+- Staged VPS image: `sha256:efe4a3ecbe416f2c9715190942e284ffcb902687ff115f05f4639e2469bb7289`.
+- Staging Compose and the combined existing-plus-KDS Caddy configuration validate.
+- Safety check: zero KDS containers, zero port-8180 listeners, zero live KDS proxy matches, and both protected credential files absent/empty. No route or service was activated.
 
 ## Authorized scope
 

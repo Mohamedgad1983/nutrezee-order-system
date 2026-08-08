@@ -1,6 +1,17 @@
 # Live Blockers & Decisions — Build Execution
 
-**Date:** 2026-06-10 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+**Date:** 2026-08-08 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+
+## WP-KDS-01 live-acceptance blocker
+
+The standalone Kitchen Display software is merged (`74a703c`), independently CI-green, and staged as an exact verified artifact plus hardened VPS image. Compose and the combined Caddy configuration validate, but no KDS container, listener, hostname route, or Partner request has been activated.
+
+Completion is blocked only by two deliberately absent protected inputs:
+
+1. `/opt/nutrezee-kds/secrets/kds_partner_api_key` — a dedicated KDS Partner **read-only** key; the label-service key must not be reused.
+2. `/opt/nutrezee-kds/secrets/kds_display_password_hash` — the scrypt hash of a password chosen by the kitchen-display operator.
+
+Both must be non-empty, root-managed mode `0600`. Once provisioned, the next session starts the isolated service and performs the documented health, HTTPS, Partner arithmetic, privacy, no-write, and bilingual Playwright acceptance before marking WP-KDS-01 DONE.
 
 ## Decision status
 
