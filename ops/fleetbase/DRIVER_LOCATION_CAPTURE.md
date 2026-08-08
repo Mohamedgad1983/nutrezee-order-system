@@ -1,7 +1,8 @@
 # A30 — assigned-driver missing-location recovery
 
-Status: staging software deployed and Fleet-Ops browser proof green in draft PR #47; physical
-Android device proof pending. Production activation remains prohibited until explicit release
+Status: staging software deployed and Fleet-Ops browser proof green in draft PR #47. Android 14
+emulator route/error-state proof is green in English and Arabic; the physical assigned-driver
+capture flow remains pending. Production activation remains prohibited until explicit release
 approval.
 
 ## Operating rule
@@ -47,7 +48,17 @@ customer's exact pin, and the customer identity behind a known-stop anchor is ne
 - Authenticated Fleet-Ops browser proof loaded the bilingual `Nutrezee Driver Locations` page,
   its append-only correction warning and the correct empty state with no console errors.
 - No driver capture, Fleet-Ops correction, dispatch write or production activation was performed.
-- Physical Navigator proof remains open because no Android device was connected for ADB UAT.
+- Installed the exact green-CI debug artifact from run `31252463962` on an Android 14 emulator,
+  reached the Driver Locations route in English and Arabic, and confirmed a clean fail-closed
+  response for an authenticated account that Fleetbase did not verify as a driver. No assignment
+  or customer data was returned and no capture request was submitted.
+- Emulator QA exposed and closed two UI defects: the empty message could render beside an API
+  error, and Fleetbase identity failures used a generic fallback. Navigator commit `e6c27b6`
+  renders one explicit bilingual authorization error; focused A30 tests pass 10/10 and the full
+  Jest suite passes 65 suites / 339 tests.
+- Physical assigned-driver proof remains open. It needs one current eligible assignment to verify
+  fallback navigation, calling that customer, GPS/shared-coordinate preview, explicit confirmation,
+  accepted/idempotent persistence and Fleet-Ops visibility.
 - The complete manual Partner dry-run read 3,210 meal rows and 739 orders, preserved 549
   authoritative Partner pins, identified 172 same-area known-stop anchors, loaded zero saved
   captures and completed with `fleetbase_written=false`. Database counts were unchanged and the
