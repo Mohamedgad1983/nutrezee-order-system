@@ -7,9 +7,10 @@
 - PR #46 delivered the standalone application and merged as `74a703c` after all 18 review threads were resolved.
 - PR #48 fixed the verified non-root protected-secret mount defect and merged as production release `5955054`.
 - PR #48 pre-merge KDS/root workflows passed 6/6 and 14/14 (`31252914322`, `31252914332`); post-merge runs `31253038731` and `31253038740` passed 6/6 and 14/14.
-- Production artifact SHA-256: `57698350d3eff6602122a24963325043ad7e11be37d03998f4cdc9f42387e5fa`.
-- Production release path: `/opt/nutrezee-kds/releases/5955054`; `/opt/nutrezee-kds/repo` is its active symlink.
-- Production image: `sha256:dbff652868a8bf292b488ed367326b3003125cc29ce268bdffd6cb472f893a32`, also retained as version tag `nutrezee-kitchen-display:5955054`.
+- PR #49 made English/LTR the initial login/display language, preserved the Arabic/RTL toggle, and merged as production release `3743aea`; post-merge KDS/root CI passed 6/6 and 14/14 (`31254271648`, `31254271662`).
+- Production artifact SHA-256: `afb83d997d45924554de724a43d10d7e8e5568edf97b62f4add01a094db25240`.
+- Production release path: `/opt/nutrezee-kds/releases/3743aea`; `/opt/nutrezee-kds/repo` is its active symlink.
+- Production image: `sha256:505154f8ea522b178e8dd7cd4797c95a24668f6845099228873feaca904014c0`, also retained as version tag `nutrezee-kitchen-display:3743aea`.
 - Production URL: `https://kds.13-140-159-201.sslip.io`; Caddy's pre-KDS configuration backup is `/opt/nutrezee/repo/docker/Caddyfile.active.pre-kds-5955054`.
 - Runtime proof: Docker health `healthy`, restart count 0, user `node`, supplemental group `61001`, read-only root, `cap_drop=ALL`, no direct secret environment entries, read-only `/run/secrets`, loopback-only host port `8180`, and a single reverse-proxy connection to `nutrezee_default` in addition to its own isolated Compose network.
 - The requirement-by-requirement completion verdict is maintained in `docs/kds/02_completion_audit.md`.
@@ -60,8 +61,8 @@ Host layout:
 
 ```text
 /opt/nutrezee-kds/
-  releases/5955054/     # exact production release
-  repo -> releases/5955054
+  releases/3743aea/     # exact production release
+  repo -> releases/3743aea
   secrets/              # mode 0750, owner root, group 61001
     kds_partner_api_key       # mode 0640, owner root, group 61001
     kds_display_password_hash # mode 0640, owner root, group 61001

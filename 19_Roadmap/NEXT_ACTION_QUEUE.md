@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is DONE and production-active under user-authorized A17/A18.** PR #46 delivered the independent application; PR #48 fixed protected-file access for the non-root container and merged as `5955054`. All KDS/root CI gates and live production acceptance are green at `https://kds.13-140-159-201.sslip.io`. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is DONE and production-active under user-authorized A17–A19.** PR #46 delivered the independent application; PR #48 fixed protected-file access; PR #49 made English/LTR the default login/display and merged as production release `3743aea`. All KDS/root CI gates and live production acceptance are green at `https://kds.13-140-159-201.sslip.io`. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
 
 ---
 
@@ -28,9 +28,9 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A17/A18**
+### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A17–A19**
 
-Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; PR #48 corrected the non-root protected-secret mount contract and merged as production release `5955054`. KDS CI 6/6 and root CI 14/14 are green before and after the production-fix merge. Exact artifact SHA-256 `57698350d3eff6602122a24963325043ad7e11be37d03998f4cdc9f42387e5fa` is installed at `/opt/nutrezee-kds/releases/5955054`; the healthy hardened image is `sha256:dbff652868a8bf292b488ed367326b3003125cc29ce268bdffd6cb472f893a32`.
+Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; PR #48 corrected the non-root protected-secret mount contract; PR #49 made English/LTR the fresh-device default while preserving the Arabic/RTL toggle and merged as production release `3743aea`. Post-merge KDS CI 6/6 (`31254271648`) and root CI 14/14 (`31254271662`) are green. Exact artifact SHA-256 `afb83d997d45924554de724a43d10d7e8e5568edf97b62f4add01a094db25240` is installed at `/opt/nutrezee-kds/releases/3743aea`; the healthy hardened image is `sha256:505154f8ea522b178e8dd7cd4797c95a24668f6845099228873feaca904014c0`.
 
 Production acceptance passed at `https://kds.13-140-159-201.sslip.io`: HTTPS/security/session/method/query controls; dedicated protected credentials; four Partner GET requests and no write surface; independent exact arithmetic for 3,178 rows, quantity 3,266, section-work quantity 6,532, six sections, 222 meal/portion groups, and zero unrouted quantity; prohibited-field/log scans; Arabic/English responsive browser journey; and protected live Playwright. No driver/logistics/label dependency, database, workflow mutation, or Partner write capability exists in this service.
 
