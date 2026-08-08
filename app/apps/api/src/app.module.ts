@@ -33,6 +33,10 @@ import { PaymentController } from './modules/m07-payments/payment.controller';
 import { PaymentService } from './modules/m07-payments/payment.service';
 import { KitchenController } from './modules/m08-kitchen/kitchen.controller';
 import { KitchenService } from './modules/m08-kitchen/kitchen.service';
+import { KitchenTotalsService } from './modules/m08-kitchen/kitchen-totals.service';
+import {
+  PartnerKdsSource, type PartnerKdsSourceGateway,
+} from './modules/m08-kitchen/partner-kds-source';
 import { NotificationController } from './modules/m11-notifications/notification.controller';
 import { NotificationService } from './modules/m11-notifications/notification.service';
 import { ReportController } from './modules/m15-reports/report.controller';
@@ -67,6 +71,7 @@ import {
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
+export const PARTNER_KDS_SOURCE = 'PARTNER_KDS_SOURCE';
 export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
 
 @Module({
@@ -205,6 +210,15 @@ export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
         POOL, AuditService, OutboxService, TransitionEngine,
         OrderService, CatalogService, CustomerService,
       ],
+    },
+    {
+      provide: PARTNER_KDS_SOURCE,
+      useFactory: (): PartnerKdsSourceGateway | null => PartnerKdsSource.fromEnv(),
+    },
+    {
+      provide: KitchenTotalsService,
+      useFactory: (source: PartnerKdsSourceGateway | null) => new KitchenTotalsService(source),
+      inject: [PARTNER_KDS_SOURCE],
     },
     {
       provide: PaymentService,

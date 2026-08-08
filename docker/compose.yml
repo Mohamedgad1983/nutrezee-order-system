@@ -46,6 +46,15 @@ services:
     depends_on:
       - api
 
+  kds:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kds
+    ports:
+      - "8081:80"
+    depends_on:
+      - api
+
   # D3: gated pre-rollout migration step (environment_plan §4) — run explicitly,
   # never at api boot:  docker compose --profile tools run --rm migrate
   # One-time admin bootstrap (BOOTSTRAP_* from the secret store / shell env):

@@ -1,6 +1,7 @@
 import {
-  BadRequestException, Body, Controller, Get, HttpCode, NotFoundException,
-  Param, Post, Query, Req, UnauthorizedException,
+  BadGatewayException, BadRequestException, Body, Controller, Get, HttpCode,
+  NotFoundException, Param, Post, Query, Req, ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthError, SessionService, type StaffContext } from '../../platform/auth/session.service';
@@ -8,6 +9,7 @@ import { AccessService } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { TransitionError } from '../../platform/transition/transition-engine';
 import { KitchenError, KitchenService, type TicketStatus } from './kitchen.service';
+import { KitchenTotalsError, KitchenTotalsService } from './kitchen-totals.service';
 
 const COOKIE = 'nz_session';
 
@@ -17,7 +19,39 @@ export class KitchenController {
     private readonly sessions: SessionService,
     private readonly access: AccessService,
     private readonly kitchen: KitchenService,
+    private readonly totalsService: KitchenTotalsService,
   ) {}
+
+  @Get('kitchen/section-totals')
+  async sectionTotals(
+    @Req() req: Request,
+    @Query('date') date?: string,
+    @Query('kitchen') kitchen = 'main',
+  ) {
+    const ctx = await this.ctx(req);
+    await requirePermission(this.access, ctx, 'kitchen.board.read');
+    if (!date || !validCalendarDate(date)) {
+      throw new BadRequestException({ error_code: 'validation_failed', field: 'date' });
+    }
+    if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(kitchen)) {
+      throw new BadRequestException({ error_code: 'validation_failed', field: 'kitchen' });
+    }
+    try {
+      return await this.totalsService.totals(date, kitchen);
+    } catch (error) {
+      if (!(error instanceof KitchenTotalsError)) throw error;
+      if (error.code === 'response_invalid') {
+        throw new BadGatewayException({ error_code: 'kds_source_response_invalid' });
+      }
+      throw new ServiceUnavailableException({
+        error_code: error.code === 'not_configured'
+          ? 'kds_source_not_configured'
+          : error.code === 'auth_failed'
+            ? 'kds_source_auth_failed'
+            : 'kds_source_unavailable',
+      });
+    }
+  }
 
   @Get('kitchen/board')
   async board(
@@ -139,4 +173,12 @@ interface EscalationBody {
   type_code?: string;
   proposed_substitute_id?: string;
   notes?: string;
+}
+
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year!, month! - 1, day!));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month! - 1
+    && parsed.getUTCDate() === day;
 }

@@ -88,6 +88,22 @@ current-day order/assignment authority, and production/Partner writes, secret ge
 unattended dispatch activation, Fleetbase vendor-source edits, and Navigator `/legacy` remain
 prohibited.
 
+## Kitchen Display totals-only amendment
+
+AMENDMENT A30 2026-08-08 — Mohamed explicitly authorized immediate construction of a
+separate Kitchen Display subproject while deferring the remaining operational questions.
+Release 1 is read-only and totals-only: for a selected delivery date and kitchen, each
+Partner-provided section receives only the total quantity required from it, grouped by the
+documented `meal_id` and `portion_size`. Multi-section assignments count in every assigned
+section; missing routes remain visibly `unrouted`. The browser must receive no customer,
+order, phone, address, item reference, credential, or other PII. Section routing comes only
+from the Partner `/integration/order-items` response and must not be inferred from names.
+The default date is Kuwait today and the default kitchen is configurable in the display.
+No Partner/production writes, KDS-status updates, workflow transitions, automatic production
+release, recipe/inventory/AI scope, secret generation, Fleetbase vendor edits, Navigator edits,
+or legacy writes are authorized by this amendment. All A29 credential and read-only controls
+remain in force.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →

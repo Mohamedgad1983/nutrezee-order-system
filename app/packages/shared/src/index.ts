@@ -7,6 +7,45 @@ export interface HealthStatus {
   service: string;
 }
 
+// ---------------------------------------------------------------------------
+// WP-KDS-01 — read-only per-section production totals (A30)
+// ---------------------------------------------------------------------------
+
+export interface KdsMealTotalContract {
+  meal_id: string;
+  name_en: string | null;
+  name_ar: string | null;
+  portion_size: string | null;
+  total_qty: number;
+}
+
+export interface KdsSectionTotalContract {
+  section_id: string | null;
+  code: string;
+  name_en: string | null;
+  name_ar: string | null;
+  step_no: number | null;
+  is_packing: boolean;
+  unrouted: boolean;
+  total_qty: number;
+  meals: KdsMealTotalContract[];
+}
+
+/** PII-free projection: source order/customer/item identifiers never cross this boundary. */
+export interface KdsSectionTotalsContract {
+  delivery_date: string;
+  kitchen: string;
+  generated_at: string;
+  source_server_time: string;
+  summary: {
+    source_item_rows: number;
+    source_quantity_total: number;
+    section_assignment_quantity_total: number;
+    unrouted_quantity_total: number;
+  };
+  sections: KdsSectionTotalContract[];
+}
+
 export type DraftChannel = 'whatsapp' | 'phone' | 'walk_in' | 'staff' | 'other';
 export type DraftState = 'open' | 'submitted' | 'returned' | 'converted' | 'rejected' | 'cancelled' | 'expired';
 

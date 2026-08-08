@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { KitchenController } from '../../apps/api/src/modules/m08-kitchen/kitchen.controller';
 import type { KitchenService } from '../../apps/api/src/modules/m08-kitchen/kitchen.service';
+import type { KitchenTotalsService } from '../../apps/api/src/modules/m08-kitchen/kitchen-totals.service';
 import type { SessionService, StaffContext } from '../../apps/api/src/platform/auth/session.service';
 import type { AccessService } from '../../apps/api/src/platform/rbac/access.service';
 
@@ -16,10 +17,40 @@ function controllerWith(kitchen: Partial<KitchenService>) {
   const access = {
     decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
   } as unknown as AccessService;
-  return new KitchenController(sessions, access, kitchen as KitchenService);
+  const totals = { totals: vi.fn() } as unknown as KitchenTotalsService;
+  return new KitchenController(sessions, access, kitchen as KitchenService, totals);
+}
+
+function controllerWithTotals(totals: Partial<KitchenTotalsService>) {
+  const sessions = { validate: vi.fn().mockResolvedValue(ctx) } as unknown as SessionService;
+  const access = {
+    decide: vi.fn().mockResolvedValue({ allowed: true, enforced: false, mode: 'log' }),
+  } as unknown as AccessService;
+  return new KitchenController(
+    sessions, access, {} as KitchenService, totals as KitchenTotalsService,
+  );
 }
 
 describe('TS-C API contract — kitchen controller (WP-10)', () => {
+  it('exposes read-only PII-free KDS totals with date and kitchen filters', async () => {
+    const totals = vi.fn().mockResolvedValue({
+      delivery_date: '2099-01-01', kitchen: 'main', sections: [],
+    });
+    const c = controllerWithTotals({ totals });
+    await expect(c.sectionTotals(req, '2099-01-01', 'main')).resolves.toMatchObject({
+      delivery_date: '2099-01-01', kitchen: 'main', sections: [],
+    });
+    expect(totals).toHaveBeenCalledWith('2099-01-01', 'main');
+  });
+
+  it('rejects impossible KDS dates and unsafe kitchen codes before reading upstream', async () => {
+    const totals = vi.fn();
+    const c = controllerWithTotals({ totals });
+    await expect(c.sectionTotals(req, '2099-02-30', 'main')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(c.sectionTotals(req, '2099-01-01', '../main')).rejects.toBeInstanceOf(BadRequestException);
+    expect(totals).not.toHaveBeenCalled();
+  });
+
   it('maps kitchen board filters to the M08 service contract', async () => {
     const board = vi.fn().mockResolvedValue([{ id: 'ticket-1' }]);
     const c = controllerWith({ board });

@@ -105,9 +105,16 @@ jobs:
           docker run --rm --add-host api:127.0.0.1 \
             -v "$PWD/docker/nginx.admin.conf:/etc/nginx/conf.d/default.conf:ro" \
             nginx:alpine nginx -t
+      - name: KDS nginx proxy config syntax — auth + read-only kitchen API only
+        run: |
+          docker run --rm --add-host api:127.0.0.1 \
+            -v "$PWD/docker/nginx.kds.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:alpine nginx -t
       - name: build api migrate stage (D3)
         run: docker build -f docker/Dockerfile.api --target migrate -t nutrezee-api:migrate .
       - name: build api runtime image
         run: docker build -f docker/Dockerfile.api -t nutrezee-api:ci .
       - name: build admin image (D1 config baked in)
         run: docker build -f docker/Dockerfile.admin -t nutrezee-admin:ci .
+      - name: build KDS image (A30 read-only totals surface)
+        run: docker build -f docker/Dockerfile.kds -t nutrezee-kds:ci .
