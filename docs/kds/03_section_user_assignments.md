@@ -1,6 +1,6 @@
 # WP-KDS-02 — User-assigned section isolation
 
-**Evidence state:** implementation and local acceptance complete; production release evidence is recorded after merge/deployment.
+**Evidence state:** **DONE and production-active 2026-08-08.** Server-enforced assignment isolation, review, CI, exact artifact deployment, all six production accounts, hardened runtime, protected live Playwright, and direct browser/API proof are complete.
 
 ## Corrected operating requirement
 
@@ -51,3 +51,15 @@ The conservative production account convention is username = exact section code,
 - Playwright logs in as two section users and proves mutually exclusive screens.
 - Boundary scan, API/web typecheck, Vitest, production build, fixture Playwright, container smoke, protected live Playwright, and direct production login tests must all pass before DONE.
 
+## Executed production evidence
+
+- PR #50 delivered the assignment model and focused UI, then merged as `251e1f2`; all three review findings were addressed before merge.
+- A protected live gate found that the 15-second browser deadline could abort a valid uncached Partner read before the server's 30-second deadline. PR #51 aligned those deadlines, made the live refresh deterministic, and merged as final production release `0fd988a`.
+- Final post-merge KDS CI passed 6/6 (`31256752632`) and root CI passed 14/14 (`31256752652`).
+- Exact artifact SHA-256 `86f596aaeaa15c235a7edc918adbedb7155c9141c27a6224984bb74fd4c93b80` is installed at `/opt/nutrezee-kds/releases/0fd988a`.
+- The active image is `sha256:e30f357f0872d3ace10d36e1dc396b5a979ba3d93a17632add3dce76de0f095c`; releases `251e1f2` and `3743aea` remain available for rollback.
+- The protected `kds_users.json` manifest is mode `0640`, owned by root and supplemental group `61001`, and contains six independently salted scrypt hashes. Password literals and hashes were not committed or printed.
+- Direct production verification proved exact one-to-one assignments and totals on Kuwait date `2026-08-08`: `drinks` 35, `hot` 1,885, `pastry` 686, `salad` 618, `soup` 42, and `packing` 3,266.
+- A `hot` session attempting `section=packing` was rejected with HTTP 400. Every account returned exactly one matching section; global totals and prohibited fields were absent.
+- Protected live Chromium passed the English-default totals flow and Arabic/RTL switch against the final release after a fresh container restart and uncached read. Direct browser proof separately showed `hot` only and `packing` only.
+- Final runtime proof: health `healthy`, restart count 0, read-only root filesystem, `cap_drop=ALL`, supplemental secret group only, read-only secrets mount, public/loopback 200, and zero error-level container log events.

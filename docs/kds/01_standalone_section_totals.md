@@ -8,9 +8,11 @@
 - PR #48 fixed the verified non-root protected-secret mount defect and merged as production release `5955054`.
 - PR #48 pre-merge KDS/root workflows passed 6/6 and 14/14 (`31252914322`, `31252914332`); post-merge runs `31253038731` and `31253038740` passed 6/6 and 14/14.
 - PR #49 made English/LTR the initial login/display language, preserved the Arabic/RTL toggle, and merged as production release `3743aea`; post-merge KDS/root CI passed 6/6 and 14/14 (`31254271648`, `31254271662`).
-- Production artifact SHA-256: `afb83d997d45924554de724a43d10d7e8e5568edf97b62f4add01a094db25240`.
-- Production release path: `/opt/nutrezee-kds/releases/3743aea`; `/opt/nutrezee-kds/repo` is its active symlink.
-- Production image: `sha256:505154f8ea522b178e8dd7cd4797c95a24668f6845099228873feaca904014c0`, also retained as version tag `nutrezee-kitchen-display:3743aea`.
+- PR #50 replaced the shared display login with server-enforced user-to-section assignments and merged as `251e1f2`; PR #51 hardened uncached live reads and merged as final production release `0fd988a`.
+- Final post-merge KDS/root CI passed 6/6 and 14/14 (`31256752632`, `31256752652`).
+- Production artifact SHA-256: `86f596aaeaa15c235a7edc918adbedb7155c9141c27a6224984bb74fd4c93b80`.
+- Production release path: `/opt/nutrezee-kds/releases/0fd988a`; `/opt/nutrezee-kds/repo` is its active symlink.
+- Production image: `sha256:e30f357f0872d3ace10d36e1dc396b5a979ba3d93a17632add3dce76de0f095c`, also retained as version tag `nutrezee-kitchen-display:0fd988a`.
 - Production URL: `https://kds.13-140-159-201.sslip.io`; Caddy's pre-KDS configuration backup is `/opt/nutrezee/repo/docker/Caddyfile.active.pre-kds-5955054`.
 - Runtime proof: Docker health `healthy`, restart count 0, user `node`, supplemental group `61001`, read-only root, `cap_drop=ALL`, no direct secret environment entries, read-only `/run/secrets`, loopback-only host port `8180`, and a single reverse-proxy connection to `nutrezee_default` in addition to its own isolated Compose network.
 - The requirement-by-requirement completion verdict is maintained in `docs/kds/02_completion_audit.md`.
@@ -54,23 +56,23 @@ Out of scope:
 Installed protected inputs (never commit or print them):
 
 1. A dedicated Partner read-only API key for KDS.
-2. A display password chosen by the operator, stored only as a generated scrypt hash.
+2. A protected versioned display-user manifest containing independently salted scrypt hashes and exact section-code assignments.
 3. Confirmed Partner kitchen identifier list (`main` is the current conservative configurable default).
 
 Host layout:
 
 ```text
 /opt/nutrezee-kds/
-  releases/3743aea/     # exact production release
-  repo -> releases/3743aea
+  releases/0fd988a/     # exact production release
+  repo -> releases/0fd988a
   secrets/              # mode 0750, owner root, group 61001
-    kds_partner_api_key       # mode 0640, owner root, group 61001
-    kds_display_password_hash # mode 0640, owner root, group 61001
+    kds_partner_api_key # mode 0640, owner root, group 61001
+    kds_users.json      # mode 0640, protected hashes + exact assignments
 ```
 
 `KDS_SECRET_GID` defaults to the dedicated numeric group `61001`. The Compose service adds that supplemental group to its non-root Node user. Do not use root-only `0600` files with the directory bind mount: the non-root runtime cannot read them. Do not grant world-readable permissions.
 
-The current display password plaintext handoff is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root, for secure operator retrieval. Its literal value is never recorded in Git. Retrieve it through root SSH, rotate away from temporary credentials promptly, then remove the plaintext handoff file. The Partner key and password hash remain mode `0640` root:61001 inside the mode-`0750` root:61001 secrets directory.
+The current temporary display password plaintext handoff is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root, for secure operator retrieval. Its literal value is never recorded in Git. Retrieve it through root SSH, rotate each account away from the shared temporary value promptly, then remove the plaintext handoff file. The Partner key and user manifest remain mode `0640` root:61001 inside the mode-`0750` root:61001 secrets directory.
 
 Deployment sequence:
 
@@ -92,9 +94,9 @@ curl --fail http://127.0.0.1:8180/health
 Use today's Kuwait delivery date and each configured kitchen.
 
 1. Unauthenticated `/api/section-totals` returns 401.
-2. Dedicated KDS login succeeds and its cookie is Secure/HttpOnly/SameSite=Strict.
+2. Each dedicated KDS user login succeeds, binds exact section claims into its opaque session, and sets a Secure/HttpOnly/SameSite=Strict cookie.
 3. English is the default with `lang=en` and `dir=ltr`; the Arabic toggle changes to `lang=ar` and `dir=rtl` and persists the operator's explicit selection.
-4. Every section returned by Partner is visible and ordered by `step_no`.
+4. Each user sees only sections assigned by the protected server manifest; no browser control or query can expand access.
 5. Recompute at least two meal/portion totals from the exact Partner rows; displayed totals match.
 6. A multi-section row contributes to all of its upstream sections.
 7. An unrouted source row, if present, appears in the warning lane; if none exists, upstream and display both show zero.
@@ -112,7 +114,8 @@ Use today's Kuwait delivery date and each configured kitchen.
 | Partner access | Independent verifier made four paginated `GET /integration/order-items` requests only; the KDS has no Partner/database/workflow write path. |
 | Exact projection | 3,178 source rows; source quantity 3,266; section-work quantity 6,532; six sections; 222 meal/portion groups; zero unrouted. Every independently aggregated group exactly matched the saved display response; no raw upstream rows were retained. |
 | Privacy and secrets | Live JSON/browser scan and 117-line container log scan found no prohibited identifiers, PII, Partner key, or display password. |
-| Browser | Protected live Chromium Playwright passed the applicable Arabic/English totals journey; direct browser validation passed login, logout, RTL/LTR, six section cards, and 390×800 rendering with no horizontal overflow. |
+| Browser | Protected live Chromium Playwright passed the applicable Arabic/English totals journey against the final release; direct browser validation passed login/logout and proved Hot-only versus Packing-only rendering after the assignment correction. |
+| User/section isolation correction | Final release `0fd988a` proved one matching section for each of `drinks`, `hot`, `pastry`, `salad`, `soup`, and `packing`; a `hot` cross-section query for `packing` returned 400. Direct browser proof showed Hot only and Packing only. |
 
 ## Rollback
 
