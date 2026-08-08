@@ -1,0 +1,28 @@
+services:
+  kitchen-display:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nutrezee-kitchen-display:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      KDS_PORT: ${KDS_PORT:-8080}
+      KDS_PUBLIC_ORIGIN: ${KDS_PUBLIC_ORIGIN:-http://127.0.0.1:8180}
+      KDS_COOKIE_SECURE: ${KDS_COOKIE_SECURE:-false}
+      KDS_TRUST_PROXY: ${KDS_TRUST_PROXY:-false}
+      KDS_PARTNER_API_BASE: ${KDS_PARTNER_API_BASE:-https://nutreeze.com/integration}
+      KDS_PARTNER_API_KEY: ${KDS_PARTNER_API_KEY:-}
+      KDS_USERS_JSON: ${KDS_USERS_JSON:-}
+      KDS_SESSION_TTL_MINUTES: ${KDS_SESSION_TTL_MINUTES:-720}
+      KDS_KITCHENS: ${KDS_KITCHENS:-main}
+      KDS_REFRESH_SECONDS: ${KDS_REFRESH_SECONDS:-60}
+    ports:
+      - "127.0.0.1:8180:8080"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL

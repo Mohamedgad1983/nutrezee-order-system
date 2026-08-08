@@ -1,6 +1,18 @@
 # Live Blockers & Decisions — Build Execution
 
-**Date:** 2026-07-25 (verified live — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+**Date:** 2026-08-08 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+
+## WP-KDS-02 user-assigned section isolation — resolved 2026-08-08
+
+A35 corrects the Kitchen Display from one shared all-sections credential to one or more exact section assignments per authenticated user. PR #50 merged the server session claims, assignment-scoped totals API, and redesigned section-focused UI as `251e1f2`; PR #51 corrected the uncached live-read deadline mismatch and merged as final production release `0fd988a`. Final KDS/root CI is green (`31256752632`, `31256752652`). The protected six-user manifest is active, every current Partner section account returned exactly its own section, a cross-section query was rejected with HTTP 400, and protected Chromium plus direct browser/API isolation passed. The container is healthy with zero restarts and zero error logs. There is no remaining KDS blocker.
+
+## WP-KDS-01 production activation — resolved 2026-08-08
+
+The standalone Kitchen Display is production-active at `https://kds.13-140-159-201.sslip.io` on final release `0fd988a`. The user supplied the dedicated production Partner credential and explicitly directed autonomous production activation. It is held only in the protected server-side secret file; it was never committed, printed, returned to the browser, or found in the container logs. The protected user manifest stores independently salted scrypt hashes plus exact section assignments, and the current temporary plaintext handoff remains root-only at `/root/nutrezee-kds-display-initial-password`; its literal value is intentionally excluded from source control and documentation. User-directed A33 makes English/LTR the initial login/display language while retaining an explicit persistent Arabic/RTL toggle.
+
+The production service is healthy with zero restarts, non-root runtime user `node`, read-only root filesystem, `cap_drop=ALL`, no direct secret environment entries, and only a read-only `/run/secrets` bind. HTTPS, security headers, unauthenticated 401, secure/HttpOnly/SameSite=Strict session cookie, logout revocation, unsafe-method 405, invalid-query 400, Arabic RTL, English LTR, and 390px responsive rendering all passed.
+
+For Kuwait delivery date `2026-08-08`, an independent server-side GET-only verifier paginated four Partner requests and exactly matched the displayed projection: 3,178 source rows, source quantity 3,266, section-work quantity 6,532, six sections, 222 meal/portion groups, and zero unrouted quantity. The live API/browser privacy scan and container log scan passed with no customer, phone, address, order/item identifier, driver, barcode, label, API-key, or display-password exposure. WP-KDS-01 is DONE; there is no remaining KDS blocker for Release 1.
 
 ## Decision status
 
