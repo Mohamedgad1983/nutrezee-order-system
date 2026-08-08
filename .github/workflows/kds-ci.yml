@@ -1,0 +1,75 @@
+name: kds-ci
+
+on:
+  push:
+    branches: ["main", "build/wp-kds-**"]
+    paths:
+      - "kitchen-display/**"
+      - ".github/workflows/kds-ci.yml"
+  pull_request:
+    paths:
+      - "kitchen-display/**"
+      - ".github/workflows/kds-ci.yml"
+
+defaults:
+  run:
+    working-directory: kitchen-display
+
+jobs:
+  boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+      - run: npm ci
+      - run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+      - run: npm ci
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: kitchen-display/package-lock.json }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  container:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f kitchen-display/compose.yml config --quiet
+      - run: docker build -f kitchen-display/Dockerfile -t nutrezee-kds:ci kitchen-display
+      - name: verify runtime ESM entrypoint loads
+        run: docker run --rm nutrezee-kds:ci node -e "import('./dist/api/api/server.js')"

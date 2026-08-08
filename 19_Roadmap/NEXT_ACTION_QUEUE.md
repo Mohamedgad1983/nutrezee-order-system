@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-06-14 · **Frontier:** WP-UI-03 ✅, WP-API-02 ✅, **WP-UI-04 enrichment editors ✅** (nutrition + allergens; PRs #29/#31). + **WP-UI-05 merge UI ✅** (#33), **WP-UI-06 payment actions ✅** (#35), **WP-14 restore drill ✅** (2026-06-14, backups verified recoverable). **🛑 ENGINEERING FRONTIER EXHAUSTED** — no unblocked build/ops work remains. Everything left is **sponsor/workshop-gated** (see below). The OS should now HOLD and report this, not invent scope. ⚠ **GitHub Actions billing-blocked** — code units admin-merged after local tests + staging Playwright until billing is restored. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. **Staging is now seeded for UAT** (2026-06-13): the intake→review→order→payment chain is clickable (catalog via M19 import — mirror mode; `uat-seed@nutrezee.local`; see memory `staging-uat-seed-data`). `cutover_catalog` still false.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals IN PROGRESS under user-authorized A17.** The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated, but this new, separate Kitchen Display unit is explicitly eligible. Local implementation and bilingual evidence are green; independent CI/PR/merge/deploy/live acceptance remain. The order-system staging/UAT state is unchanged.
 
 ---
 
@@ -27,6 +27,10 @@
 ---
 
 ## Engineering Queue (take the top unblocked item)
+
+### ▶ WP-KDS-01 — Standalone Kitchen Display section totals · **IN PROGRESS 2026-08-08 · user-authorized A17**
+
+Completely independent subproject on `build/wp-kds-01-standalone`, based directly on `origin/main`. Local API/UI/auth/container implementation, 25 Vitest cases, separation/privacy scan, typecheck/build, npm audit, bilingual Chromium Playwright, and unchanged root baseline (204 tests) are green. Remaining ordered gates: finish adversarial diff review → commit/push → independent PR and both existing CI + KDS CI green → merge → dedicated service/hostname deployment with dedicated protected credentials → live Partner arithmetic/privacy/write audit → staging bilingual Playwright → final runbooks/evidence. No driver/logistics/label dependency or write capability is in scope.
 
 ### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.

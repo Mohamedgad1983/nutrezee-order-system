@@ -1,0 +1,145 @@
+:root {
+  color: #17342f;
+  background: #f4f0e8;
+  font-family: Inter, "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f0e8; }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .6; }
+
+.appFrame { min-height: 100vh; padding-bottom: 3rem; }
+.topbar {
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 3vw, 2.5rem);
+  color: #fff;
+  background: #0b6b59;
+  box-shadow: 0 8px 28px rgba(8, 67, 56, .18);
+}
+.titleBlock, .topActions { display: flex; align-items: center; gap: .85rem; }
+.titleBlock h1 { margin: 0; font-size: clamp(1.25rem, 2.6vw, 2rem); }
+.titleBlock p { margin: .2rem 0 0; color: #cbe9df; }
+.brandMark {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: #0b6b59;
+  background: #fff8e8;
+  font-size: 2rem;
+  font-weight: 900;
+}
+.brandMark.small { width: 48px; height: 48px; border-radius: 14px; font-size: 1.45rem; }
+.languageButton, .ghostButton {
+  min-height: 44px;
+  padding: .65rem 1rem;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 12px;
+  color: #fff;
+  background: transparent;
+  font-weight: 700;
+}
+.languageButton:hover, .ghostButton:hover { background: rgba(255, 255, 255, .12); }
+
+.controlBar {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem clamp(1rem, 3vw, 2.5rem);
+  background: #fffaf1;
+  border-bottom: 1px solid #dfd8ca;
+}
+.controlBar label, .loginCard label { display: grid; gap: .35rem; font-weight: 750; }
+.controlBar input, .controlBar select, .loginCard input {
+  min-height: 46px;
+  padding: .65rem .8rem;
+  border: 1px solid #b9c9c4;
+  border-radius: 11px;
+  color: #17342f;
+  background: #fff;
+}
+.controlBar input:focus, .controlBar select:focus, .loginCard input:focus { outline: 3px solid rgba(11, 107, 89, .18); border-color: #0b6b59; }
+.refreshButton, .primaryButton {
+  min-height: 46px;
+  padding: .7rem 1.25rem;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: #0b6b59;
+  font-weight: 800;
+  box-shadow: 0 5px 14px rgba(11, 107, 89, .18);
+}
+.timestamps { margin-inline-start: auto; display: flex; gap: 1rem; }
+.timestamps p { margin: 0; display: grid; gap: .1rem; color: #62736e; font-size: .78rem; }
+.timestamps strong { color: #17342f; font-size: .95rem; }
+
+.summaryStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.35rem clamp(1rem, 3vw, 2.5rem);
+}
+.metric { padding: 1rem 1.25rem; border-radius: 16px; background: #fff; border: 1px solid #e4ded2; box-shadow: 0 8px 24px rgba(62, 69, 62, .06); }
+.metric span { display: block; color: #687973; font-weight: 700; }
+.metric strong { display: block; margin-top: .25rem; color: #0b6b59; font-size: clamp(1.65rem, 4vw, 2.65rem); line-height: 1; }
+
+.sectionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 1.25rem; padding: 0 clamp(1rem, 3vw, 2.5rem); }
+.sectionCard { overflow: hidden; border-radius: 18px; background: #fff; border: 1px solid #ddd7cc; box-shadow: 0 12px 30px rgba(52, 59, 53, .08); }
+.sectionCard > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.15rem 1.25rem; color: #fff; background: #244c44; }
+.sectionCard.unrouted { border: 2px solid #bd4d36; }
+.sectionCard.unrouted > header { background: #9d3e2e; }
+.sectionCode { margin: 0 0 .2rem; color: #b9ded5; font-size: .78rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.sectionCard h2 { margin: 0; font-size: clamp(1.25rem, 2.5vw, 1.7rem); }
+.sectionTotal { min-width: 78px; text-align: center; font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 950; line-height: 1; }
+.packingBadge { display: inline-block; margin: .8rem 1.25rem 0; padding: .25rem .65rem; border-radius: 999px; color: #72420b; background: #ffe1af; font-size: .8rem; font-weight: 900; }
+.mealList { padding: .55rem 1.25rem 1rem; }
+.mealRow { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #eee9df; }
+.mealRow:last-child { border-bottom: 0; }
+.mealName { display: grid; gap: .18rem; }
+.mealName strong { font-size: clamp(1rem, 2vw, 1.25rem); }
+.mealName span { color: #71807b; font-size: .85rem; }
+.mealQty { min-width: 62px; text-align: center; color: #0b6b59; font-size: clamp(1.65rem, 4vw, 2.25rem); font-weight: 950; }
+
+.warningBanner, .errorBanner { margin: 1rem clamp(1rem, 3vw, 2.5rem); padding: .9rem 1rem; border-radius: 12px; font-weight: 800; }
+.warningBanner { color: #63390b; background: #fff0ce; border: 1px solid #efc36b; }
+.errorBanner { color: #7a281b; background: #fff0ec; border: 1px solid #e5a094; }
+.errorBanner.wide { margin-bottom: 1rem; }
+.emptyState { margin: 2rem; padding: 3rem 1rem; text-align: center; color: #66756f; background: #fff; border: 1px dashed #b8c5c0; border-radius: 18px; font-size: 1.15rem; }
+.centered { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: .75rem; color: #49615a; font-weight: 700; }
+.boardLoader { min-height: 45vh; }
+.loader { width: 28px; height: 28px; border: 3px solid #b7d5cc; border-top-color: #0b6b59; border-radius: 50%; animation: spin .75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loginPage { min-height: 100vh; display: grid; place-items: center; padding: 2rem 1rem; background: #e9eee9; }
+.loginLanguage { position: fixed; inset-block-start: 1.2rem; inset-inline-end: 1.2rem; }
+.loginLanguage .languageButton { color: #0b6b59; border-color: #0b6b59; }
+.loginCard { width: min(100%, 430px); display: grid; gap: 1rem; padding: 2rem; border-radius: 22px; background: #fffaf1; border: 1px solid #dcd6ca; box-shadow: 0 18px 60px rgba(35, 68, 58, .16); }
+.loginCard .brandMark { margin: 0 auto; color: #fff8e8; background: #0b6b59; }
+.loginCard h1 { margin: .25rem 0 0; text-align: center; color: #0b6b59; }
+.loginCard > p { margin: 0 0 .4rem; text-align: center; color: #61726c; }
+.loginCard .errorBanner { margin: 0; }
+
+@media (max-width: 720px) {
+  .topbar { align-items: flex-start; }
+  .titleBlock p { display: none; }
+  .ghostButton { display: none; }
+  .summaryStrip { grid-template-columns: 1fr 1fr; }
+  .summaryStrip .metric:last-child { grid-column: 1 / -1; }
+  .controlBar { align-items: stretch; }
+  .controlBar label { flex: 1 1 140px; }
+  .controlBar input, .controlBar select { width: 100%; }
+  .refreshButton { flex: 1 1 100%; }
+  .timestamps { width: 100%; margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) { .loader { animation: none; } }

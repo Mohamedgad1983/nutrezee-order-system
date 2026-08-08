@@ -1,0 +1,36 @@
+{
+  "name": "nutrezee-kitchen-display",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone, read-only Nutrezee Kitchen Display System",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "tsc -p tsconfig.api.json",
+    "build:web": "vite build",
+    "dev": "vite",
+    "hash-password": "node scripts/hash-password.mjs",
+    "lint": "node scripts/verify-boundaries.mjs",
+    "start": "node dist/api/api/server.js",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.api.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.5.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

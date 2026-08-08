@@ -1,0 +1,18 @@
+services:
+  kitchen-display:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nutrezee-kitchen-display:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8180:8080"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL

@@ -1,0 +1,6 @@
+# Add this route to the staging Caddy configuration. The KDS container is a separate
+# service and is not joined to the order-system/Fleet-Ops application network.
+kds.13-140-159-201.sslip.io {
+  encode zstd gzip
+  reverse_proxy host.docker.internal:8180
+}
