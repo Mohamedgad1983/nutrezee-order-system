@@ -18,9 +18,13 @@ const source = {
   },
 };
 
+const passwordHash = await createPasswordHash('e2e-only-password', Buffer.alloc(16, 9));
 const auth = new AuthManager({
-  username: 'kitchen-display',
-  passwordHash: await createPasswordHash('e2e-only-password', Buffer.alloc(16, 9)),
+  users: [
+    { username: 'hot-user', passwordHash, sectionCodes: ['hot'] },
+    { username: 'packing-user', passwordHash, sectionCodes: ['packing'] },
+    { username: 'unrouted-user', passwordHash, sectionCodes: ['unrouted'] },
+  ],
 });
 const server = createKdsServer({
   auth,

@@ -37,11 +37,10 @@ describe('totals-only section projection', () => {
         row('three', 4, [hot], 'small'),
       ],
     };
-    const totals = aggregateDay(day, DATE, 'main', '2026-08-08T07:01:00.000Z');
+    const totals = aggregateDay(day, DATE, 'main', '2026-08-08T07:01:00.000Z', ['hot', 'packing']);
     expect(totals.summary).toEqual({
-      source_item_rows: 3,
-      source_quantity_total: 9,
-      section_assignment_quantity_total: 11,
+      assigned_section_count: 2,
+      assigned_quantity_total: 11,
       unrouted_quantity_total: 0,
     });
     expect(totals.sections.map((entry) => [entry.code, entry.total_qty])).toEqual([
@@ -57,7 +56,7 @@ describe('totals-only section projection', () => {
       serverTime: '2026-08-08T10:00:00+03:00',
       items: [row('SENSITIVE-ITEM', 3, [])],
     };
-    const totals = aggregateDay(day, DATE, 'main', '2026-08-08T07:01:00.000Z');
+    const totals = aggregateDay(day, DATE, 'main', '2026-08-08T07:01:00.000Z', ['unrouted']);
     expect(totals.sections).toMatchObject([{ code: 'unrouted', unrouted: true, total_qty: 3 }]);
     expect(totals.summary.unrouted_quantity_total).toBe(3);
     const serialized = JSON.stringify(totals);
@@ -69,18 +68,37 @@ describe('totals-only section projection', () => {
     expect(serialized).not.toContain('address');
   });
 
+  it('returns only the authenticated user assignment and no global quantity metadata', () => {
+    const hot = route('hot-id', 'hot', 1);
+    const packing = route('pack-id', 'packing', 9, true);
+    const totals = aggregateDay({
+      serverTime: '2026-08-08T10:00:00+03:00',
+      items: [row('one', 3, [hot]), row('two', 7, [packing])],
+    }, DATE, 'main', '2026-08-08T07:01:00.000Z', ['hot']);
+    expect(totals.sections).toMatchObject([{ code: 'hot', total_qty: 3 }]);
+    expect(totals.summary).toEqual({
+      assigned_section_count: 1,
+      assigned_quantity_total: 3,
+      unrouted_quantity_total: 0,
+    });
+    const serialized = JSON.stringify(totals);
+    expect(serialized).not.toContain('"code":"packing"');
+    expect(serialized).not.toContain('source_quantity_total');
+    expect(serialized).not.toContain('source_item_rows');
+  });
+
   it('fails closed on contradictory section or meal metadata', () => {
     const hot = route('hot-id', 'hot', 1);
     const changed = { ...hot, stepNo: 2 };
     expect(() => aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 1, [hot]), row('two', 1, [changed])],
-    }, DATE, 'main', new Date().toISOString())).toThrowError(TotalsError);
+    }, DATE, 'main', new Date().toISOString(), ['hot'])).toThrowError(TotalsError);
 
     expect(() => aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 1, [hot]), { ...row('two', 1, [hot]), nameEn: 'Different name' }],
-    }, DATE, 'main', new Date().toISOString())).toThrowError(
+    }, DATE, 'main', new Date().toISOString(), ['hot'])).toThrowError(
       expect.objectContaining({ code: 'response_invalid' }),
     );
   });
@@ -91,7 +109,7 @@ describe('totals-only section projection', () => {
     expect(() => aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 1, [hot]), row('two', 1, [changedCode])],
-    }, DATE, 'main', new Date().toISOString())).toThrowError(
+    }, DATE, 'main', new Date().toISOString(), ['hot', 'renamed-hot'])).toThrowError(
       expect.objectContaining({ code: 'response_invalid' }),
     );
 
@@ -99,7 +117,7 @@ describe('totals-only section projection', () => {
     expect(() => aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 1, [hot]), { ...row('two', 1, [cold]), nameAr: 'اسم متناقض' }],
-    }, DATE, 'main', new Date().toISOString())).toThrowError(
+    }, DATE, 'main', new Date().toISOString(), ['hot', 'cold'])).toThrowError(
       expect.objectContaining({ code: 'response_invalid' }),
     );
   });
@@ -109,7 +127,7 @@ describe('totals-only section projection', () => {
     const totals = aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 0.1, [hot]), row('two', 0.2, [hot])],
-    }, DATE, 'main', new Date().toISOString());
+    }, DATE, 'main', new Date().toISOString(), ['hot']);
     expect(totals.sections[0]?.total_qty).toBe(0.3);
   });
 
@@ -118,8 +136,8 @@ describe('totals-only section projection', () => {
     const totals = aggregateDay({
       serverTime: new Date().toISOString(),
       items: [row('one', 0.000001, [hot]), row('two', 0.000002, [hot])],
-    }, DATE, 'main', new Date().toISOString());
-    expect(totals.summary.source_quantity_total).toBe(0.000003);
+    }, DATE, 'main', new Date().toISOString(), ['hot']);
+    expect(totals.summary.assigned_quantity_total).toBe(0.000003);
     expect(totals.sections[0]?.total_qty).toBe(0.000003);
     expect(totals.sections[0]?.meals[0]?.total_qty).toBe(0.000003);
   });

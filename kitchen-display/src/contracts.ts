@@ -24,17 +24,24 @@ export interface KdsSectionTotals {
   generated_at: string;
   source_server_time: string;
   summary: {
-    source_item_rows: number;
-    source_quantity_total: number;
-    section_assignment_quantity_total: number;
+    assigned_section_count: number;
+    assigned_quantity_total: number;
     unrouted_quantity_total: number;
   };
   sections: KdsSectionTotal[];
 }
 
 export interface KdsDisplayConfig {
+  username: string;
+  assigned_sections: string[];
   kitchens: string[];
   refresh_seconds: number;
+}
+
+export interface KdsAuthSession {
+  authenticated: true;
+  username: string;
+  assigned_sections: string[];
 }
 
 export interface KdsApiError {

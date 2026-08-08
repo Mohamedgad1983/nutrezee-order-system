@@ -14,16 +14,17 @@ type AuthState = 'checking' | 'signed_in' | 'signed_out';
 const COPY = {
   ar: {
     appName: 'شاشة إنتاج المطبخ',
-    appSubtitle: 'إجمالي المطلوب لكل قسم — بدون بيانات العملاء',
+    appSubtitle: 'الكميات المطلوبة للقسم المخصّص لهذا المستخدم فقط',
     checkSession: 'جاري التحقق من الجلسة…',
     date: 'تاريخ التسليم',
     kitchen: 'المطبخ',
     refresh: 'تحديث الآن',
     refreshing: 'جاري التحديث…',
     logout: 'تسجيل الخروج',
-    sourceTotal: 'إجمالي الوجبات',
-    workTotal: 'إجمالي مهام الأقسام',
-    sections: 'الأقسام',
+    assignedQuantity: 'إجمالي الكمية المطلوبة',
+    sections: 'الأقسام المخصّصة',
+    signedInAs: 'المستخدم',
+    assignment: 'صلاحية القسم',
     updated: 'وقت إنشاء العرض',
     sourceUpdated: 'وقت المصدر',
     empty: 'لا توجد كميات مطلوبة لهذا اليوم.',
@@ -31,7 +32,9 @@ const COPY = {
     packing: 'تجهيز',
     unroutedWarning: 'يوجد عناصر غير موجّهة لقسم. يجب مراجعة التوجيه قبل الإنتاج.',
     signIn: 'تسجيل دخول المطبخ',
-    signInHint: 'استخدم بيانات الدخول الخاصة بشاشة المطبخ.',
+    signInHint: 'كل مستخدم يرى فقط القسم المخصّص له.',
+    loginHeroTitle: 'كل قسم. شاشة مستقلة.',
+    loginHeroText: 'سجّل الدخول بحساب القسم لعرض الوجبات والكميات المطلوبة لهذا القسم فقط.',
     username: 'اسم المستخدم',
     password: 'كلمة المرور',
     signingIn: 'جاري الدخول…',
@@ -44,16 +47,17 @@ const COPY = {
   },
   en: {
     appName: 'Kitchen Production Display',
-    appSubtitle: 'Required totals by section — no customer data',
+    appSubtitle: 'Required quantities for this user’s assigned section only',
     checkSession: 'Checking session…',
     date: 'Delivery date',
     kitchen: 'Kitchen',
     refresh: 'Refresh now',
     refreshing: 'Refreshing…',
     logout: 'Sign out',
-    sourceTotal: 'Meal quantity',
-    workTotal: 'Section work quantity',
-    sections: 'Sections',
+    assignedQuantity: 'Required quantity',
+    sections: 'Assigned sections',
+    signedInAs: 'Signed in as',
+    assignment: 'Section access',
     updated: 'Display generated',
     sourceUpdated: 'Source time',
     empty: 'No production quantities are required for this date.',
@@ -61,7 +65,9 @@ const COPY = {
     packing: 'Packing',
     unroutedWarning: 'Some items have no section route. Review routing before production.',
     signIn: 'Kitchen sign in',
-    signInHint: 'Use the dedicated Kitchen Display credentials.',
+    signInHint: 'Each user sees only their assigned section.',
+    loginHeroTitle: 'One section. One focused screen.',
+    loginHeroText: 'Sign in with the section account to see only the meals and quantities required from that section.',
     username: 'Username',
     password: 'Password',
     signingIn: 'Signing in…',
@@ -111,7 +117,17 @@ export function App(): React.JSX.Element {
     return (
       <main className="loginPage">
         <div className="loginLanguage">{languageButton}</div>
-        <Login language={language} onSuccess={() => setAuth('signed_in')} />
+        <div className="loginShell">
+          <section className="loginHero" aria-label={copy.appName}>
+            <div className="heroBrand"><span aria-hidden="true">N</span> Nutrezee</div>
+            <h1>{copy.loginHeroTitle}</h1>
+            <p>{copy.loginHeroText}</p>
+            <div className="heroFlow" aria-hidden="true">
+              <span>USER</span><i>→</i><span>SECTION</span><i>→</i><span>TOTALS</span>
+            </div>
+          </section>
+          <Login language={language} onSuccess={() => setAuth('signed_in')} />
+        </div>
       </main>
     );
   }
@@ -258,6 +274,13 @@ function Board({
           <div><h1>{copy.appName}</h1><p>{copy.appSubtitle}</p></div>
         </div>
         <div className="topActions">
+          {config ? (
+            <div className="userAccess">
+              <span>{copy.signedInAs}</span>
+              <strong>{config.username}</strong>
+              <small>{config.assigned_sections.join(' · ')}</small>
+            </div>
+          ) : null}
           {languageButton}
           <button className="ghostButton" type="button" onClick={() => void logout()}>{copy.logout}</button>
         </div>
@@ -265,12 +288,20 @@ function Board({
 
       <section className="controlBar" aria-label={copy.appName}>
         <label><span>{copy.date}</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-        <label>
-          <span>{copy.kitchen}</span>
-          <select value={kitchen} disabled={!config} onChange={(event) => setKitchen(event.target.value)}>
-            {(config?.kitchens ?? []).map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
+        {(config?.kitchens.length ?? 0) > 1 ? (
+          <label>
+            <span>{copy.kitchen}</span>
+            <select value={kitchen} disabled={!config} onChange={(event) => setKitchen(event.target.value)}>
+              {(config?.kitchens ?? []).map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+        ) : <div className="controlValue"><span>{copy.kitchen}</span><strong>{kitchen || '—'}</strong></div>}
+        {config ? (
+          <div className="controlValue assignmentValue">
+            <span>{copy.assignment}</span>
+            <strong>{config.assigned_sections.join(' · ')}</strong>
+          </div>
+        ) : null}
         <button className="refreshButton" type="button" onClick={() => void load()} disabled={busy || !date || !kitchen}>
           {busy ? copy.refreshing : copy.refresh}
         </button>
@@ -288,12 +319,11 @@ function Board({
       {data ? (
         <>
           <section className="summaryStrip" aria-label={copy.sections}>
-            <Metric label={copy.sourceTotal} value={data.summary.source_quantity_total} language={language} />
-            <Metric label={copy.workTotal} value={data.summary.section_assignment_quantity_total} language={language} />
-            <Metric label={copy.sections} value={data.sections.length} language={language} />
+            <Metric label={copy.assignedQuantity} value={data.summary.assigned_quantity_total} language={language} />
+            <Metric label={copy.sections} value={data.summary.assigned_section_count} language={language} />
           </section>
           {data.sections.length === 0 ? <div className="emptyState">{copy.empty}</div> : (
-            <section className="sectionGrid">
+            <section className={`sectionGrid${data.sections.length === 1 ? ' single' : ''}`}>
               {data.sections.map((section) => (
                 <article className={`sectionCard${section.unrouted ? ' unrouted' : ''}`} key={`${section.section_id ?? 'none'}-${section.code}`}>
                   <header>

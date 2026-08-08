@@ -8,9 +8,11 @@ import { AuthManager, createPasswordHash } from '../src/api/auth.js';
 import { PartnerSourceError, type PartnerSourceGateway } from '../src/api/partner-source.js';
 import { createKdsServer, LoginLimiter, type KdsServerOptions } from '../src/api/server.js';
 
-const USERNAME = 'kitchen-display';
+const USERNAME = 'hot-display';
+const PACKING_USERNAME = 'packing-display';
 const PASSWORD = 'test-only-secure-password';
 const TOKEN = 't'.repeat(43);
+const SECOND_TOKEN = 'p'.repeat(43);
 
 describe('standalone KDS HTTP boundary', () => {
   let server: Server;
@@ -27,29 +29,51 @@ describe('standalone KDS HTTP boundary', () => {
     const source: PartnerSourceGateway = {
       itemsForDay: async () => ({
         serverTime: '2026-08-08T10:00:00+03:00',
-        items: [{
-          itemRef: 'PRIVATE-PHYSICAL-ROW',
-          mealId: 'meal-1',
-          nameEn: 'Chicken',
-          nameAr: 'دجاج',
-          portionSize: 'large',
-          quantity: 3,
-          sections: [{
-            sectionId: 'hot-id',
-            code: 'hot',
-            nameEn: 'Hot',
-            nameAr: 'ساخن',
-            stepNo: 1,
-            isPacking: false,
-          }],
-        }],
+        items: [
+          {
+            itemRef: 'PRIVATE-PHYSICAL-ROW',
+            mealId: 'meal-1',
+            nameEn: 'Chicken',
+            nameAr: 'دجاج',
+            portionSize: 'large',
+            quantity: 3,
+            sections: [{
+              sectionId: 'hot-id',
+              code: 'hot',
+              nameEn: 'Hot',
+              nameAr: 'ساخن',
+              stepNo: 1,
+              isPacking: false,
+            }],
+          },
+          {
+            itemRef: 'PRIVATE-PACKING-ROW',
+            mealId: 'meal-2',
+            nameEn: 'Packing meal',
+            nameAr: 'وجبة تجهيز',
+            portionSize: 'regular',
+            quantity: 7,
+            sections: [{
+              sectionId: 'packing-id',
+              code: 'packing',
+              nameEn: 'Packing',
+              nameAr: 'التجهيز',
+              stepNo: 9,
+              isPacking: true,
+            }],
+          },
+        ],
       }),
     };
+    const passwordHash = await createPasswordHash(PASSWORD, Buffer.alloc(16, 3));
+    let tokenIndex = 0;
     options = {
       auth: new AuthManager({
-        username: USERNAME,
-        passwordHash: await createPasswordHash(PASSWORD, Buffer.alloc(16, 3)),
-        randomToken: () => TOKEN,
+        users: [
+          { username: USERNAME, passwordHash, sectionCodes: ['hot'] },
+          { username: PACKING_USERNAME, passwordHash, sectionCodes: ['packing'] },
+        ],
+        randomToken: () => tokenIndex++ === 0 ? TOKEN : SECOND_TOKEN,
       }),
       source,
       kitchens: ['main'],
@@ -105,14 +129,25 @@ describe('standalone KDS HTTP boundary', () => {
     expect(setCookie).toContain('Max-Age=300');
     expect(setCookie).toContain('Secure');
     expect(setCookie).not.toContain('test-only-secure-password');
-    expect((await fetch(`${origin}/api/auth/me`, { headers: { Cookie: cookieFrom(login) } })).status).toBe(200);
+    const me = await fetch(`${origin}/api/auth/me`, { headers: { Cookie: cookieFrom(login) } });
+    expect(me.status).toBe(200);
+    expect(await me.json()).toEqual({
+      authenticated: true,
+      username: USERNAME,
+      assigned_sections: ['hot'],
+    });
   });
 
   it('returns only section/meal/portion totals and never exposes physical identifiers', async () => {
     const login = await signIn();
     const cookie = cookieFrom(login);
     const config = await fetch(`${origin}/api/display-config`, { headers: { Cookie: cookie } });
-    expect(await config.json()).toEqual({ kitchens: ['main'], refresh_seconds: 60 });
+    expect(await config.json()).toEqual({
+      username: USERNAME,
+      assigned_sections: ['hot'],
+      kitchens: ['main'],
+      refresh_seconds: 60,
+    });
 
     const response = await fetch(`${origin}/api/section-totals?date=2026-08-08&kitchen=main`, {
       headers: { Cookie: cookie },
@@ -123,11 +158,34 @@ describe('standalone KDS HTTP boundary', () => {
       delivery_date: '2026-08-08',
       kitchen: 'main',
       sections: [{ code: 'hot', total_qty: 3, meals: [{ meal_id: 'meal-1', portion_size: 'large', total_qty: 3 }] }],
+      summary: { assigned_section_count: 1, assigned_quantity_total: 3 },
     });
+    expect(bodyText).not.toContain('"code":"packing"');
+    expect(bodyText).not.toContain('Packing meal');
     expect(bodyText).not.toContain('PRIVATE-PHYSICAL-ROW');
     expect(bodyText).not.toContain('itemRef');
     expect(bodyText).not.toContain('item_ref');
     expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('enforces different user-to-section assignments at the API boundary', async () => {
+    const hotCookie = cookieFrom(await signIn());
+    const packingCookie = cookieFrom(await signIn(PACKING_USERNAME));
+
+    const hotText = await (await fetch(
+      `${origin}/api/section-totals?date=2026-08-08&kitchen=main`,
+      { headers: { Cookie: hotCookie } },
+    )).text();
+    const packingText = await (await fetch(
+      `${origin}/api/section-totals?date=2026-08-08&kitchen=main`,
+      { headers: { Cookie: packingCookie } },
+    )).text();
+
+    expect(JSON.parse(hotText)).toMatchObject({ sections: [{ code: 'hot', total_qty: 3 }] });
+    expect(hotText).not.toContain('"code":"packing"');
+    expect(JSON.parse(packingText)).toMatchObject({ sections: [{ code: 'packing', total_qty: 7 }] });
+    expect(packingText).not.toContain('"code":"hot"');
+    expect(packingText).not.toContain('Chicken');
   });
 
   it('rejects unconfigured kitchens, extra query fields and unsafe methods', async () => {
@@ -182,11 +240,11 @@ describe('standalone KDS HTTP boundary', () => {
     expect(limited.status).toBe(429);
   });
 
-  async function signIn(): Promise<Response> {
+  async function signIn(username = USERNAME, password = PASSWORD): Promise<Response> {
     return fetch(`${origin}/api/auth/login`, {
       method: 'POST',
       headers: { Origin: origin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: USERNAME, password: PASSWORD }),
+      body: JSON.stringify({ username, password }),
     });
   }
 });
