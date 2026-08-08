@@ -81,7 +81,8 @@ Catalog enrichment editors. Enrichment bypasses mirror mode (no `assertWritable`
 - ⏸ **04c routing-rule editor — BLOCKED on workshop DEC-006** (sections content). Build the engine zero-row-ready when content lands.
 
 ### ▶ Next eligible engineering (no sponsor/workshop block) — last 1–2 units before the wall
-- ▶ **WP-KDS-01 section totals — IN PROGRESS 2026-08-08 (A30):** separate bilingual Kitchen Display app + authenticated, PII-free `GET /kitchen/section-totals`; read-only Partner routing; totals only by section/meal/portion; visible unrouted lane. No statuses or upstream writes.
+- ✅ **WP-KDS-01 section totals — BUILD COMPLETE 2026-08-08 (A30; draft PR #45):** separate bilingual Kitchen Display app + authenticated, PII-free `GET /kitchen/section-totals`; read-only Partner routing; totals only by section/meal/portion; visible unrouted lane. CI 31245574687 passed 14/14 including the KDS image/nginx gate. No statuses, upstream writes or deployment.
+- ⏭ **Next KDS unit — review/merge then staging pilot:** deploy only after the stacked A29 dependency/PR #44 and KDS PR #45 are reviewed; final hostname/device/account and the deferred workflow questions remain operational inputs, not Release-1 code assumptions.
 - ✅ **Customer merge UI — DONE** (PR #33 `0e3cd53`).
 - ✅ **Per-order payment actions — DONE** (PR #35 `5b5a0fb`).
 - ✅ **WP-14 restore drill — DONE** (2026-06-14): latest nightly dump restored to a throwaway DB, schema 13/13 + 62/62 tables + data intact, dropped; live untouched. Backups proven recoverable.

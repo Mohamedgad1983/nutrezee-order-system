@@ -6,7 +6,7 @@
 
 **Mode:** Build
 
-**Status:** IN PROGRESS
+**Status:** BUILD COMPLETE — draft PR #45; not deployed
 
 ## Outcome
 
@@ -86,4 +86,6 @@ None of these deferred items is silently implemented in Release 1.
 - API, shared package and KDS TypeScript checks pass.
 - Monorepo lint, build and all Vitest suites pass.
 - KDS nginx and container image are CI-validated.
-- Branch is pushed with CI green; deployment remains a separate authorized unit.
+- Branch `build/wp-kds-01-section-totals` is pushed at `28d1655`; CI run 31245574687
+  passed 14/14 including the KDS image and nginx checks.
+- Draft PR #45 is stacked on the A29 label branch/PR #44. Deployment remains a separate unit.
