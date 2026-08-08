@@ -2,6 +2,8 @@
   "name": "Nutrezee Kitchen Display",
   "short_name": "Kitchen",
   "description": "Read-only production totals by kitchen section",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f0e8",

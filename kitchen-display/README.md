@@ -4,6 +4,7 @@ Standalone, read-only production display for kitchen sections. It has its own No
 
 ## Release-1 behavior
 
+- Open the login and display in English/LTR by default, with an Arabic/RTL toggle that remains available and persists after the operator selects it.
 - Select a configured kitchen and delivery date.
 - Read Partner `GET /integration/order-items` with a dedicated server-held key.
 - Validate live mode, pagination, exact date, physical-row uniqueness, quantity, meal, portion, and routing metadata.
@@ -45,7 +46,7 @@ npm run build
 npm run test:e2e
 ```
 
-`npm run test:e2e` starts an isolated fixture source and production-built server, then runs the Arabic/English Chromium journey. It does not call Partner.
+`npm run test:e2e` starts an isolated fixture source and production-built server, then runs the English-default/Arabic Chromium journey. It does not call Partner.
 
 After deployment, run the same journey against the HTTPS hostname without putting credentials in arguments or source control:
 

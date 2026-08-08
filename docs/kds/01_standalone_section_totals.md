@@ -44,7 +44,7 @@ Out of scope:
 | API/web type safety | `npm run typecheck` | zero errors |
 | Unit + HTTP integration | `npm test` | all tests pass |
 | Production artifacts | `npm run build` | API and Vite bundles generated |
-| Visible bilingual journey | `npm run test:e2e` | Chromium login → Arabic totals → English totals; unrouted visible; PII absent |
+| Visible bilingual journey | `npm run test:e2e` | Chromium English-default login/totals → Arabic toggle; unrouted visible; PII absent |
 | Container image | `docker build -f Dockerfile -t nutrezee-kds:verify .` | hardened runtime image builds and its ESM entrypoint imports |
 | Runtime health | Start the image with test-only configuration, then request `/health` inside the isolated container | HTTP 200 with `service=nutrezee-kds`; no Partner request is made |
 
@@ -92,7 +92,7 @@ Use today's Kuwait delivery date and each configured kitchen.
 
 1. Unauthenticated `/api/section-totals` returns 401.
 2. Dedicated KDS login succeeds and its cookie is Secure/HttpOnly/SameSite=Strict.
-3. Arabic is the default and `dir=rtl`; English toggle changes to `dir=ltr`.
+3. English is the default with `lang=en` and `dir=ltr`; the Arabic toggle changes to `lang=ar` and `dir=rtl` and persists the operator's explicit selection.
 4. Every section returned by Partner is visible and ordered by `step_no`.
 5. Recompute at least two meal/portion totals from the exact Partner rows; displayed totals match.
 6. A multi-section row contributes to all of its upstream sections.
