@@ -104,12 +104,12 @@ jobs:
           sudo chown root:"$secret_gid" "$secret_dir"
           sudo chmod 0750 "$secret_dir"
           printf '%s\n' 'ci-only-read-key' | sudo tee "$secret_dir/kds_partner_api_key" >/dev/null
-          printf '%s\n' 'scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q' \
-            | sudo tee "$secret_dir/kds_display_password_hash" >/dev/null
+          printf '%s\n' '{"version":1,"users":[{"username":"ci-display","password_hash":"scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q","section_codes":["hot"]}]}' \
+            | sudo tee "$secret_dir/kds_users.json" >/dev/null
           sudo chown root:"$secret_gid" \
-            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_display_password_hash"
+            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_users.json"
           sudo chmod 0640 \
-            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_display_password_hash"
+            "$secret_dir/kds_partner_api_key" "$secret_dir/kds_users.json"
           docker run --detach --name "$container" --network none --read-only \
             --tmpfs /tmp:size=16m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true \
             --group-add "$secret_gid" --volume "$secret_dir:/run/secrets:ro" \
@@ -118,8 +118,7 @@ jobs:
             -e KDS_COOKIE_SECURE=true \
             -e KDS_PARTNER_API_BASE=https://nutreeze.com/integration \
             -e KDS_PARTNER_API_KEY_FILE=/run/secrets/kds_partner_api_key \
-            -e KDS_DISPLAY_USERNAME=ci-display \
-            -e KDS_DISPLAY_PASSWORD_HASH_FILE=/run/secrets/kds_display_password_hash \
+            -e KDS_USERS_FILE=/run/secrets/kds_users.json \
             -e KDS_KITCHENS=main \
             nutrezee-kds:ci
           for attempt in {1..20}; do
@@ -127,6 +126,7 @@ jobs:
               "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
               test "$(docker exec "$container" id -u)" = "1000"
               test "$(docker exec "$container" stat -c '%a:%u:%g' /run/secrets/kds_partner_api_key)" = "640:0:${secret_gid}"
+              test "$(docker exec "$container" stat -c '%a:%u:%g' /run/secrets/kds_users.json)" = "640:0:${secret_gid}"
               exit 0
             fi
             sleep 1

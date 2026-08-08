@@ -13,8 +13,7 @@ services:
       KDS_TRUST_PROXY: "true"
       KDS_PARTNER_API_BASE: https://nutreeze.com/integration
       KDS_PARTNER_API_KEY_FILE: /run/secrets/kds_partner_api_key
-      KDS_DISPLAY_USERNAME: ${KDS_DISPLAY_USERNAME:-kitchen-display}
-      KDS_DISPLAY_PASSWORD_HASH_FILE: /run/secrets/kds_display_password_hash
+      KDS_USERS_FILE: /run/secrets/kds_users.json
       KDS_SESSION_TTL_MINUTES: ${KDS_SESSION_TTL_MINUTES:-720}
       KDS_KITCHENS: ${KDS_KITCHENS:-main}
       KDS_REFRESH_SECONDS: ${KDS_REFRESH_SECONDS:-60}

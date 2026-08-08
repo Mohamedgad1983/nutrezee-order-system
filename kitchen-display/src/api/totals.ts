@@ -39,10 +39,14 @@ export class TotalsService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  async totals(deliveryDate: string, kitchen: string): Promise<KdsSectionTotals> {
+  async totals(
+    deliveryDate: string,
+    kitchen: string,
+    assignedSectionCodes: readonly string[],
+  ): Promise<KdsSectionTotals> {
     try {
       const day = await this.source.itemsForDay(deliveryDate, kitchen);
-      return aggregateDay(day, deliveryDate, kitchen, this.now().toISOString());
+      return aggregateDay(day, deliveryDate, kitchen, this.now().toISOString(), assignedSectionCodes);
     } catch (error) {
       if (error instanceof TotalsError) throw error;
       if (!(error instanceof PartnerSourceError)) throw error;
@@ -62,23 +66,24 @@ export function aggregateDay(
   deliveryDate: string,
   kitchen: string,
   generatedAt: string,
+  assignedSectionCodes: readonly string[],
 ): KdsSectionTotals {
+  const allowedSections = new Set(assignedSectionCodes);
   const sections = new Map<string, MutableSection>();
   const sectionIdToCode = new Map<string, string>();
   const sectionCodeToId = new Map<string, string>();
   const mealMetadata = new Map<string, { nameEn: string | null; nameAr: string | null }>();
-  let sourceQuantity = 0;
   let assignmentQuantity = 0;
   let unroutedQuantity = 0;
 
   for (const item of day.items) {
-    mergeMealMetadata(mealMetadata, item.mealId, item.nameEn, item.nameAr);
-    sourceQuantity = add(sourceQuantity, item.quantity);
     const routes = item.sections.length > 0 ? item.sections : [UNROUTED];
-    if (item.sections.length === 0) unroutedQuantity = add(unroutedQuantity, item.quantity);
 
     for (const route of routes) {
+      if (!allowedSections.has(route.code)) continue;
       if (route !== UNROUTED) validateSectionIdentity(sectionIdToCode, sectionCodeToId, route);
+      else unroutedQuantity = add(unroutedQuantity, item.quantity);
+      mergeMealMetadata(mealMetadata, item.mealId, item.nameEn, item.nameAr);
       assignmentQuantity = add(assignmentQuantity, item.quantity);
       const sectionKey = `${route.sectionId}\u0000${route.code}`;
       let section = sections.get(sectionKey);
@@ -128,9 +133,8 @@ export function aggregateDay(
     generated_at: generatedAt,
     source_server_time: day.serverTime,
     summary: {
-      source_item_rows: day.items.length,
-      source_quantity_total: sourceQuantity,
-      section_assignment_quantity_total: assignmentQuantity,
+      assigned_section_count: sections.size,
+      assigned_quantity_total: assignmentQuantity,
       unrouted_quantity_total: unroutedQuantity,
     },
     sections: [...sections.values()]

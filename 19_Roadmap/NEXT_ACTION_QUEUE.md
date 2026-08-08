@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is DONE and production-active under user-authorized A17–A19.** PR #46 delivered the independent application; PR #48 fixed protected-file access; PR #49 made English/LTR the default login/display and merged as production release `3743aea`. All KDS/root CI gates and live production acceptance are green at `https://kds.13-140-159-201.sslip.io`. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-02 user-assigned section isolation is IN PROGRESS under A21.** Local implementation and isolation/browser gates are green; next is push → CI → merge → protected six-user manifest → exact production deployment → per-user live proof. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
 
 ---
 
@@ -27,6 +27,10 @@
 ---
 
 ## Engineering Queue (take the top unblocked item)
+
+### ▶ WP-KDS-02 — User-assigned Kitchen Display section isolation · **IN PROGRESS · blocked_by: none**
+
+Replace the shared all-sections session with a protected configurable user manifest. Bind exact section-code assignments to each opaque server session, project only those sections at the API boundary, remove global totals and manual section selection, and show a focused full-width screen for the signed-in section. Live Partner codes are `drinks`, `hot`, `pastry`, `salad`, `soup`, and `packing`. Local boundary/typecheck/build, Vitest 34/34, Playwright 3/3, audit, and visual checks are green. Next: push branch, require KDS/root CI, merge, deploy exact artifact, provision six code-named section accounts under ASM-052, and verify every account sees exactly one section.
 
 ### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A17–A19**
 

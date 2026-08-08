@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { KdsApiError, KdsDisplayConfig } from '../contracts.js';
-import { AuthManager } from './auth.js';
+import type { KdsApiError, KdsAuthSession, KdsDisplayConfig } from '../contracts.js';
+import { AuthManager, parseAuthUsers } from './auth.js';
 import { PartnerSource, validCalendarDate, type PartnerSourceGateway } from './partner-source.js';
 import { TotalsError, TotalsService } from './totals.js';
 
@@ -128,11 +128,17 @@ export function createKdsServer(options: KdsServerOptions): Server {
       }
 
       const sessionToken = readCookie(request, COOKIE_NAME);
-      if (pathname.startsWith('/api/') && !options.auth.isAuthenticated(sessionToken)) {
+      const principal = options.auth.principal(sessionToken);
+      if (pathname.startsWith('/api/') && !principal) {
         return sendError(response, 401, 'authentication_required');
       }
       if (request.method === 'GET' && pathname === '/api/auth/me') {
-        return sendJson(response, 200, { authenticated: true });
+        const session: KdsAuthSession = {
+          authenticated: true,
+          username: principal!.username,
+          assigned_sections: [...principal!.sectionCodes],
+        };
+        return sendJson(response, 200, session);
       }
       if (request.method === 'POST' && pathname === '/api/auth/logout') {
         if (!validOrigin(request, options.publicOrigin)) return sendError(response, 403, 'origin_forbidden');
@@ -141,7 +147,12 @@ export function createKdsServer(options: KdsServerOptions): Server {
         return sendJson(response, 200, { authenticated: false });
       }
       if (request.method === 'GET' && pathname === '/api/display-config') {
-        const config: KdsDisplayConfig = { kitchens: [...kitchens], refresh_seconds: refreshSeconds };
+        const config: KdsDisplayConfig = {
+          username: principal!.username,
+          assigned_sections: [...principal!.sectionCodes],
+          kitchens: [...kitchens],
+          refresh_seconds: refreshSeconds,
+        };
         return sendJson(response, 200, config);
       }
       if (request.method === 'GET' && pathname === '/api/section-totals') {
@@ -154,7 +165,11 @@ export function createKdsServer(options: KdsServerOptions): Server {
           return sendError(response, 400, 'invalid_query');
         }
         try {
-          return sendJson(response, 200, await totals.totals(date, kitchen));
+          return sendJson(
+            response,
+            200,
+            await totals.totals(date, kitchen, principal!.sectionCodes),
+          );
         } catch (error) {
           return sendTotalsError(response, error);
         }
@@ -189,9 +204,8 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
   }
   const sessionTtlMs = integerEnv(env.KDS_SESSION_TTL_MINUTES, 720, 5, 1440, 'invalid_session_ttl') * 60_000;
   const refreshSeconds = integerEnv(env.KDS_REFRESH_SECONDS, 60, 15, 300, 'invalid_refresh_seconds');
-  const username = env.KDS_DISPLAY_USERNAME?.trim();
-  const passwordHash = secretValue(env.KDS_DISPLAY_PASSWORD_HASH, env.KDS_DISPLAY_PASSWORD_HASH_FILE);
-  if (!username || !passwordHash) throw new Error('display_auth_not_configured');
+  const usersJson = secretValue(env.KDS_USERS_JSON, env.KDS_USERS_FILE);
+  if (!usersJson) throw new Error('display_auth_not_configured');
   const compiledDir = dirname(fileURLToPath(import.meta.url));
   return {
     port,
@@ -203,7 +217,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
     trustProxy: env.KDS_TRUST_PROXY === 'true',
     webRoot: env.KDS_WEB_ROOT?.trim() || resolve(compiledDir, '../../web'),
     source: PartnerSource.fromEnv(env),
-    auth: new AuthManager({ username, passwordHash, sessionTtlMs }),
+    auth: new AuthManager({ users: parseAuthUsers(usersJson), sessionTtlMs }),
   };
 }
 

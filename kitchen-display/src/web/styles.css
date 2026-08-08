@@ -7,6 +7,7 @@
 }
 
 * { box-sizing: border-box; }
+html, body, #root { width: 100%; min-height: 100%; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f0e8; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
@@ -49,6 +50,18 @@ button:disabled { cursor: wait; opacity: .6; }
   font-weight: 700;
 }
 .languageButton:hover, .ghostButton:hover { background: rgba(255, 255, 255, .12); }
+.userAccess {
+  min-width: 150px;
+  display: grid;
+  gap: .05rem;
+  padding: .45rem .75rem;
+  border-radius: 12px;
+  color: #d7eee7;
+  background: rgba(0, 0, 0, .13);
+}
+.userAccess span { font-size: .68rem; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.userAccess strong { color: #fff; font-size: .95rem; }
+.userAccess small { color: #bfe4da; font-weight: 800; }
 
 .controlBar {
   display: flex;
@@ -60,6 +73,20 @@ button:disabled { cursor: wait; opacity: .6; }
   border-bottom: 1px solid #dfd8ca;
 }
 .controlBar label, .loginCard label { display: grid; gap: .35rem; font-weight: 750; }
+.controlValue { min-width: 125px; display: grid; gap: .35rem; }
+.controlValue span { font-weight: 750; }
+.controlValue strong {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: .65rem .9rem;
+  border: 1px solid #c8d4d0;
+  border-radius: 11px;
+  color: #0b6b59;
+  background: #edf5f2;
+  text-transform: uppercase;
+}
+.assignmentValue { min-width: 180px; }
 .controlBar input, .controlBar select, .loginCard input {
   min-height: 46px;
   padding: .65rem .8rem;
@@ -85,7 +112,7 @@ button:disabled { cursor: wait; opacity: .6; }
 
 .summaryStrip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin: 1.35rem clamp(1rem, 3vw, 2.5rem);
 }
@@ -94,6 +121,14 @@ button:disabled { cursor: wait; opacity: .6; }
 .metric strong { display: block; margin-top: .25rem; color: #0b6b59; font-size: clamp(1.65rem, 4vw, 2.65rem); line-height: 1; }
 
 .sectionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 1.25rem; padding: 0 clamp(1rem, 3vw, 2.5rem); }
+.sectionGrid.single { grid-template-columns: minmax(0, 1fr); }
+.sectionGrid.single .sectionCard > header { min-height: 150px; padding: 1.5rem 2rem; }
+.sectionGrid.single .sectionCard h2 { font-size: clamp(1.8rem, 4vw, 3rem); }
+.sectionGrid.single .sectionTotal { font-size: clamp(4rem, 10vw, 7.5rem); min-width: 150px; }
+.sectionGrid.single .mealList { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 0 1.5rem; padding: 1rem 2rem 1.5rem; }
+.sectionGrid.single .mealRow { min-height: 86px; }
+.sectionGrid.single .mealName strong { font-size: clamp(1.15rem, 2vw, 1.55rem); }
+.sectionGrid.single .mealQty { font-size: clamp(2rem, 4vw, 3rem); }
 .sectionCard { overflow: hidden; border-radius: 18px; background: #fff; border: 1px solid #ddd7cc; box-shadow: 0 12px 30px rgba(52, 59, 53, .08); }
 .sectionCard > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.15rem 1.25rem; color: #fff; background: #244c44; }
 .sectionCard.unrouted { border: 2px solid #bd4d36; }
@@ -120,26 +155,75 @@ button:disabled { cursor: wait; opacity: .6; }
 .loader { width: 28px; height: 28px; border: 3px solid #b7d5cc; border-top-color: #0b6b59; border-radius: 50%; animation: spin .75s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.loginPage { min-height: 100vh; display: grid; place-items: center; padding: 2rem 1rem; background: #e9eee9; }
+.loginPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 4.5rem clamp(1rem, 5vw, 5rem) 2rem;
+  background:
+    radial-gradient(circle at 12% 15%, rgba(38, 136, 113, .18), transparent 32rem),
+    linear-gradient(135deg, #e7f0ec 0%, #f7f2e9 55%, #efe7d9 100%);
+}
 .loginLanguage { position: fixed; inset-block-start: 1.2rem; inset-inline-end: 1.2rem; }
 .loginLanguage .languageButton { color: #0b6b59; border-color: #0b6b59; }
-.loginCard { width: min(100%, 430px); display: grid; gap: 1rem; padding: 2rem; border-radius: 22px; background: #fffaf1; border: 1px solid #dcd6ca; box-shadow: 0 18px 60px rgba(35, 68, 58, .16); }
+.loginShell {
+  width: min(1120px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr);
+  overflow: hidden;
+  border: 1px solid rgba(18, 82, 68, .15);
+  border-radius: 30px;
+  background: #fffaf1;
+  box-shadow: 0 30px 90px rgba(35, 68, 58, .2);
+}
+.loginHero {
+  min-height: 590px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2.5rem, 7vw, 5.5rem);
+  color: #fff;
+  background:
+    linear-gradient(155deg, rgba(5, 74, 61, .96), rgba(8, 110, 89, .9)),
+    #0b6b59;
+}
+.heroBrand { display: flex; align-items: center; gap: .7rem; margin-bottom: 3rem; font-size: 1.1rem; font-weight: 900; letter-spacing: .04em; }
+.heroBrand span { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 13px; color: #0b6b59; background: #fff8e8; font-size: 1.55rem; }
+.loginHero h1 { max-width: 680px; margin: 0; font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: .98; letter-spacing: -.035em; }
+.loginHero p { max-width: 620px; margin: 1.5rem 0 0; color: #d0ebe3; font-size: clamp(1rem, 2vw, 1.3rem); line-height: 1.65; }
+.heroFlow { display: flex; align-items: center; gap: .75rem; margin-top: 3rem; color: #d8eee8; font-size: .75rem; font-weight: 950; letter-spacing: .12em; }
+.heroFlow span { padding: .55rem .7rem; border: 1px solid rgba(255, 255, 255, .35); border-radius: 9px; }
+.heroFlow i { color: #ffcf76; font-style: normal; font-size: 1.2rem; }
+.loginCard { width: 100%; align-self: center; display: grid; gap: 1rem; padding: clamp(2rem, 5vw, 4rem); background: #fffaf1; }
 .loginCard .brandMark { margin: 0 auto; color: #fff8e8; background: #0b6b59; }
 .loginCard h1 { margin: .25rem 0 0; text-align: center; color: #0b6b59; }
 .loginCard > p { margin: 0 0 .4rem; text-align: center; color: #61726c; }
 .loginCard .errorBanner { margin: 0; }
 
 @media (max-width: 720px) {
-  .topbar { align-items: flex-start; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; }
+  .topActions { width: 100%; justify-content: flex-end; gap: .5rem; }
   .titleBlock p { display: none; }
   .ghostButton { min-height: 40px; padding: .5rem .7rem; font-size: .85rem; }
   .summaryStrip { grid-template-columns: 1fr 1fr; }
-  .summaryStrip .metric:last-child { grid-column: 1 / -1; }
   .controlBar { align-items: stretch; }
   .controlBar label { flex: 1 1 140px; }
   .controlBar input, .controlBar select { width: 100%; }
   .refreshButton { flex: 1 1 100%; }
   .timestamps { width: 100%; margin: 0; }
+  .userAccess { min-width: 0; margin-inline-end: auto; padding: .4rem .55rem; }
+  .userAccess span, .userAccess small { display: none; }
+  .sectionGrid.single .sectionCard > header { min-height: 120px; padding: 1.25rem; }
+  .sectionGrid.single .sectionTotal { min-width: 90px; font-size: clamp(3rem, 18vw, 5rem); }
+  .sectionGrid.single .mealList { grid-template-columns: 1fr; padding: .8rem 1.25rem 1.2rem; }
+  .loginPage { padding: 4.5rem 1rem 1rem; }
+  .loginShell { grid-template-columns: 1fr; border-radius: 22px; }
+  .loginHero { min-height: auto; padding: 2rem; }
+  .heroBrand { margin-bottom: 1.3rem; }
+  .loginHero h1 { font-size: clamp(2.1rem, 12vw, 3.2rem); }
+  .loginHero p { margin-top: .85rem; }
+  .heroFlow { display: none; }
+  .loginCard { padding: 2rem; }
 }
 
 @media (prefers-reduced-motion: reduce) { .loader { animation: none; } }

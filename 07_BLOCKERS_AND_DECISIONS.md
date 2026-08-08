@@ -2,6 +2,10 @@
 
 **Date:** 2026-08-08 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
 
+## WP-KDS-02 user-assigned section isolation — in progress 2026-08-08
+
+A21 corrects the Kitchen Display from one shared all-sections credential to one or more exact section assignments per authenticated user. The server session now carries username and section codes, and the totals API projects only those assigned codes. Local implementation, mutual-isolation HTTP/browser tests, and redesigned section-focused UI are green. There is no engineering blocker; the remaining sequence is push, CI, merge, protected production users manifest, deployment, and live verification for all six current Partner sections.
+
 ## WP-KDS-01 production activation — resolved 2026-08-08
 
 The standalone Kitchen Display is production-active at `https://kds.13-140-159-201.sslip.io` on release `3743aea`. The user supplied the dedicated production Partner credential and explicitly directed autonomous production activation. It is held only in the protected server-side secret file; it was never committed, printed, returned to the browser, or found in the container logs. The current user-selected temporary display credential has a server-side scrypt hash, and its plaintext handoff remains root-only at `/root/nutrezee-kds-display-initial-password`; its literal value is intentionally excluded from source control and documentation. User-directed A19 makes English/LTR the initial login/display language while retaining an explicit persistent Arabic/RTL toggle.
