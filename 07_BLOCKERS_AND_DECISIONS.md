@@ -13,6 +13,8 @@ Completion is blocked only by two deliberately absent protected inputs:
 
 Both must be non-empty, root-managed mode `0600`. Once provisioned, the next session starts the isolated service and performs the documented health, HTTPS, Partner arithmetic, privacy, no-write, and bilingual Playwright acceptance before marking WP-KDS-01 DONE.
 
+**2026-08-08 re-verification:** both inputs remain absent/empty. The exact staged image nevertheless passed a temporary network-disabled hardened runtime smoke on the VPS (`/health` 200, runtime user `node`, read-only root, `cap_drop=ALL`) and left zero residual containers/listeners. DNS for `kds.13-140-159-201.sslip.io` resolves correctly; TLS remains intentionally inactive because the live Caddy route has not been installed.
+
 ## Decision status
 
 | Item | Status | Evidence |

@@ -10,6 +10,8 @@
 - Staged VPS image: `sha256:efe4a3ecbe416f2c9715190942e284ffcb902687ff115f05f4639e2469bb7289`.
 - Staging Compose and the combined existing-plus-KDS Caddy configuration validate.
 - Safety check: zero KDS containers, zero port-8180 listeners, zero live KDS proxy matches, and both protected credential files absent/empty. No route or service was activated.
+- The exact staged image also passed a hardened network-disabled VPS `/health` smoke as user `node` with a read-only root filesystem, all capabilities dropped, and no-new-privileges; the temporary container was removed and left no listener. The proposed hostname resolves to the VPS, while HTTPS correctly remains unavailable before route activation.
+- The requirement-by-requirement completion verdict is maintained in `docs/kds/02_completion_audit.md`.
 
 ## Authorized scope
 
