@@ -1,0 +1,42 @@
+services:
+  kitchen-display:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nutrezee-kitchen-display:staging
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      KDS_PORT: "8080"
+      KDS_PUBLIC_ORIGIN: ${KDS_PUBLIC_ORIGIN}
+      KDS_COOKIE_SECURE: "true"
+      KDS_TRUST_PROXY: "true"
+      KDS_PARTNER_API_BASE: https://nutreeze.com/integration
+      KDS_PARTNER_API_KEY_FILE: /run/secrets/kds_partner_api_key
+      KDS_USERS_FILE: /run/secrets/kds_users.json
+      KDS_SESSION_TTL_MINUTES: ${KDS_SESSION_TTL_MINUTES:-720}
+      KDS_KITCHENS: ${KDS_KITCHENS:-main}
+      KDS_REFRESH_SECONDS: ${KDS_REFRESH_SECONDS:-60}
+    ports:
+      - "127.0.0.1:8180:8080"
+    volumes:
+      - /opt/nutrezee-kds/secrets:/run/secrets:ro
+    # The image runs as non-root UID/GID 1000. A dedicated supplemental group
+    # reads host-owned 0640 secret files without granting world access.
+    group_add:
+      - "${KDS_SECRET_GID:-61001}"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    networks:
+      - default
+      - reverse-proxy
+
+networks:
+  reverse-proxy:
+    external: true
+    name: ${KDS_REVERSE_PROXY_NETWORK:-nutrezee_default}

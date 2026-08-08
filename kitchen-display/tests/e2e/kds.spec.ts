@@ -1,0 +1,182 @@
+import { expect, test } from '@playwright/test';
+
+const live = process.env.KDS_E2E_LIVE === '1';
+const username = process.env.KDS_E2E_USERNAME ?? 'hot-user';
+const password = process.env.KDS_E2E_PASSWORD ?? 'e2e-only-password';
+
+test('English-default and Arabic totals-only kitchen display', async ({ page }) => {
+  let totalsRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/section-totals') totalsRequests += 1;
+  });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.getByRole('heading', { name: 'Kitchen sign in' })).toBeVisible();
+
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
+  if (live) {
+    await assertLiveTotals(page);
+    return;
+  }
+
+  await expect(page.getByRole('heading', { name: 'Hot Kitchen' })).toBeVisible();
+  await expect(page.getByText('Grilled Chicken')).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'Packing' })).toHaveCount(0);
+  await expect(page.getByRole('alert').filter({ hasText: 'Some items have no section route' })).toHaveCount(0);
+  await expect(page.getByText('hot-user')).toBeVisible();
+  await expect(page.locator('.sectionCard').filter({ hasText: 'hot' }).locator('.sectionTotal')).toHaveText('5');
+  await expect(page.locator('body')).not.toContainText('PRIVATE-ROW');
+
+  const requestsBeforeLanguageToggle = totalsRequests;
+  await page.getByRole('button', { name: 'العربية' }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'المطبخ الساخن' })).toBeVisible();
+  await expect(page.getByText('دجاج مشوي')).toHaveCount(1);
+  await page.waitForTimeout(200);
+  expect(totalsRequests).toBe(requestsBeforeLanguageToggle);
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible();
+  await expect(page.getByText('hot-user')).toBeVisible();
+});
+
+test('different users receive only their server-assigned section', async ({ page }) => {
+  test.skip(live, 'fixture-only multi-user isolation regression');
+  await page.goto('/');
+  await page.getByLabel('Username').fill('hot-user');
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Hot Kitchen' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Packing' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.getByLabel('Username').fill('packing-user');
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Packing' })).toBeVisible();
+  await expect(page.locator('.sectionCard').filter({ hasText: 'packing' }).locator('.sectionTotal')).toHaveText('2');
+  await expect(page.getByRole('heading', { name: 'Hot Kitchen' })).toHaveCount(0);
+  await expect(page.getByText('Vegetable Soup')).toHaveCount(0);
+});
+
+test('a slower previous date cannot overwrite the current selection', async ({ page }) => {
+  test.skip(live, 'fixture-only concurrency regression');
+  let releaseInitial: (() => void) | undefined;
+  const initialStarted = new Promise<void>((resolve) => { releaseInitial = resolve; });
+  let firstTotalsRequest = true;
+  await page.route('**/api/section-totals?**', async (route) => {
+    const date = new URL(route.request().url()).searchParams.get('date') ?? '';
+    if (firstTotalsRequest) {
+      firstTotalsRequest = false;
+      releaseInitial?.();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(totalsPayload(date, 'وجبة قديمة', 9)) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(totalsPayload(date, 'وجبة حالية', 2)) });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Kitchen sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Kitchen Production Display' })).toBeVisible();
+  await initialStarted;
+  await page.getByLabel('Delivery date').fill('2026-08-09');
+  await expect(page.getByText('وجبة حالية')).toBeVisible();
+  await page.waitForTimeout(700);
+  await expect(page.getByText('وجبة حالية')).toBeVisible();
+  await expect(page.getByText('وجبة قديمة')).toHaveCount(0);
+});
+
+async function assertLiveTotals(page: import('@playwright/test').Page): Promise<void> {
+  const requestedDate = process.env.KDS_E2E_DELIVERY_DATE;
+  if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    throw new Error('KDS_E2E_DELIVERY_DATE must use YYYY-MM-DD');
+  }
+
+  const dateInput = page.getByLabel('Delivery date');
+  const refreshButton = page.getByRole('button', { name: 'Refresh now' });
+  await expect(refreshButton).toBeEnabled({ timeout: 45_000 });
+  const currentDate = await dateInput.inputValue();
+  const expectedDate = requestedDate ?? currentDate;
+  const responsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.pathname === '/api/section-totals'
+      && (!expectedDate || url.searchParams.get('date') === expectedDate);
+  });
+  if (requestedDate && requestedDate !== currentDate) {
+    await dateInput.fill(requestedDate);
+  } else {
+    await refreshButton.click();
+  }
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+
+  const payload = await response.json() as {
+    summary: {
+      assigned_section_count: number;
+      assigned_quantity_total: number;
+    };
+    sections: Array<{ total_qty: number; meals: Array<{ total_qty: number }> }>;
+  };
+  const serialized = JSON.stringify(payload).toLowerCase();
+  for (const forbidden of [
+    'customer', 'phone', 'address', 'order_number', 'order_no', 'item_ref',
+    'api_key', 'driver', 'vehicle', 'barcode', 'label',
+  ]) {
+    expect(serialized).not.toContain(forbidden);
+  }
+  expect(payload.summary.assigned_section_count).toBe(payload.sections.length);
+  expect(payload.summary.assigned_quantity_total).toBeGreaterThanOrEqual(0);
+  expect(payload.sections.reduce((sum, section) => sum + section.total_qty, 0))
+    .toBe(payload.summary.assigned_quantity_total);
+  for (const section of payload.sections) {
+    expect(section.meals.reduce((sum, meal) => sum + meal.total_qty, 0)).toBe(section.total_qty);
+  }
+
+  await expect(page.getByText('Required quantity')).toBeVisible();
+  await page.getByRole('button', { name: 'العربية' }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.getByRole('heading', { name: 'شاشة إنتاج المطبخ' })).toBeVisible();
+  await expect(page.getByText('إجمالي الكمية المطلوبة')).toBeVisible();
+}
+
+function totalsPayload(deliveryDate: string, mealName: string, quantity: number) {
+  const timestamp = '2026-08-08T10:00:00.000Z';
+  return {
+    delivery_date: deliveryDate,
+    kitchen: 'main',
+    generated_at: timestamp,
+    source_server_time: timestamp,
+    summary: {
+      assigned_section_count: 1,
+      assigned_quantity_total: quantity,
+      unrouted_quantity_total: 0,
+    },
+    sections: [{
+      section_id: 'hot-id',
+      code: 'hot',
+      name_en: 'Hot Kitchen',
+      name_ar: 'المطبخ الساخن',
+      step_no: 1,
+      is_packing: false,
+      unrouted: false,
+      total_qty: quantity,
+      meals: [{
+        meal_id: `meal-${quantity}`,
+        name_en: mealName,
+        name_ar: mealName,
+        portion_size: 'regular',
+        total_qty: quantity,
+      }],
+    }],
+  };
+}
