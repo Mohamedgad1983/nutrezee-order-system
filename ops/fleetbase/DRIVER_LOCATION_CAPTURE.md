@@ -56,6 +56,11 @@ customer's exact pin, and the customer identity behind a known-stop anchor is ne
   error, and Fleetbase identity failures used a generic fallback. Navigator commit `e6c27b6`
   renders one explicit bilingual authorization error; focused A30 tests pass 10/10 and the full
   Jest suite passes 65 suites / 339 tests.
+- Navigator CI run `31257188765` passed both `install_and_test` and `android_build`. Its exact
+  `android-debug-apk` artifact had SHA-256
+  `708e7bc0355f15382fefa19a7817f2cf6ebff96b2446bff3a3fc28af1cf0d46e`; installation and cold
+  launch on Android 14 reached the Nutreeze activity without a fatal or unhandled React Native
+  error. The downloaded local copy was removed after verification; GitHub retains the artifact.
 - Physical assigned-driver proof remains open. It needs one current eligible assignment to verify
   fallback navigation, calling that customer, GPS/shared-coordinate preview, explicit confirmation,
   accepted/idempotent persistence and Fleet-Ops visibility.
@@ -63,6 +68,19 @@ customer's exact pin, and the customer identity behind a known-stop anchor is ne
   authoritative Partner pins, identified 172 same-area known-stop anchors, loaded zero saved
   captures and completed with `fleetbase_written=false`. Database counts were unchanged and the
   unattended dispatch timer remained disabled/inactive.
+
+## Release/UAT gate revalidation — 2026-08-08
+
+- No ADB device is connected. Repository secrets still omit the Transistorsoft production license
+  and Nutreeze upload-keystore/signing inputs; no release build was attempted.
+- Driver PR #1 and A30 PR #47 remain clean, mergeable drafts with green checks. Their physical and
+  release gates have not been bypassed.
+- Staging health is green. `/nz/health` returns `200`; unauthenticated driver and Fleet-Ops location
+  reads return `401`. Only migrations `0027`, `0028`, and `0029` are applied in the protected
+  `0024`–`0029` range; `0024`–`0026` remain absent.
+- The append-only ledger and its A30 audit event count both remain zero. The unattended dispatch
+  timer is disabled/inactive; the separate read-only snapshot timer is enabled/active and its
+  current root-owned mode-`0600` manifest records `fleetbase_written=false`.
 
 ## Predeclared implementation files
 
