@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is software-complete and credential-blocked at live acceptance under user-authorized A17.** PR #46 is merged and every independent KDS/root CI gate is green. The exact merge artifact and image are staged on the VPS, but the service and proxy route intentionally remain inactive until the two dedicated protected credentials exist. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
+**Last updated:** 2026-08-08 · **Frontier:** **WP-KDS-01 standalone section totals is DONE and production-active under user-authorized A17/A18.** PR #46 delivered the independent application; PR #48 fixed protected-file access for the non-root container and merged as `5955054`. All KDS/root CI gates and live production acceptance are green at `https://kds.13-140-159-201.sslip.io`. The earlier legacy-replacement engineering frontier remains exhausted and sponsor/workshop-gated; the order-system staging/UAT state is unchanged.
 
 ---
 
@@ -28,9 +28,11 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ⏸ WP-KDS-01 — Standalone Kitchen Display section totals · **BLOCKED 2026-08-08 on dedicated credentials · user-authorized A17**
+### ✅ WP-KDS-01 — Standalone Kitchen Display section totals · **DONE 2026-08-08 · production-active · user-authorized A17/A18**
 
-Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; final pre-merge and post-merge KDS/root workflows are green. The exact merge archive and hardened image are staged under `/opt/nutrezee-kds`, and the combined Caddy configuration validates without touching the live proxy. No KDS container, port, or route is active. **Single unblock action:** securely provision non-empty mode-0600 files `/opt/nutrezee-kds/secrets/kds_partner_api_key` (a dedicated read-only Partner key, not the label key) and `/opt/nutrezee-kds/secrets/kds_display_password_hash` (operator-selected password, scrypt hash). Then start the isolated Compose service, add/reload only its validated hostname route, and complete live health, exact arithmetic, PII/prohibited-field, GET-only/no-write, and protected Arabic/English Playwright acceptance. No driver/logistics/label dependency or write capability is in scope.
+Completely independent subproject from `origin/main`. PR #46 merged as `74a703c` after 18/18 review threads were resolved; PR #48 corrected the non-root protected-secret mount contract and merged as production release `5955054`. KDS CI 6/6 and root CI 14/14 are green before and after the production-fix merge. Exact artifact SHA-256 `57698350d3eff6602122a24963325043ad7e11be37d03998f4cdc9f42387e5fa` is installed at `/opt/nutrezee-kds/releases/5955054`; the healthy hardened image is `sha256:dbff652868a8bf292b488ed367326b3003125cc29ce268bdffd6cb472f893a32`.
+
+Production acceptance passed at `https://kds.13-140-159-201.sslip.io`: HTTPS/security/session/method/query controls; dedicated protected credentials; four Partner GET requests and no write surface; independent exact arithmetic for 3,178 rows, quantity 3,266, section-work quantity 6,532, six sections, 222 meal/portion groups, and zero unrouted quantity; prohibited-field/log scans; Arabic/English responsive browser journey; and protected live Playwright. No driver/logistics/label dependency, database, workflow mutation, or Partner write capability exists in this service.
 
 ### ✅ 1. WP-API-01 — Customers + Catalog-read + Masters/Reason-code controllers · **DONE 2026-06-13** (PR #4 `f9dcae6` + D8 `0c3af5a`)
 Shipped A1 customers controller, A2 catalog-read controller, A3 settings masters/reason-code routes. 3-lens review caught + fixed 2 PII leaks + 1 SQL injection pre-merge. CI 14/14; suite 164→190; deployed + verified on staging. merge/undo split out → item 5.

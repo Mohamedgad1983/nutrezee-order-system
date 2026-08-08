@@ -2,18 +2,13 @@
 
 **Date:** 2026-08-08 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
 
-## WP-KDS-01 live-acceptance blocker
+## WP-KDS-01 production activation — resolved 2026-08-08
 
-The standalone Kitchen Display software is merged (`74a703c`), independently CI-green, and staged as an exact verified artifact plus hardened VPS image. Compose and the combined Caddy configuration validate, but no KDS container, listener, hostname route, or Partner request has been activated.
+The standalone Kitchen Display is production-active at `https://kds.13-140-159-201.sslip.io` on release `5955054`. The user supplied the dedicated production Partner credential and explicitly directed autonomous production activation. It is held only in the protected server-side secret file; it was never committed, printed, returned to the browser, or found in the container logs. A random initial display credential was generated server-side, its scrypt hash was installed, and its plaintext handoff remains root-only at `/root/nutrezee-kds-display-initial-password` for operator retrieval and rotation.
 
-Completion is blocked only by two deliberately absent protected inputs:
+The production service is healthy with zero restarts, non-root runtime user `node`, read-only root filesystem, `cap_drop=ALL`, no direct secret environment entries, and only a read-only `/run/secrets` bind. HTTPS, security headers, unauthenticated 401, secure/HttpOnly/SameSite=Strict session cookie, logout revocation, unsafe-method 405, invalid-query 400, Arabic RTL, English LTR, and 390px responsive rendering all passed.
 
-1. `/opt/nutrezee-kds/secrets/kds_partner_api_key` — a dedicated KDS Partner **read-only** key; the label-service key must not be reused.
-2. `/opt/nutrezee-kds/secrets/kds_display_password_hash` — the scrypt hash of a password chosen by the kitchen-display operator.
-
-Both must be non-empty, root-owned mode `0640`, dedicated group `61001`; their directory is mode `0750` with the same group. Compose grants only that supplemental group to the non-root runtime. Once provisioned, the next session starts the isolated service and performs the documented health, HTTPS, Partner arithmetic, privacy, no-write, and bilingual Playwright acceptance before marking WP-KDS-01 DONE.
-
-**2026-08-08 re-verification:** both inputs remain absent/empty. The exact staged image nevertheless passed a temporary network-disabled hardened runtime smoke on the VPS (`/health` 200, runtime user `node`, read-only root, `cap_drop=ALL`) and left zero residual containers/listeners. DNS for `kds.13-140-159-201.sslip.io` resolves correctly; TLS remains intentionally inactive because the live Caddy route has not been installed.
+For Kuwait delivery date `2026-08-08`, an independent server-side GET-only verifier paginated four Partner requests and exactly matched the displayed projection: 3,178 source rows, source quantity 3,266, section-work quantity 6,532, six sections, 222 meal/portion groups, and zero unrouted quantity. The live API/browser privacy scan and container log scan passed with no customer, phone, address, order/item identifier, driver, barcode, label, API-key, or display-password exposure. WP-KDS-01 is DONE; there is no remaining KDS blocker for Release 1.
 
 ## Decision status
 

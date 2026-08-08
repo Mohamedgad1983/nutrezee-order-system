@@ -1,16 +1,17 @@
 # WP-KDS-01 — Standalone section totals release
 
-**Evidence state:** software merged and independently CI-green 2026-08-08; exact merge artifact and hardened image staged on the VPS. Dedicated credentials, service activation, and live Partner/HTTPS acceptance remain required before DONE.
+**Evidence state:** **DONE and production-active 2026-08-08.** Software, review, CI, exact artifact deployment, protected credentials, live Partner arithmetic, privacy/security, and bilingual browser acceptance are proven.
 
 ## Release evidence
 
-- PR #46 merged as `74a703c` after all 18 review threads were resolved.
-- Final pre-merge KDS workflows passed 6/6 and root workflows passed 14/14; post-merge runs `31251266861` and `31251266863` passed 6/6 and 14/14 respectively.
-- Artifact SHA-256: `1e3b0f572a1c73b86538f20f457d64cc03064422db0b9c3220af6d2e9c2c500d`.
-- Staged VPS image: `sha256:efe4a3ecbe416f2c9715190942e284ffcb902687ff115f05f4639e2469bb7289`.
-- Staging Compose and the combined existing-plus-KDS Caddy configuration validate.
-- Safety check: zero KDS containers, zero port-8180 listeners, zero live KDS proxy matches, and both protected credential files absent/empty. No route or service was activated.
-- The exact staged image also passed a hardened network-disabled VPS `/health` smoke as user `node` with a read-only root filesystem, all capabilities dropped, and no-new-privileges; the temporary container was removed and left no listener. The proposed hostname resolves to the VPS, while HTTPS correctly remains unavailable before route activation.
+- PR #46 delivered the standalone application and merged as `74a703c` after all 18 review threads were resolved.
+- PR #48 fixed the verified non-root protected-secret mount defect and merged as production release `5955054`.
+- PR #48 pre-merge KDS/root workflows passed 6/6 and 14/14 (`31252914322`, `31252914332`); post-merge runs `31253038731` and `31253038740` passed 6/6 and 14/14.
+- Production artifact SHA-256: `57698350d3eff6602122a24963325043ad7e11be37d03998f4cdc9f42387e5fa`.
+- Production release path: `/opt/nutrezee-kds/releases/5955054`; `/opt/nutrezee-kds/repo` is its active symlink.
+- Production image: `sha256:dbff652868a8bf292b488ed367326b3003125cc29ce268bdffd6cb472f893a32`, also retained as version tag `nutrezee-kitchen-display:5955054`.
+- Production URL: `https://kds.13-140-159-201.sslip.io`; Caddy's pre-KDS configuration backup is `/opt/nutrezee/repo/docker/Caddyfile.active.pre-kds-5955054`.
+- Runtime proof: Docker health `healthy`, restart count 0, user `node`, supplemental group `61001`, read-only root, `cap_drop=ALL`, no direct secret environment entries, read-only `/run/secrets`, loopback-only host port `8180`, and a single reverse-proxy connection to `nutrezee_default` in addition to its own isolated Compose network.
 - The requirement-by-requirement completion verdict is maintained in `docs/kds/02_completion_audit.md`.
 
 ## Authorized scope
@@ -47,9 +48,9 @@ Out of scope:
 | Container image | `docker build -f Dockerfile -t nutrezee-kds:verify .` | hardened runtime image builds and its ESM entrypoint imports |
 | Runtime health | Start the image with test-only configuration, then request `/health` inside the isolated container | HTTP 200 with `service=nutrezee-kds`; no Partner request is made |
 
-## Staging provisioning
+## Production deployment
 
-Required protected inputs (do not commit or print them):
+Installed protected inputs (never commit or print them):
 
 1. A dedicated Partner read-only API key for KDS.
 2. A display password chosen by the operator, stored only as a generated scrypt hash.
@@ -59,13 +60,16 @@ Host layout:
 
 ```text
 /opt/nutrezee-kds/
-  repo/                 # this repository checkout
+  releases/5955054/     # exact production release
+  repo -> releases/5955054
   secrets/              # mode 0750, owner root, group 61001
     kds_partner_api_key       # mode 0640, owner root, group 61001
     kds_display_password_hash # mode 0640, owner root, group 61001
 ```
 
 `KDS_SECRET_GID` defaults to the dedicated numeric group `61001`. The Compose service adds that supplemental group to its non-root Node user. Do not use root-only `0600` files with the directory bind mount: the non-root runtime cannot read them. Do not grant world-readable permissions.
+
+The initial display password plaintext is retained only in `/root/nutrezee-kds-display-initial-password`, mode `0600` root:root, for secure operator retrieval. Retrieve it through root SSH, rotate the display credential after handoff, then remove the plaintext handoff file. The Partner key and password hash remain mode `0640` root:61001 inside the mode-`0750` root:61001 secrets directory.
 
 Deployment sequence:
 
@@ -96,6 +100,18 @@ Use today's Kuwait delivery date and each configured kitchen.
 8. Search the JSON/browser/network evidence for item refs, order numbers, customer names, phones, addresses, API keys, delivery actors, and label data; none may appear.
 9. Verify the service issued only Partner GET requests and caused no Partner/database/workflow writes.
 10. Run `KDS_E2E_BASE_URL=https://<kds-host> KDS_E2E_USERNAME=<display-user> KDS_E2E_LIVE=1 npm run test:e2e:staging` after exporting `KDS_E2E_PASSWORD` through a protected interactive environment. The live suite requires a successful totals response, validates browser-contract arithmetic and prohibited-field absence, then proves Arabic RTL and English LTR rendering. Set `KDS_E2E_DELIVERY_DATE=YYYY-MM-DD` when validating a specific production date.
+
+### Executed production result — 2026-08-08
+
+| Check | Verified result |
+|---|---|
+| Health and TLS | Loopback `/health` and public HTTPS returned 200; HTTP redirects to HTTPS. |
+| Authentication | Unauthenticated totals returned 401; login 200; cookie Secure/HttpOnly/SameSite=Strict; logout revoked the session. |
+| Request safety | Totals accepts authenticated GET only; POST returned 405; invalid date, kitchen, and extra query returned 400; API responses are `no-store`. |
+| Partner access | Independent verifier made four paginated `GET /integration/order-items` requests only; the KDS has no Partner/database/workflow write path. |
+| Exact projection | 3,178 source rows; source quantity 3,266; section-work quantity 6,532; six sections; 222 meal/portion groups; zero unrouted. Every independently aggregated group exactly matched the saved display response; no raw upstream rows were retained. |
+| Privacy and secrets | Live JSON/browser scan and 117-line container log scan found no prohibited identifiers, PII, Partner key, or display password. |
+| Browser | Protected live Chromium Playwright passed the applicable Arabic/English totals journey; direct browser validation passed login, logout, RTL/LTR, six section cards, and 390×800 rendering with no horizontal overflow. |
 
 ## Rollback
 
