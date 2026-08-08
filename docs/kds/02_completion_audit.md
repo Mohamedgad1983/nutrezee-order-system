@@ -30,7 +30,7 @@ Both files were re-verified absent/empty on the VPS on 2026-08-08:
 1. `/opt/nutrezee-kds/secrets/kds_partner_api_key` — dedicated KDS Partner read-only credential; do not reuse the label-service key.
 2. `/opt/nutrezee-kds/secrets/kds_display_password_hash` — scrypt hash of a password selected by the kitchen-display operator.
 
-Both files must be root-managed, non-empty, and mode `0600`. The operator password must not be invented by an agent or exposed in shell arguments, logs, source control, or ordinary chat.
+Both files must be root-owned, non-empty, mode `0640`, group `61001`; their directory must be root-owned mode `0750`, group `61001`. Compose supplies only that supplemental group to the non-root runtime. The operator password must not be exposed in shell arguments, logs, source control, or ordinary chat; when the operator explicitly authorizes autonomous production completion, an initial random credential may be generated and retained only in a separate root-only handoff file for immediate retrieval and rotation.
 
 ## Exact completion sequence after provisioning
 

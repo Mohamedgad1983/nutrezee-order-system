@@ -94,22 +94,37 @@ jobs:
         run: |
           set -euo pipefail
           container=nutrezee-kds-ci-smoke
-          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          secret_dir="$(mktemp -d)"
+          secret_gid=61001
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            sudo rm -rf "$secret_dir"
+          }
           trap cleanup EXIT
+          sudo chown root:"$secret_gid" "$secret_dir"
+          sudo chmod 0750 "$secret_dir"
+          printf '%s\n' 'ci-only-read-key' | sudo tee "$secret_dir/kds_partner_api_key" >/dev/null
+          printf '%s\n' 'scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q' \
+            | sudo tee "$secret_dir/kds_display_password_hash" >/dev/null
+          sudo chown root:"$secret_gid" "$secret_dir"/*
+          sudo chmod 0640 "$secret_dir"/*
           docker run --detach --name "$container" --network none --read-only \
             --tmpfs /tmp:size=16m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true \
+            --group-add "$secret_gid" --volume "$secret_dir:/run/secrets:ro" \
             -e NODE_ENV=production \
             -e KDS_PUBLIC_ORIGIN=https://kds.example.com \
             -e KDS_COOKIE_SECURE=true \
             -e KDS_PARTNER_API_BASE=https://nutreeze.com/integration \
-            -e KDS_PARTNER_API_KEY=ci-only-read-key \
+            -e KDS_PARTNER_API_KEY_FILE=/run/secrets/kds_partner_api_key \
             -e KDS_DISPLAY_USERNAME=ci-display \
-            -e 'KDS_DISPLAY_PASSWORD_HASH=scrypt$16384$8$1$EEaR1Y_Xj3T_xGDtvGqE9w$7z8ViKE6efG7ctOyMbCNesWDJOguFn2uLbI5IeTIQ4Q' \
+            -e KDS_DISPLAY_PASSWORD_HASH_FILE=/run/secrets/kds_display_password_hash \
             -e KDS_KITCHENS=main \
             nutrezee-kds:ci
           for attempt in {1..20}; do
             if docker exec "$container" node -e \
               "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+              test "$(docker exec "$container" id -u)" = "1000"
+              test "$(docker exec "$container" stat -c '%a:%u:%g' /run/secrets/kds_partner_api_key)" = "640:0:${secret_gid}"
               exit 0
             fi
             sleep 1

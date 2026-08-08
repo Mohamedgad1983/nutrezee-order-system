@@ -60,10 +60,12 @@ Host layout:
 ```text
 /opt/nutrezee-kds/
   repo/                 # this repository checkout
-  secrets/
-    kds_partner_api_key       # mode 0600
-    kds_display_password_hash # mode 0600
+  secrets/              # mode 0750, owner root, group 61001
+    kds_partner_api_key       # mode 0640, owner root, group 61001
+    kds_display_password_hash # mode 0640, owner root, group 61001
 ```
+
+`KDS_SECRET_GID` defaults to the dedicated numeric group `61001`. The Compose service adds that supplemental group to its non-root Node user. Do not use root-only `0600` files with the directory bind mount: the non-root runtime cannot read them. Do not grant world-readable permissions.
 
 Deployment sequence:
 
