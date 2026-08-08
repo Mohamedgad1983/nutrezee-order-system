@@ -494,6 +494,13 @@ function sourcePinHoldReason(array $row): ?string
 
 function dailyHoldReason(array $row): ?string
 {
+    $statusHold = dailyStatusHoldReason($row);
+    return $statusHold ?? pinHoldReason($row);
+}
+
+/** Status eligibility is independent of location recovery; held rows never become anchors. */
+function dailyStatusHoldReason(array $row): ?string
+{
     if (($row['source_order_status'] ?? null) === 'cancel') {
         return 'source_order_canceled';
     }
@@ -503,7 +510,7 @@ function dailyHoldReason(array $row): ?string
     if (!in_array((string) ($row['meal_status'] ?? ''), DAILY_DISPATCHABLE_MEAL_STATUSES, true)) {
         return 'unapproved_meal_status';
     }
-    return pinHoldReason($row);
+    return null;
 }
 
 function rowHasAddressCallContext(array $row): bool
@@ -946,7 +953,8 @@ function applyLocationRecoveryData(array $rows, array $captures): array
     foreach ($rows as $row) {
         // An anchor must be a real stop in today's dispatchable workload. A valid coordinate from
         // a cancelled, incomplete or otherwise held row is not an operational stop.
-        if (dailyHoldReason($row) !== null) {
+        if (dailyStatusHoldReason($row) !== null
+            || (($row['pin'] ?? null) === null && ($row['recovery_pin'] ?? null) === null)) {
             continue;
         }
         $area = mb_strtolower(trim((string) ($row['routing_area'] ?? '')));
@@ -958,7 +966,10 @@ function applyLocationRecoveryData(array $rows, array $captures): array
     }
 
     foreach ($rows as &$row) {
-        if (sourcePinHoldReason($row) === null || ($row['recovery_pin'] ?? null) !== null) {
+        if (dailyStatusHoldReason($row) !== null
+            || !rowHasAddressCallContext($row)
+            || sourcePinHoldReason($row) === null
+            || ($row['recovery_pin'] ?? null) !== null) {
             continue;
         }
         $area = mb_strtolower(trim((string) ($row['routing_area'] ?? '')));
