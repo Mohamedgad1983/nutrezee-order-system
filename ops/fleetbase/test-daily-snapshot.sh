@@ -4,6 +4,7 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 SCRIPT="$SCRIPT_DIR/nutreeze-daily-snapshot.sh"
 TIMER="$SCRIPT_DIR/nutreeze-partner-snapshot.timer"
+SERVICE="$SCRIPT_DIR/nutreeze-partner-snapshot.service"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/nutreeze-snapshot-test.XXXXXX")"
 MOCK_RUNNER="$TEST_ROOT/mock-runner.sh"
 SNAPSHOT_DIR="$TEST_ROOT/snapshots"
@@ -21,6 +22,11 @@ fail() {
 
 grep -q '^OnCalendar=\*-\*-\* 22:00:00 UTC$' "$TIMER" \
   || fail 'timer must run at 01:00 Kuwait (22:00 UTC)'
+grep -q '^Restart=no$' "$SERVICE" \
+  || fail 'snapshot service must not restart a failed daily source read'
+if grep -q '^RestartSec=' "$SERVICE"; then
+  fail 'snapshot service must not configure a restart interval'
+fi
 
 cat > "$MOCK_RUNNER" <<'EOF'
 #!/bin/sh
@@ -32,6 +38,13 @@ if [ -f "$MOCK_CALL_FILE" ]; then
 fi
 CALLS=$((CALLS + 1))
 printf '%s\n' "$CALLS" > "$MOCK_CALL_FILE"
+
+if [ "${MOCK_FAIL:-0}" = 1 ]; then
+  jq -cn \
+    --arg customer_phone "SECRET_PHONE_MUST_NOT_LEAK" \
+    '{event:"fatal",stage:"vendor_fetch",error_code:"vendor_http_status",customer_phone:$customer_phone}'
+  exit 9
+fi
 
 DIGEST="$MOCK_DIGEST"
 RECONCILED=true
@@ -137,4 +150,24 @@ jq -e '.completeness_status == "empty_two_pass_not_authoritative"' \
   "$SNAPSHOT_DIR/2026-07-25.json" >/dev/null || fail 'stable zero snapshot was not flagged'
 [ ! -e "$SNAPSHOT_DIR/2020-01-01.json" ] || fail 'retention did not remove the old snapshot'
 
-printf '%s\n' 'daily snapshot tests: 6/6 passed'
+printf '0\n' > "$CALL_FILE"
+if NUTREEZE_SNAPSHOT_RUNNER="$MOCK_RUNNER" \
+  NUTREEZE_SNAPSHOT_DIR="$SNAPSHOT_DIR" \
+  NUTREEZE_SNAPSHOT_DATE=2026-07-26 \
+  NUTREEZE_SNAPSHOT_CAPTURED_AT=2026-07-26T04:00:00Z \
+  MOCK_CALL_FILE="$CALL_FILE" \
+  MOCK_COUNT=1 \
+  MOCK_DIGEST="$DIGEST_A" \
+  MOCK_FAIL=1 \
+  "$SCRIPT" > "$TEST_ROOT/failure.out" 2>&1; then
+  fail 'failed source read was accepted'
+fi
+grep -q '"event":"snapshot_source_error"' "$TEST_ROOT/failure.out" \
+  || fail 'sanitized source error was not relayed'
+grep -q '"error_code":"vendor_http_status"' "$TEST_ROOT/failure.out" \
+  || fail 'sanitized source error code was not relayed'
+if grep -q 'SECRET_PHONE' "$TEST_ROOT/failure.out"; then
+  fail 'source error relay leaked a non-allowlisted field'
+fi
+
+printf '%s\n' 'daily snapshot tests: 8/8 passed'

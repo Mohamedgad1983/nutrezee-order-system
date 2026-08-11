@@ -25,6 +25,18 @@ log_event() {
   jq -cn --arg event "$EVENT" "$@" '{event: $event} + $ARGS.named'
 }
 
+relay_runner_fatal() {
+  LOG_FILE="$1"
+  jq -c '
+    select(.event == "fatal")
+    | {
+        event: "snapshot_source_error",
+        stage: (.stage // "unknown"),
+        error_code: (.error_code // "unknown")
+      }
+  ' "$LOG_FILE" 2>/dev/null | tail -n 1 >&2 || true
+}
+
 case "$DELIVERY_DATE" in
   [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
   *)
@@ -56,6 +68,7 @@ if ! "$RUNNER" \
   "--meal-since=$MEAL_SINCE" \
   --limit=1000 \
   --dry-run > "$FIRST_LOG"; then
+  relay_runner_fatal "$FIRST_LOG"
   log_event fatal --arg stage first_source_pass --arg error_code source_read_failed >&2
   exit 33
 fi
@@ -86,6 +99,7 @@ if ! "$RUNNER" \
   "--expected-count=$COUNT" \
   "--expected-digest=$DIGEST" \
   --dry-run > "$SECOND_LOG"; then
+  relay_runner_fatal "$SECOND_LOG"
   log_event fatal --arg stage second_source_pass --arg error_code unstable_or_failed_source_read >&2
   exit 36
 fi
