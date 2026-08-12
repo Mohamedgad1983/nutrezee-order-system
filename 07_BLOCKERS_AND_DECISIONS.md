@@ -1,6 +1,10 @@
 # Live Blockers & Decisions — Build Execution
 
-**Date:** 2026-08-08 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+**Date:** 2026-08-12 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+
+## WP-OPS-01 daily Partner selector — resolved 2026-08-12
+
+A36 replaced the incomplete `/integration/meal-history` + `/integration/orders` daily membership logic with Partner's exact-date live `/integration/daily-deliveries` endpoint. The deployed bridge now reconciles the complete cursor walk to the endpoint's declared delivery and distinct-order totals, uses unique `order_id` for Fleetbase, and fails closed on ambiguous duplicate instances or an old-selector date prefix. The 2026-08-12 source reconciled 891 delivery rows to 883 distinct orders; Fleetbase contains exactly 883 unique integration orders, 671 dispatched/assigned and 212 held for missing/invalid pins, with zero duplicates. The root-protected read-only snapshot is healthy at the same 883; the unattended dispatch timer remains disabled pending separate activation approval. The current 2026-08-13 read-only preflight is 874 delivery rows / 856 distinct orders and has not been written.
 
 ## WP-KDS-02 user-assigned section isolation — resolved 2026-08-08
 

@@ -4,7 +4,6 @@ umask 077
 
 RUNNER=/opt/fleetbase/integrations/nutreeze-orders/run.sh
 DELIVERY_DATE="$(TZ=Asia/Kuwait date +%F)"
-MEAL_SINCE=2026-01-01T00:00:00+03:00
 HOUR="$(TZ=Asia/Kuwait date +%H | sed 's/^0//')"
 MINUTE="$(TZ=Asia/Kuwait date +%M | sed 's/^0//')"
 NOW_MINUTES=$((HOUR * 60 + MINUTE))
@@ -19,7 +18,6 @@ fi
 
 if ! "$RUNNER" \
   "--delivery-date=$DELIVERY_DATE" \
-  "--meal-since=$MEAL_SINCE" \
   --limit=1000 \
   --dry-run > "$MANIFEST_LOG"; then
   sed -n '/"event":"fatal"/p' "$MANIFEST_LOG" >&2
@@ -40,7 +38,6 @@ find /var/tmp -maxdepth 1 -type f -name "$(basename "$MANIFEST_LOG")" -delete
 
 exec "$RUNNER" \
   "--delivery-date=$DELIVERY_DATE" \
-  "--meal-since=$MEAL_SINCE" \
   --limit=1000 \
   "--expected-count=$COUNT" \
   "--expected-digest=$DIGEST" \

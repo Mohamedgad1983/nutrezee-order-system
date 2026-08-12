@@ -62,11 +62,16 @@ jq -cn \
   '{
     event: "daily_source_summary",
     delivery_date: $delivery_date,
-    meal_pages: 2,
-    meal_response_rows: 30,
-    daily_meal_rows: 30,
-    order_pages: 2,
-    order_response_rows: 20,
+    source_selector: "partner_daily_deliveries_v1",
+    source_endpoint: "/integration/daily-deliveries",
+    delivery_pages: 2,
+    delivery_response_rows: $daily_orders,
+    source_declared_deliveries: $daily_orders,
+    source_declared_distinct_orders: $daily_orders,
+    source_declared_scheduled: $daily_orders,
+    source_declared_on_hold: 0,
+    source_declared_cancelled: 0,
+    duplicate_delivery_rows_collapsed: 0,
     daily_orders: $daily_orders,
     orders_with_real_pin: 10,
     orders_dispatchable: 10,
@@ -113,7 +118,8 @@ run_snapshot 2026-07-23 12 "$DIGEST_A" > "$TEST_ROOT/first.out"
 SNAPSHOT_FILE="$SNAPSHOT_DIR/2026-07-23.json"
 [ -f "$SNAPSHOT_FILE" ] || fail 'snapshot file was not created'
 jq -e '
-  .schema_version == 1
+  .schema_version == 2
+  and .source_selector == "partner_daily_deliveries_v1"
   and .delivery_date == "2026-07-23"
   and .stable_two_pass == true
   and .authoritative_expected_total == false
