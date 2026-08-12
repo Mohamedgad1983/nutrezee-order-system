@@ -1416,6 +1416,81 @@ function dailySourceDigest(array $dailyRows): string
 }
 
 /**
+ * Reconcile Partner's endpoint membership to a root-protected Driver Orders
+ * export. The manifest contains order numbers only (no names, phones, or
+ * addresses). Every manifest order must exist in the complete API response;
+ * API-only rows are excluded and reported, while a missing manifest order
+ * aborts the run.
+ */
+function applyDriverOrdersMembership(array $dailyRows, string $path, string $deliveryDate): array
+{
+    return applyDriverOrdersMembershipManifest(
+        $dailyRows,
+        loadLockedJson($path, 'driver_orders_manifest'),
+        $deliveryDate,
+    );
+}
+
+function applyDriverOrdersMembershipManifest(array $dailyRows, array $manifest, string $deliveryDate): array
+{
+    if (($manifest['schema_version'] ?? null) !== 1
+        || ($manifest['source'] ?? null) !== 'legacy_driver_orders_csv_v1'
+        || ($manifest['delivery_date'] ?? null) !== $deliveryDate
+        || !is_int($manifest['expected_count'] ?? null)
+        || $manifest['expected_count'] < 0
+        || !is_array($manifest['order_numbers'] ?? null)
+        || !is_string($manifest['order_number_digest'] ?? null)
+        || !preg_match('/^[a-f0-9]{64}$/', $manifest['order_number_digest'])) {
+        throw new RuntimeException('driver_orders_manifest_shape');
+    }
+
+    $numbers = [];
+    foreach ($manifest['order_numbers'] as $number) {
+        if (!is_string($number)) {
+            throw new RuntimeException('driver_orders_manifest_order_number');
+        }
+        $number = trim($number);
+        if ($number === ''
+            || mb_strlen($number) > 255
+            || !preg_match('/^[A-Za-z0-9._-]+$/', $number)
+            || isset($numbers[$number])) {
+            throw new RuntimeException('driver_orders_manifest_order_number');
+        }
+        $numbers[$number] = true;
+    }
+    if (count($numbers) !== $manifest['expected_count']) {
+        throw new RuntimeException('driver_orders_manifest_count');
+    }
+    $sortedNumbers = array_keys($numbers);
+    sort($sortedNumbers, SORT_STRING);
+    $digest = hash('sha256', implode("\n", $sortedNumbers) . ($sortedNumbers === [] ? '' : "\n"));
+    if (!hash_equals($manifest['order_number_digest'], $digest)) {
+        throw new RuntimeException('driver_orders_manifest_digest');
+    }
+
+    $byNumber = [];
+    foreach ($dailyRows as $row) {
+        $number = (string) $row['order_number'];
+        if (isset($byNumber[$number])) {
+            throw new RuntimeException('driver_orders_manifest_api_duplicate');
+        }
+        $byNumber[$number] = $row;
+    }
+    $missing = array_diff_key($numbers, $byNumber);
+    if ($missing !== []) {
+        throw new RuntimeException('driver_orders_manifest_missing_from_api');
+    }
+    $selected = array_values(array_intersect_key($byNumber, $numbers));
+    usort($selected, fn (array $a, array $b): int => $a['order_id'] <=> $b['order_id']);
+    return [
+        'rows' => $selected,
+        'count' => count($numbers),
+        'digest' => $digest,
+        'api_only_excluded' => count($dailyRows) - count($selected),
+    ];
+}
+
+/**
  * Once an order is dispatched its source snapshot and deterministic driver are
  * immutable. This preflight runs before FleetbaseWriter so a changed feed cannot
  * modify a live job even transiently; the outer transaction is the second guard.
@@ -1918,10 +1993,26 @@ final class VendorClient
                     fn (mixed $item): bool => is_array($item)
                         && ($item['delivery_date'] ?? null) === $selectedDate,
                 ));
-                if (count($matching) !== 1) {
+                if (count($matching) > 1) {
                     throw new RuntimeException('vendor_daily_completeness_date');
                 }
-                $daily = $matching[0];
+                if ($matching === []) {
+                    if ($payload['data'] !== [] || $payload['count'] !== 0) {
+                        throw new RuntimeException('vendor_daily_completeness_date');
+                    }
+                    // The live endpoint omits zero-delivery dates from per_date.
+                    // Inside its declared window, an empty selected response is
+                    // therefore normalized to an explicit zero-day contract.
+                    $daily = [
+                        'deliveries' => 0,
+                        'distinct_orders' => 0,
+                        'scheduled' => 0,
+                        'on_hold' => 0,
+                        'cancelled' => 0,
+                    ];
+                } else {
+                    $daily = $matching[0];
+                }
                 foreach (['deliveries', 'distinct_orders', 'scheduled', 'on_hold', 'cancelled'] as $field) {
                     if (!isset($daily[$field]) || !is_int($daily[$field]) || $daily[$field] < 0) {
                         throw new RuntimeException('vendor_daily_completeness_' . $field);
@@ -4330,7 +4421,46 @@ function runSelfTest(): array
     if (dailySourceDigest($singleDeliveryRows) === dailySourceDigest($changedDeliveryIdRows)) {
         throw new RuntimeException('self_test_daily_delivery_digest');
     }
-    return ['passed' => 32, 'total' => 32];
+    $membershipNumbers = ['DELIVERY-31'];
+    $membershipManifest = [
+        'schema_version' => 1,
+        'source' => 'legacy_driver_orders_csv_v1',
+        'delivery_date' => '2026-08-12',
+        'expected_count' => 1,
+        'order_number_digest' => hash('sha256', "DELIVERY-31\n"),
+        'order_numbers' => $membershipNumbers,
+    ];
+    $membership = applyDriverOrdersMembershipManifest(
+        $dailyDeliveryRows,
+        $membershipManifest,
+        '2026-08-12',
+    );
+    if ($membership['count'] !== 1
+        || $membership['api_only_excluded'] !== 1
+        || count($membership['rows']) !== 1
+        || $membership['rows'][0]['order_number'] !== 'DELIVERY-31') {
+        throw new RuntimeException('self_test_driver_orders_membership');
+    }
+    foreach ([
+        array_replace($membershipManifest, [
+            'order_numbers' => ['DELIVERY-99'],
+            'order_number_digest' => hash('sha256', "DELIVERY-99\n"),
+        ]),
+        array_replace($membershipManifest, ['order_number_digest' => str_repeat('0', 64)]),
+    ] as $index => $invalidManifest) {
+        try {
+            applyDriverOrdersMembershipManifest($dailyDeliveryRows, $invalidManifest, '2026-08-12');
+            throw new RuntimeException('self_test_driver_orders_membership_not_rejected');
+        } catch (RuntimeException $exception) {
+            $expected = $index === 0
+                ? 'driver_orders_manifest_missing_from_api'
+                : 'driver_orders_manifest_digest';
+            if ($exception->getMessage() !== $expected) {
+                throw $exception;
+            }
+        }
+    }
+    return ['passed' => 35, 'total' => 35];
 }
 
 $stage = 'startup';
@@ -4345,6 +4475,7 @@ try {
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
+        'driver-orders-manifest:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -4367,6 +4498,9 @@ try {
     $allowAddressCall = $allowA19AddressCall || $allowLocationRecovery;
     if (isset($options['location-captures']) !== $allowLocationRecovery) {
         throw new RuntimeException('daily_location_captures_authorization_guard');
+    }
+    if (isset($options['driver-orders-manifest']) && $deliveryDate === null) {
+        throw new RuntimeException('driver_orders_manifest_daily_only');
     }
     $dailyPrefix = $deliveryDate === null
         ? null
@@ -4479,6 +4613,15 @@ try {
         if (count($dailyRows) !== $sourceDeclaredOrders) {
             throw new RuntimeException('vendor_daily_distinct_order_mismatch');
         }
+        $driverOrdersMembership = null;
+        if (isset($options['driver-orders-manifest'])) {
+            $driverOrdersMembership = applyDriverOrdersMembership(
+                $dailyRows,
+                (string) $options['driver-orders-manifest'],
+                $deliveryDate,
+            );
+            $dailyRows = $driverOrdersMembership['rows'];
+        }
         $futureLimit = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kuwait')))->modify('+5 minutes');
         foreach ($dailyRows as $dailyRow) {
             if (parseTimestamp($dailyRow['updated_at'], 'updated_at') > $futureLimit
@@ -4571,7 +4714,7 @@ try {
             $dailyRows,
             fn (array $row): bool => dailyHoldReason($row) === 'source_order_canceled',
         ));
-        $duplicateDeliveryRowsCollapsed = $fetched['delivery_response_rows'] - count($dailyRows);
+        $duplicateDeliveryRowsCollapsed = $fetched['delivery_response_rows'] - $sourceDeclaredOrders;
         safeLog('daily_source_summary', [
             'delivery_date' => $deliveryDate,
             'source_selector' => DAILY_SOURCE_SELECTOR,
@@ -4584,6 +4727,10 @@ try {
             'source_declared_on_hold' => $fetched['daily_completeness']['on_hold'],
             'source_declared_cancelled' => $fetched['daily_completeness']['cancelled'],
             'duplicate_delivery_rows_collapsed' => $duplicateDeliveryRowsCollapsed,
+            'driver_orders_manifest_checked' => $driverOrdersMembership !== null,
+            'driver_orders_manifest_count' => $driverOrdersMembership['count'] ?? null,
+            'driver_orders_manifest_digest' => $driverOrdersMembership['digest'] ?? null,
+            'api_only_orders_excluded' => $driverOrdersMembership['api_only_excluded'] ?? 0,
             'daily_orders' => count($dailyRows),
             'orders_with_real_pin' => $sourceRealPinCount,
             'orders_dispatchable' => $routableCount,

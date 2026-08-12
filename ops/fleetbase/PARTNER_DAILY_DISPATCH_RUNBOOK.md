@@ -83,11 +83,17 @@ The config directory must be root-owned mode `0700`:
 
 - `/opt/fleetbase/api/storage/app/integrations/config`
 
-All three files must be root-owned regular files with mode `0600`:
+The core files must be root-owned regular files with mode `0600`:
 
 - `/root/nutreeze-vendor.key`
 - `/opt/fleetbase/api/storage/app/integrations/config/nutreeze-driver-roster.json`
 - `/opt/fleetbase/api/storage/app/integrations/config/nutreeze-pickup.json`
+
+When exact Driver Orders membership is needed, an optional date-scoped
+`driver-orders-YYYYMMDD.json` file lives in the same protected config directory.
+It contains only delivery date, order numbers, count and SHA-256 digest—never
+customer names, phones, addresses or credentials. The bridge rejects a missing
+API member, duplicate, wrong date/count/digest, symlink, wrong owner or mode.
 
 The API key is supplied to the container over standard input. It is never passed
 in a command argument or environment variable.
@@ -148,6 +154,16 @@ The summary must keep the Partner-only `source_digest`, and separately report
 `orders_dispatchable_saved_pin`, `orders_location_known_stop_anchor`, and
 `approved_location_captures_loaded`. Never treat fallback counts as exact customer pins.
 
+When a verified Driver Orders manifest exists, append its protected container
+path to both passes:
+
+```sh
+--driver-orders-manifest=/fleetbase/api/storage/app/integrations/config/driver-orders-YYYYMMDD.json
+```
+
+The summary must show `driver_orders_manifest_checked=true`, its expected
+count/digest, and the explicit number of API-only orders excluded.
+
 The source summary must show `orders_location_country_fallback_held=0` before
 claiming that every otherwise-approved July 20 delivery was assigned. Do not
 add this option to `nutreeze-daily-sync.sh`.
@@ -186,22 +202,23 @@ systemctl list-timers nutreeze-partner-snapshot.timer --no-pager
 jq . /var/lib/nutreeze-partner-snapshots/"$(TZ=Asia/Kuwait date +%F)".json
 ```
 
-## Dispatch timer (installed, deliberately disabled)
+## Rolling 48-hour dispatch timer (production active under A37)
 
-The supplied timer targets 07:00 Kuwait (04:00 UTC), after the documented 06:00
-Partner snapshot. The service accepts only the 06:45–07:45 Kuwait window, does
-not replay missed timers, waits for a healthy Fleetbase application container,
-and performs two independent API passes whose count and digest must match.
+The A37 timer targets 07:00 Kuwait (04:00 UTC) and refreshes **tomorrow and the
+following day** (+1/+2), giving drivers a rolling 48-hour horizon without
+rewriting today's potentially started work. Each date performs a dry-run plus
+count/digest-locked write independently, so one failed date does not block the
+other. A zero day requires the same stability plus explicit zero confirmation.
+The oneshot service has `Restart=no`, preventing an API retry storm; the timer
+tries again only on its next daily trigger.
 
-Do **not** enable unattended execution yet. The new endpoint supplies a date-level
-delivery total and distinct-order total, and the bridge now reconciles both, but
-timer activation is still a separate operational approval. The enabled read-only
-snapshot remains separate and cannot write Fleetbase records.
-
-Confirm it remains disabled with:
+Confirm the active schedule with:
 
 ```sh
 systemctl is-enabled nutreeze-partner-daily.timer
+systemctl is-active nutreeze-partner-daily.timer
+systemctl show nutreeze-partner-daily.service -p Restart -p NRestarts
+systemctl list-timers nutreeze-partner-daily.timer --no-pager
 journalctl -u nutreeze-partner-daily.service --since today
 ```
 

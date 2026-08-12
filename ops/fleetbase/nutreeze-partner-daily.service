@@ -1,5 +1,5 @@
 [Unit]
-Description=Nutrezee Partner API daily Fleetbase dispatch sync
+Description=Nutrezee Partner API rolling 48-hour Fleetbase dispatch sync
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 StartLimitIntervalSec=30min
@@ -13,8 +13,6 @@ UMask=0077
 ExecStartPre=/opt/fleetbase/integrations/nutreeze-orders/healthcheck.sh
 ExecStart=/opt/fleetbase/integrations/nutreeze-orders/daily-sync.sh
 TimeoutStartSec=45min
-Restart=on-failure
-RestartSec=5min
 NoNewPrivileges=true
 PrivateDevices=true
 ProtectHome=read-only

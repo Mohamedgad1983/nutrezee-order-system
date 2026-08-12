@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Nutrezee Partner daily dispatch after the 06:00 Kuwait snapshot
+Description=Refresh Nutrezee Fleetbase orders for the next 48 hours
 
 [Timer]
 OnCalendar=*-*-* 04:00:00 UTC
