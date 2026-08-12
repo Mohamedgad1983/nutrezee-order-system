@@ -150,6 +150,17 @@ manifest must remain labeled non-authoritative and must not enable or feed the
 dispatch timer. All A23 storage, PII, write-prohibition, and A19 boundaries remain
 in force.
 
+## Rolling Fleetbase synchronization 01:00 schedule amendment
+
+AMENDMENT A38 2026-08-12 — Mohamed corrected the production rolling Fleetbase
+synchronization schedule to **01:00 Kuwait** (`22:00 UTC` on the preceding
+calendar day), superseding only A37's 07:00 timing. The job continues to refresh
+the +1/+2-day horizon with independent per-date reconciliation and `Restart=no`;
+its executable wrapper must reject starts outside 00:45–01:45 Kuwait. Applying
+this schedule correction must restart only the timer and must not trigger an
+additional dispatch run. Partner and legacy remain read-only, and the A30
+production-activation gate remains separate.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

@@ -7,7 +7,7 @@ CONFIG_ROOT="${NUTREEZE_DAILY_CONFIG_ROOT:-/opt/fleetbase/api/storage/app/integr
 CONTAINER_CONFIG_ROOT="${NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT:-/fleetbase/api/storage/app/integrations/config}"
 TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
 if [ "${NUTREEZE_DAILY_TEST_MODE:-0}" = 1 ]; then
-  NOW_MINUTES="${NUTREEZE_DAILY_TEST_NOW_MINUTES:-420}"
+  NOW_MINUTES="${NUTREEZE_DAILY_TEST_NOW_MINUTES:-60}"
   TARGET_DATES="${NUTREEZE_DAILY_TARGET_DATES:-}"
 else
   HOUR="$(TZ=Asia/Kuwait date +%H | sed 's/^0//')"
@@ -19,8 +19,8 @@ MANIFEST_LOG="$(mktemp /var/tmp/nutreeze-partner-manifest.XXXXXX)"
 trap 'find /var/tmp -maxdepth 1 -type f -name "$(basename "$MANIFEST_LOG")" -delete' EXIT HUP INT TERM
 chmod 600 "$MANIFEST_LOG"
 
-if [ "$NOW_MINUTES" -lt 405 ] || [ "$NOW_MINUTES" -gt 465 ]; then
-  printf '%s\n' 'outside guarded 06:45-07:45 Kuwait sync window' >&2
+if [ "$NOW_MINUTES" -lt 45 ] || [ "$NOW_MINUTES" -gt 105 ]; then
+  printf '%s\n' 'outside guarded 00:45-01:45 Kuwait sync window' >&2
   exit 25
 fi
 

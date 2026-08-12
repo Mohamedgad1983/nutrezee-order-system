@@ -202,15 +202,16 @@ systemctl list-timers nutreeze-partner-snapshot.timer --no-pager
 jq . /var/lib/nutreeze-partner-snapshots/"$(TZ=Asia/Kuwait date +%F)".json
 ```
 
-## Rolling 48-hour dispatch timer (production active under A37)
+## Rolling 48-hour dispatch timer (production active under A37/A38)
 
-The A37 timer targets 07:00 Kuwait (04:00 UTC) and refreshes **tomorrow and the
-following day** (+1/+2), giving drivers a rolling 48-hour horizon without
-rewriting today's potentially started work. Each date performs a dry-run plus
-count/digest-locked write independently, so one failed date does not block the
-other. A zero day requires the same stability plus explicit zero confirmation.
-The oneshot service has `Restart=no`, preventing an API retry storm; the timer
-tries again only on its next daily trigger.
+The A38 schedule correction targets 01:00 Kuwait (22:00 UTC on the preceding
+calendar day) and refreshes **tomorrow and the following day** (+1/+2), giving
+drivers a rolling 48-hour horizon without rewriting today's potentially started
+work. The executable wrapper permits starts only from 00:45 through 01:45 Kuwait.
+Each date performs a dry-run plus count/digest-locked write independently, so one
+failed date does not block the other. A zero day requires the same stability plus
+explicit zero confirmation. The oneshot service has `Restart=no`, preventing an
+API retry storm; the timer tries again only on its next daily trigger.
 
 Confirm the active schedule with:
 

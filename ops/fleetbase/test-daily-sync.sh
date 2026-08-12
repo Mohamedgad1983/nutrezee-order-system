@@ -54,7 +54,7 @@ run_sync() {
   MOCK_CALL_LOG="$CALL_LOG" \
   MOCK_FAIL_DATE="${1:-}" \
   NUTREEZE_DAILY_TEST_MODE=1 \
-  NUTREEZE_DAILY_TEST_NOW_MINUTES=420 \
+  NUTREEZE_DAILY_TEST_NOW_MINUTES=60 \
   NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
   NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
   NUTREEZE_DAILY_CONFIG_ROOT="$CONFIG_ROOT" \
@@ -76,4 +76,17 @@ fi
 grep -q -- '--confirm-daily-sync=2026-08-14' "$CALL_LOG"
 grep -q '"days_succeeded":1,"days_failed":1' "$ROOT/failure.log"
 
-printf '%s\n' 'daily sync tests: 7/7 passed'
+: > "$CALL_LOG"
+if MOCK_CALL_LOG="$CALL_LOG" \
+  NUTREEZE_DAILY_TEST_MODE=1 \
+  NUTREEZE_DAILY_TEST_NOW_MINUTES=420 \
+  NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
+  NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
+  "$(dirname "$0")/nutreeze-daily-sync.sh" > "$ROOT/outside-window.log" 2>&1; then
+  printf '%s\n' 'expected 07:00 Kuwait to be rejected' >&2
+  exit 1
+fi
+grep -q 'outside guarded 00:45-01:45 Kuwait sync window' "$ROOT/outside-window.log"
+[ ! -s "$CALL_LOG" ]
+
+printf '%s\n' 'daily sync tests: 9/9 passed'
