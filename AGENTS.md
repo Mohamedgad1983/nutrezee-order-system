@@ -161,6 +161,18 @@ this schedule correction must restart only the timer and must not trigger an
 additional dispatch run. Partner and legacy remain read-only, and the A30
 production-activation gate remains separate.
 
+## Nullable Partner time-slot amendment
+
+AMENDMENT A39 2026-08-16 — Mohamed directed immediate repair of the live rolling
+Fleetbase synchronization after Partner returned a legitimate daily-delivery row
+whose legacy `time_slot` object contained null `id`, `title`, `start`, and `end`
+values. These presentation fields are optional; their absence must not block an
+otherwise valid delivery. Non-null values remain strictly type/length validated,
+and Fleetbase scheduling continues to use only the protected pickup
+`dispatch_time`. All count/digest, exact membership, location-hold, idempotency,
+read-only Partner/legacy, `Restart=no`, and separate A30 activation controls remain
+unchanged.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

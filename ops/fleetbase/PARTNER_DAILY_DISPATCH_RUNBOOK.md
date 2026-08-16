@@ -18,6 +18,10 @@ write to the Partner API or the legacy application.
   wins) or one newest positive-meal member supersedes zero-meal members. All
   delivery ids and states remain represented in the source digest. Any
   ambiguous duplicate aborts.
+- The legacy `time_slot` object may contain null `id`, `title`, `start`, and
+  `end` values. Those optional presentation values do not control scheduling;
+  every non-null string remains type/length checked, and the bridge continues
+  to use only the protected pickup `dispatch_time` for Fleetbase scheduling.
 - `/integration/order-items` remains the authoritative Kitchen & Labels item
   source, not the driver-trip membership source. `/integration/orders` and
   `/integration/meal-history` are no longer used to select daily dispatch rows.

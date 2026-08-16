@@ -1,10 +1,10 @@
 # Live Blockers & Decisions — Build Execution
 
-**Date:** 2026-08-12 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
+**Date:** 2026-08-16 (verify live each session — `build_progress_register.md` gate snapshot + `20_Decisions/decision_register.md` are the operative sources; this file is the orientation summary) · **Status:** Living
 
-## WP-OPS-01 daily Partner selector — resolved 2026-08-12
+## WP-OPS-01 daily Partner selector — resolved through 2026-08-18
 
-A36 replaced the incomplete `/integration/meal-history` + `/integration/orders` daily membership logic with Partner's exact-date live `/integration/daily-deliveries` endpoint. A37 then resolved the verified Aug-13 one-row membership surplus by requiring a root-protected, PII-free Driver Orders order-number manifest when one is present. Fleetbase now contains exactly 883 unique Aug-12 orders and exactly 855 unique Aug-13 orders; Aug-13 has 657 dispatched/assigned and 198 explicitly held, with 0 duplicates and the API-only order excluded. Aug-14 was independently verified as a zero-delivery day. A38 corrects the rolling 48-hour (+1/+2 day) timer to 01:00 Kuwait, with an executable 00:45–01:45 guard; each date is isolated, uses two-pass count/digest reconciliation, and the service has `Restart=no`. The separate read-only 01:00 snapshot remains enabled and cannot write Fleetbase.
+A36 replaced the incomplete `/integration/meal-history` + `/integration/orders` daily membership logic with Partner's exact-date live `/integration/daily-deliveries` endpoint. A37 then resolved the verified Aug-13 one-row membership surplus by requiring a root-protected, PII-free Driver Orders order-number manifest when one is present. A38 corrects the rolling 48-hour (+1/+2 day) timer to 01:00 Kuwait, with an executable 00:45–01:45 guard; each date is isolated, uses two-pass count/digest reconciliation, and the service has `Restart=no`. A39 accepts null values in the endpoint's optional legacy `time_slot` presentation fields while continuing to reject non-null type violations and using only the protected pickup `dispatch_time` for Fleetbase scheduling. The repaired Aug-18 run reconciled exactly 835 unique orders: 628 dispatched/assigned and 207 explicitly held (201 missing pins, 6 invalid pins), with 835 payloads, 835 tracking records, and 0 duplicate ids. The timer is enabled/waiting for 01:00 Kuwait; the separate read-only snapshot remains unable to write Fleetbase.
 
 ## WP-KDS-02 user-assigned section isolation — resolved 2026-08-08
 

@@ -943,9 +943,12 @@ function validateDailyDeliveryRow(array $row, string $deliveryDate): array
     optionalString($row, 'delivery_method', 255);
     optionalString($row, 'driver_instructions', 2000);
     requiredString($row, 'hold_state', 64);
-    requiredString($timeSlot, 'title', 255);
-    requiredString($timeSlot, 'start', 64);
-    requiredString($timeSlot, 'end', 64);
+    // Partner can legitimately omit the optional legacy time-slot object values.
+    // Fleetbase scheduling is governed by the protected pickup dispatch_time,
+    // not these presentation fields. Non-null values remain contract-checked.
+    $timeSlotTitle = optionalString($timeSlot, 'title', 255);
+    $timeSlotStart = optionalString($timeSlot, 'start', 64);
+    $timeSlotEnd = optionalString($timeSlot, 'end', 64);
     $updatedAt = requiredString($row, 'updated_at', 64);
     $updatedTime = parseTimestamp($updatedAt, 'daily_delivery_updated_at');
 
@@ -985,9 +988,9 @@ function validateDailyDeliveryRow(array $row, string $deliveryDate): array
         'driver_instructions' => optionalString($row, 'driver_instructions', 2000),
         'time_slot' => [
             'id' => $timeSlot['id'] ?? null,
-            'title' => requiredString($timeSlot, 'title', 255),
-            'start' => requiredString($timeSlot, 'start', 64),
-            'end' => requiredString($timeSlot, 'end', 64),
+            'title' => $timeSlotTitle,
+            'start' => $timeSlotStart,
+            'end' => $timeSlotEnd,
         ],
     ];
     return $base + [
@@ -4421,6 +4424,26 @@ function runSelfTest(): array
     if (dailySourceDigest($singleDeliveryRows) === dailySourceDigest($changedDeliveryIdRows)) {
         throw new RuntimeException('self_test_daily_delivery_digest');
     }
+    $emptyTimeSlotRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, [
+            'time_slot' => ['id' => null, 'title' => null, 'start' => null, 'end' => null],
+        ]),
+    ], '2026-08-12');
+    if (count($emptyTimeSlotRows) !== 1) {
+        throw new RuntimeException('self_test_daily_delivery_empty_time_slot');
+    }
+    try {
+        buildDailyDeliveryRows([
+            array_replace($deliveryBase, [
+                'time_slot' => array_replace($deliveryBase['time_slot'], ['title' => ['invalid']]),
+            ]),
+        ], '2026-08-12');
+        throw new RuntimeException('self_test_daily_delivery_invalid_time_slot_title_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'contract_string_title') {
+            throw $exception;
+        }
+    }
     $membershipNumbers = ['DELIVERY-31'];
     $membershipManifest = [
         'schema_version' => 1,
@@ -4460,7 +4483,7 @@ function runSelfTest(): array
             }
         }
     }
-    return ['passed' => 35, 'total' => 35];
+    return ['passed' => 37, 'total' => 37];
 }
 
 $stage = 'startup';
