@@ -44,7 +44,7 @@
         </div>
 
         <div class="nz-label-preview">
-            <article class="nz-legacy-label" aria-label="Nutrezee label for order {{this.label.orderNumber}}">
+            <article class="nz-legacy-label {{this.label.driverColorClass}}" aria-label="Nutrezee label for order {{this.label.orderNumber}}">
                 <header class="nz-legacy-label__header">
                     <svg class="nz-legacy-label__mark" viewBox="0 0 48 44" aria-hidden="true">
                         <polygon points="24,2 42,12 42,32 24,42 6,32 6,12" fill="none" stroke="currentColor" stroke-width="1.4" />
@@ -52,6 +52,10 @@
                     </svg>
                     <div class="nz-legacy-label__brand">Nutreeze</div>
                     <div class="nz-legacy-label__tagline">Stay Healthy</div>
+                    <div class="nz-driver-band" data-test-driver-box-identity>
+                        <span>CAR / سيارة <strong>{{this.label.vehicleNumber}}</strong></span>
+                        <span>TEL / هاتف <strong>{{this.label.driverPhone}}</strong></span>
+                    </div>
                 </header>
 
                 <div class="nz-legacy-label__body">
@@ -71,8 +75,7 @@
 
                         <div class="nz-info-group nz-id-row">
                             <span>User ID <strong>{{this.label.legacyUserId}}</strong></span>
-                            <span>Driver ID <strong>{{this.label.driverRef}}</strong></span>
-                            <span class="nz-id-row__order">User ID <strong>{{this.label.orderNumber}}</strong></span>
+                            <span class="nz-id-row__order">Order ID <strong>{{this.label.orderNumber}}</strong></span>
                         </div>
 
                         <div class="nz-info-group nz-address-block">

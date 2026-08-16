@@ -144,6 +144,10 @@ export interface LabelAddressContract {
   direction: string | null;
 }
 
+export type DriverLabelColorToken =
+  | 'red' | 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'pink' | 'navy'
+  | 'brown' | 'cyan' | 'olive' | 'amber' | 'magenta' | 'slate' | 'lime' | 'coral';
+
 /** The complete, render-ready legacy label. Field order mirrors the printed label exactly. */
 export interface LabelDocumentContract {
   order_id: string;
@@ -159,6 +163,9 @@ export interface LabelDocumentContract {
   snacks_per_day: number | null;
   legacy_user_id: string | null;
   driver_ref: string | null;
+  driver_color: DriverLabelColorToken | null;
+  driver_phone: string | null;
+  vehicle_number: string | null;
   order_number: string;
   address: LabelAddressContract;
   phone: string | null;

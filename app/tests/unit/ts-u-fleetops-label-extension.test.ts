@@ -117,6 +117,24 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(styles).toMatch(/\.nz-legacy-label__barcode\s*\{/);
   });
 
+  it('prints vehicle and phone in a driver color while keeping the barcode black', () => {
+    expect(template).toContain('CAR / سيارة');
+    expect(template).toContain('TEL / هاتف');
+    expect(template).toContain('this.label.vehicleNumber');
+    expect(template).toContain('this.label.driverPhone');
+    expect(template).not.toContain('Driver ID');
+    expect(batchTemplate).toContain('item.label.driverColorClass');
+    expect(batchTemplate).toContain('item.label.vehicleNumber');
+    expect(batchTemplate).toContain('item.label.driverPhone');
+    expect(batchTemplate).not.toContain('order.driver_name');
+    expect(normalize).toContain('DRIVER_COLORS');
+    expect(normalize).toContain('driver_color');
+    expect(styles).toContain('.nz-driver-color--red');
+    expect(styles).toContain('.nz-driver-color--coral');
+    expect(styles).toContain('-webkit-print-color-adjust: exact');
+    expect(styles).toMatch(/\.nz-barcode-svg svg[\s\S]*fill: #000/);
+  });
+
   it('renders an explicit empty meal state instead of fabricated nutrition', () => {
     expect(template).toContain('No dish detail recorded for this date');
     expect(template).toContain('No authoritative dish detail is recorded');

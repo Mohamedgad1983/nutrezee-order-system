@@ -111,9 +111,9 @@ export class LabelController {
       );
       const orderId = await this.labels.resolveFleetbaseOrder(order);
       const deliveryDate = this.fleetbaseIdentity.deliveryDateForOrder(order);
-      return this.labels.build(actor, orderId, deliveryDate, {
-        driverRef: this.labels.fleetbaseDriverRef(order),
-      });
+      return this.labels.build(
+        actor, orderId, deliveryDate, this.labels.fleetbaseDriverSource(order),
+      );
     });
   }
 
@@ -406,7 +406,7 @@ function batchOptionsResponse(
       const current = driverMap.get(candidate.driverId);
       driverMap.set(candidate.driverId, {
         id: candidate.driverId,
-        label: candidate.driverName ?? candidate.driverId,
+        label: candidate.driverLabel ?? candidate.driverId,
         count: (current?.count ?? 0) + 1,
       });
     }
@@ -430,7 +430,7 @@ function batchOptionsResponse(
       selection_id: candidate.selectionId,
       order_number: candidate.orderNumber,
       driver_id: candidate.driverId,
-      driver_name: candidate.driverName,
+      driver_label: candidate.driverLabel,
       area_id: candidate.areaKey,
       area: candidate.areaLabel,
     })),

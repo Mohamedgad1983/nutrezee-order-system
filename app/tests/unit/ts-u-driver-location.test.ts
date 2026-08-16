@@ -11,6 +11,7 @@ import {
 class LocationGateway implements FleetbaseIdentityGateway {
   constructor(private readonly assigned: FleetbaseOrderProjection[]) {}
   async session() { return { user: 'driver-user', type: 'driver', verified: true }; }
+  async drivers() { return [{ public_id: 'driver_1', internal_id: 'A1' }]; }
   async driversForUser() { return [{ public_id: 'driver_1', internal_id: 'A1' }]; }
   async assignedOrders() { return this.assigned; }
   async orders() { return this.assigned; }

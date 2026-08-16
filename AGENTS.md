@@ -173,6 +173,23 @@ and Fleetbase scheduling continues to use only the protected pickup
 read-only Partner/legacy, `Restart=no`, and separate A30 activation controls remain
 unchanged.
 
+## Driver box color + vehicle/phone label amendment
+
+AMENDMENT A40 2026-08-16 — Mohamed requires every current Fleetbase-assigned
+driver's meal boxes to carry a visually distinct driver color plus the driver's
+current vehicle number and phone number, because a driver's display name may
+change. The color identity must be derived from the immutable Fleetbase driver
+public id across the complete current company driver directory, never from the
+name, customer, area, or order. The permanent customer Code 128/QR payload and
+bars remain black and unchanged for scanner reliability; color is restricted to
+a prominent label band/border. Fleet-Ops must read the phone and vehicle plate
+server-side from the current Fleetbase driver/vehicle assignment and fail closed
+before printing if an assigned driver's public id, unique color, phone, or
+vehicle plate is missing. Reassignment must produce the newly assigned driver's
+identity on a fresh preview. This supersedes the earlier driver-phone prohibition
+only for authenticated internal box-label rendering; it does not authorize phone
+storage, logging, Partner exposure, public APIs, or any Fleetbase/Partner write.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

@@ -17,6 +17,13 @@ sticker per page. It fails closed when today's Fleetbase set is absent or any Fl
 cannot be mapped to the label database; a partial local fulfillment count is never presented as
 the day's operational total.
 
+Each assigned driver's boxes carry a prominent, deterministic color keyed only by the immutable
+Fleetbase driver public id. The visible identity is the driver's current Fleetbase phone and
+assigned vehicle plate, never the mutable driver name. Every company driver gets a distinct color;
+the Code 128 barcode stays black. An assigned driver with no phone, vehicle plate or color blocks
+preview and printing. These values are read live for the authenticated Fleet-Ops operation and are
+not persisted in Nutrezee label or audit tables.
+
 It uses the already-authenticated Fleetbase bearer token and same-origin
 `/nz/fleet-ops/labels/*` endpoints. It does not add an administration shell,
 login page, or independent customer/driver authorization model.

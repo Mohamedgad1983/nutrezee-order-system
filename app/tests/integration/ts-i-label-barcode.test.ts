@@ -437,6 +437,9 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
         public_id: 'driver_ahmed',
         internal_id: 'AHMED',
         name: 'Ahmed',
+        phone: '+96550000001',
+        vehicle: { plate_number: 'KWT-101' },
+        label_color: 'teal' as const,
       },
     }));
 
@@ -449,12 +452,18 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
       'N-LBL-BATCH-1',
       'N-LBL-BATCH-2',
     ]);
-    expect(selected.every((item) => item.driverRef === 'AHMED')).toBe(true);
+    expect(selected.every((item) => item.driverRef === 'driver_ahmed')).toBe(true);
+    expect(selected.every((item) => item.driverPhone === '+96550000001')).toBe(true);
+    expect(selected.every((item) => item.vehicleNumber === 'KWT-101')).toBe(true);
+    expect(selected.every((item) => item.driverColor === 'teal')).toBe(true);
 
     const preview = await labels.buildCandidateBatch(actor, DATE_B, selected);
     expect(preview).toHaveLength(2);
     expect(preview.every((item) => item.prior_prints === 0)).toBe(true);
-    expect(preview.every((item) => item.label.driver_ref === 'AHMED')).toBe(true);
+    expect(preview.every((item) => item.label.driver_ref === 'driver_ahmed')).toBe(true);
+    expect(preview.every((item) => item.label.driver_phone === '+96550000001')).toBe(true);
+    expect(preview.every((item) => item.label.vehicle_number === 'KWT-101')).toBe(true);
+    expect(preview.every((item) => item.label.driver_color === 'teal')).toBe(true);
 
     const printed = await labels.recordCandidateBatchPrint(actor, DATE_B, selected);
     expect(printed.printed).toBe(2);
@@ -492,12 +501,18 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
       {
         id: 'fleetbase_guard_1',
         meta: { delivery_date: DATE_A, nutrezee_order_id: one.orderId },
-        driver_assigned: { public_id: 'driver_one', name: 'Driver One' },
+        driver_assigned: {
+          public_id: 'driver_one', name: 'Driver One', phone: '+96550000001',
+          vehicle: { plate_number: 'KWT-101' }, label_color: 'red',
+        },
       },
       {
         id: 'fleetbase_guard_2',
         meta: { delivery_date: DATE_A, nutrezee_order_id: two.orderId },
-        driver_assigned: { public_id: 'driver_two', name: 'Driver Two' },
+        driver_assigned: {
+          public_id: 'driver_two', name: 'Driver Two', phone: '+96550000002',
+          vehicle: { plate_number: 'KWT-202' }, label_color: 'blue',
+        },
       },
     ]);
     const first = candidates.find((item) => item.localOrderId === one.orderId)!;

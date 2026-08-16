@@ -1,4 +1,5 @@
 import type { StaffContext } from '../../platform/auth/session.service';
+import type { DriverLabelColorToken } from '@nutrezee/shared';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -8,7 +9,17 @@ export interface FleetbaseOrderProjection {
   scheduled_at?: string | null;
   status?: string | null;
   meta?: Record<string, unknown> | null;
-  driver_assigned?: { id?: string; public_id?: string; internal_id?: string; name?: string } | null;
+  driver_assigned?: {
+    id?: string;
+    public_id?: string;
+    user_uuid?: string;
+    internal_id?: string | null;
+    name?: string | null;
+    phone?: string | null;
+    vehicle_uuid?: string | null;
+    vehicle?: { plate_number?: string | null } | null;
+    label_color?: DriverLabelColorToken | null;
+  } | null;
   customer?: {
     name?: string | null;
     phone?: string | null;
@@ -53,16 +64,20 @@ interface FleetbaseSession {
   verified?: boolean;
 }
 
-interface FleetbaseDriverProjection {
+export interface FleetbaseDriverProjection {
   id?: string;
   public_id?: string;
   user_uuid?: string;
   internal_id?: string | null;
   name?: string | null;
+  phone?: string | null;
+  vehicle_uuid?: string | null;
+  vehicle?: { plate_number?: string | null } | null;
 }
 
 export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
+  drivers(token: string): Promise<FleetbaseDriverProjection[]>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
   assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
   orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]>;
@@ -155,10 +170,14 @@ export class FleetbaseIdentityService {
     actor: StaffContext;
     order: FleetbaseOrderProjection;
   }> {
-    const actor = await this.operatorContext(token);
-    const order = await this.client().order(requireToken(token), orderId);
+    const safeToken = requireToken(token);
+    const actor = await this.operatorContext(safeToken);
+    const [order, drivers] = await Promise.all([
+      this.client().order(safeToken, orderId),
+      this.client().drivers(safeToken),
+    ]);
     if (!order?.id) throw new FleetbaseIdentityError('upstream_unavailable');
-    return { actor, order };
+    return { actor, order: enrichDriverAssignments([order], drivers)[0]! };
   }
 
   /**
@@ -175,7 +194,11 @@ export class FleetbaseIdentityService {
     }
     const safeToken = requireToken(token);
     const actor = await this.operatorContext(safeToken);
-    const orders = (await this.client().orders(safeToken, deliveryDate))
+    const [sourceOrders, drivers] = await Promise.all([
+      this.client().orders(safeToken, deliveryDate),
+      this.client().drivers(safeToken),
+    ]);
+    const orders = enrichDriverAssignments(sourceOrders, drivers)
       .filter((order) => order.id && fleetbaseOrderDate(order) === deliveryDate)
       .filter((order) => !isHeldOrCancelled(order));
     return { actor, orders };
@@ -216,15 +239,19 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return this.request('GET', '/int/v1/auth/session', token);
   }
 
-  async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
+  async drivers(token: string): Promise<FleetbaseDriverProjection[]> {
     const response = await this.request<unknown>(
-      // Fleetbase 0.7.48 exposes user_uuid in the protected internal driver projection, but its
-      // DriverFilter silently ignores a user_uuid query parameter. Fetch the current company's
-      // bounded driver set and enforce the exact UUID comparison here rather than trusting a
-      // non-functional upstream filter.
-      'GET', '/int/v1/drivers?limit=-1', token,
+      'GET', '/int/v1/drivers?limit=-1&with%5B%5D=vehicle', token,
     );
-    return arrayPayload<FleetbaseDriverProjection>(response)
+    return arrayPayload<FleetbaseDriverProjection>(response);
+  }
+
+  async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
+    // Fleetbase 0.7.48 exposes user_uuid in the protected internal driver projection, but its
+    // DriverFilter silently ignores a user_uuid query parameter. Fetch the current company's
+    // bounded driver set and enforce the exact UUID comparison here rather than trusting a
+    // non-functional upstream filter.
+    return (await this.drivers(token))
       .filter((driver) => driver.user_uuid === userUuid);
   }
 
@@ -358,6 +385,76 @@ function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
   if (status.includes('cancel')) return true;
   const holdReason = order.meta?.hold_reason;
   return typeof holdReason === 'string' && holdReason.trim().length > 0;
+}
+
+const DRIVER_LABEL_COLORS: readonly DriverLabelColorToken[] = [
+  'red', 'blue', 'green', 'orange', 'purple', 'teal', 'pink', 'navy',
+  'brown', 'cyan', 'olive', 'amber', 'magenta', 'slate', 'lime', 'coral',
+];
+
+function enrichDriverAssignments(
+  orders: FleetbaseOrderProjection[],
+  drivers: FleetbaseDriverProjection[],
+): FleetbaseOrderProjection[] {
+  const directory = new Map<string, FleetbaseDriverProjection>();
+  for (const driver of drivers) {
+    const id = cleanString(driver.public_id) ?? cleanString(driver.id);
+    if (!id || directory.has(id)) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: id ? 'fleetbase_driver_directory_duplicate' : 'fleetbase_driver_public_id_missing',
+      });
+    }
+    directory.set(id, driver);
+  }
+  if (directory.size > DRIVER_LABEL_COLORS.length) {
+    throw new FleetbaseIdentityError('upstream_unavailable', {
+      reason: 'driver_label_color_capacity_exceeded',
+      capacity: DRIVER_LABEL_COLORS.length,
+    });
+  }
+  const colors = new Map(
+    [...directory.keys()].sort().map((id, index) => [id, DRIVER_LABEL_COLORS[index]!] as const),
+  );
+
+  return orders.map((order) => {
+    const assigned = order.driver_assigned;
+    if (!assigned) return order;
+    const id = cleanString(assigned.public_id) ?? cleanString(assigned.id);
+    if (!id) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_public_id_missing',
+      });
+    }
+    const profile = directory.get(id);
+    if (!profile) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_not_in_company_directory',
+      });
+    }
+    const phone = cleanString(profile.phone);
+    if (!phone) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_phone_missing',
+      });
+    }
+    const plateNumber = cleanString(profile.vehicle?.plate_number);
+    if (!plateNumber) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_vehicle_plate_missing',
+      });
+    }
+    return {
+      ...order,
+      driver_assigned: {
+        ...assigned,
+        ...profile,
+        public_id: id,
+        phone,
+        vehicle: { ...(assigned.vehicle ?? {}), ...(profile.vehicle ?? {}), plate_number: plateNumber },
+        label_color: colors.get(id)!,
+      },
+    };
+  });
 }
 
 function toAssignedOrder(order: FleetbaseOrderProjection): FleetbaseAssignedOrder | null {
