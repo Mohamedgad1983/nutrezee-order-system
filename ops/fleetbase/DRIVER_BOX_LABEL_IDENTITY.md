@@ -17,13 +17,16 @@
   are not stored in Nutrezee tables, audit rows, Partner data, logs, QR/barcode payloads or public
   endpoints.
 
-## Verified production-data prerequisite — 2026-08-16
+## Verified production-data prerequisite — 2026-08-18
 
 The current Fleetbase company has 12 non-deleted driver records, including the 11-driver active
-dispatch roster. All 11 active drivers have a phone, but Fleetbase currently has zero company
-vehicle records and zero driver-to-vehicle assignments. A40 can be built and tested now, but its
-production deployment must remain blocked until operations creates the real vehicles with plate
-numbers and assigns one to every active driver. No vehicle number may be invented.
+dispatch roster. All 11 active drivers have a phone. Under A41, operations used the supplied
+driver workbook to create and link nine real Fleetbase vehicle plates through the supported API;
+post-write reconciliation proved nine unique plates, nine distinct driver links, zero duplicate
+plates and zero cross-company links. Phone was used only as a transient matching key and was not
+stored in any vehicle field. Ahmed Al-Salem and Unit-01 remain unlinked because their workbook
+plate cells are blank. A40 production deployment therefore remains blocked until those two real
+plates are supplied and linked. No vehicle number may be invented.
 
 ## Predeclared implementation files
 
