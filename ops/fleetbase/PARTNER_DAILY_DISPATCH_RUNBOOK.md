@@ -26,8 +26,12 @@ write to the Partner API or the legacy application.
   source, not the driver-trip membership source. `/integration/orders` and
   `/integration/meal-history` are no longer used to select daily dispatch rows.
 - A stable date-scoped Fleetbase prefix makes an unchanged source snapshot
-  idempotent. Once a job is dispatched, source and driver hashes are immutable;
-  a changed snapshot fails before it can alter the live job.
+  idempotent. An integration-owned job remains reconcilable inside the guarded
+  transaction until Navigator records `started`/`started_at`: an allowed Partner
+  lifecycle advance such as `ordered` to `driver_assigned`, a timestamp refresh,
+  reassignment, hold, cancellation, or disappearance may update that unstarted
+  job. Once started, source and driver hashes are immutable and any changed
+  snapshot fails before it can alter the live job.
 - Daily mapping v3 stores `partner_daily_deliveries_v1` on every order and
   payload. A date prefix created by the retired meal-history selector is rejected
   before reconciliation, preventing a selector change from canceling old jobs.

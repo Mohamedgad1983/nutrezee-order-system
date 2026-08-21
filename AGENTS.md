@@ -190,6 +190,20 @@ identity on a fresh preview. This supersedes the earlier driver-phone prohibitio
 only for authenticated internal box-label rendering; it does not authorize phone
 storage, logging, Partner exposure, public APIs, or any Fleetbase/Partner write.
 
+## Unstarted rolling-sync reconciliation amendment
+
+AMENDMENT A42 2026-08-21 — Mohamed authorized immediate repair of the production rolling
+Fleetbase synchronization after the current +1-day Partner snapshot legitimately changed from
+684 to 674 distinct orders: 123 existing rows advanced from `ordered` to `driver_assigned`, three
+received timestamp-only updates, and ten unstarted source rows disappeared. Both lifecycle states
+are already dispatch-approved. An integration-owned Fleetbase job may therefore be atomically
+refreshed, reassigned, held, canceled or tombstoned from a stable count/digest-locked Partner
+snapshot until Navigator records `started` or `started_at`; a started job remains immutable and
+must fail closed on any source, routability or driver change. Raw hashes remain audit provenance
+but must not freeze an unstarted pre-dispatched job. Partner and legacy remain read-only; Fleetbase
+vendor source, Navigator `/legacy`, secret generation, paid-license purchase, retry behavior and
+the separate A30 production-activation gate remain unchanged.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

@@ -1494,9 +1494,46 @@ function applyDriverOrdersMembershipManifest(array $dailyRows, array $manifest, 
 }
 
 /**
- * Once an order is dispatched its source snapshot and deterministic driver are
- * immutable. This preflight runs before FleetbaseWriter so a changed feed cannot
- * modify a live job even transiently; the outer transaction is the second guard.
+ * Freeze a started job, but allow the transactional writer to reconcile an
+ * integration-owned job that has not started yet. Partner may legitimately
+ * advance an allowed lifecycle status or refresh updated_at after Fleetbase has
+ * pre-dispatched the job; those raw hash changes are not an operational conflict
+ * until Navigator records started/started_at.
+ */
+function guardDailyDispatchedReconciliation(
+    bool $started,
+    bool $routable,
+    ?string $expectedDriver,
+    ?string $actualDriver,
+    ?string $storedSourceHash,
+    string $currentSourceHash,
+    ?string $storedMealHash,
+    string $currentMealHash,
+): void
+{
+    if (!$routable) {
+        if ($started) {
+            throw new RuntimeException('daily_started_snapshot_changed');
+        }
+        return;
+    }
+    if ($expectedDriver === null) {
+        throw new RuntimeException('daily_allocation_driver');
+    }
+    if (!$started) {
+        return;
+    }
+    if ($actualDriver !== $expectedDriver
+        || $storedSourceHash !== $currentSourceHash
+        || $storedMealHash !== $currentMealHash) {
+        throw new RuntimeException('daily_started_snapshot_changed');
+    }
+}
+
+/**
+ * This preflight runs before FleetbaseWriter. Started jobs are immutable;
+ * unstarted integration-owned rows may proceed to the outer transaction, where
+ * the writer atomically refreshes, reassigns, holds, or tombstones them.
  */
 function guardDailyOperationalRows(
     string $prefix,
@@ -1586,21 +1623,16 @@ function guardDailyOperationalRows(
             throw new RuntimeException('daily_address_call_confirmation_required');
         }
         $expectedDriver = $allocation['assignments'][(string) $row['order_id']] ?? null;
-        if (!rowIsDailyRoutable($row, $allowAddressCall)) {
-            if ((bool) $order->started || $order->started_at !== null) {
-                throw new RuntimeException('daily_started_snapshot_changed');
-            }
-            // A dispatched-but-not-started order whose pin disappeared or whose
-            // meal status left the verified allowlist is atomically revoked and
-            // converted to an unassigned held row.
-            continue;
-        }
-        if ($expectedDriver === null
-            || $order->driver_assigned_uuid !== $expectedDriver
-            || ($meta['daily_source_hash'] ?? null) !== $row['_source_hash']
-            || ($meta['daily_meal_hash'] ?? null) !== dailyMealHash($row)) {
-            throw new RuntimeException('daily_dispatched_snapshot_changed');
-        }
+        guardDailyDispatchedReconciliation(
+            (bool) $order->started || $order->started_at !== null,
+            rowIsDailyRoutable($row, $allowAddressCall),
+            $expectedDriver,
+            $order->driver_assigned_uuid,
+            $meta['daily_source_hash'] ?? null,
+            $row['_source_hash'],
+            $meta['daily_meal_hash'] ?? null,
+            dailyMealHash($row),
+        );
     }
 }
 
@@ -4444,6 +4476,70 @@ function runSelfTest(): array
             throw $exception;
         }
     }
+    // A pre-dispatched but unstarted job remains safe to reconcile inside the
+    // existing transaction even when Partner advances ordered -> driver_assigned,
+    // refreshes updated_at, changes the deterministic assignment, or holds it.
+    guardDailyDispatchedReconciliation(
+        false,
+        true,
+        'driver-uuid-b',
+        'driver-uuid-a',
+        'old-source-hash',
+        'new-source-hash',
+        'old-meal-hash',
+        'new-meal-hash',
+    );
+    guardDailyDispatchedReconciliation(
+        false,
+        false,
+        null,
+        'driver-uuid-a',
+        'old-source-hash',
+        'new-source-hash',
+        'old-meal-hash',
+        'new-meal-hash',
+    );
+    guardDailyDispatchedReconciliation(
+        true,
+        true,
+        'driver-uuid-a',
+        'driver-uuid-a',
+        'stable-source-hash',
+        'stable-source-hash',
+        'stable-meal-hash',
+        'stable-meal-hash',
+    );
+    foreach ([
+        [true, false, null, 'driver-uuid-a', 'old', 'new', 'old', 'new'],
+        [true, true, 'driver-uuid-b', 'driver-uuid-a', 'same', 'same', 'same', 'same'],
+        [true, true, 'driver-uuid-a', 'driver-uuid-a', 'old', 'new', 'same', 'same'],
+    ] as $guardArguments) {
+        try {
+            guardDailyDispatchedReconciliation(...$guardArguments);
+            throw new RuntimeException('self_test_daily_started_snapshot_not_rejected');
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== 'daily_started_snapshot_changed') {
+                throw $exception;
+            }
+        }
+    }
+    try {
+        guardDailyDispatchedReconciliation(
+            false,
+            true,
+            null,
+            null,
+            'same',
+            'same',
+            'same',
+            'same',
+        );
+        throw new RuntimeException('self_test_daily_missing_allocation_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'daily_allocation_driver') {
+            throw $exception;
+        }
+    }
     $membershipNumbers = ['DELIVERY-31'];
     $membershipManifest = [
         'schema_version' => 1,
@@ -4483,7 +4579,7 @@ function runSelfTest(): array
             }
         }
     }
-    return ['passed' => 37, 'total' => 37];
+    return ['passed' => 38, 'total' => 38];
 }
 
 $stage = 'startup';
