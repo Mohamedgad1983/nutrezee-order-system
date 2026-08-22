@@ -35,7 +35,8 @@
   existing Nutrezee extension panels. Fleetbase legal/version attribution stays visible.
 - No route/auth/permission/data-workflow change, no Fleetbase application/vendor source edit, and
   no change to the exact 100 x 70 mm label print contract.
-- Result: extension v0.3.1 / Console a43.2, commits `e5c421b` + `2b4d809`, PR #52. Focused
+- Result: extension v0.3.1 / Console a43.2, commits `e5c421b` + `2b4d809`, PR #52 merged
+  as `a52f1ff`. Focused
   11/11, full Vitest 72 files / 407 tests, lint/typecheck/build, scans, snapshot 8/8, rolling sync
   9/9, push/PR CI 14/14, local dark/light visual proof and signed-in live Chrome acceptance all
   green. Final Console image `28eaa18b83f7`; the first a43.1 image was safely rolled back and fixed
