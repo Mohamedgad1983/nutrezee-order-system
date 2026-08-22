@@ -1,12 +1,10 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
 
-const BRAND_THEME_VERSION = 'a44.1';
+const BRAND_THEME_VERSION = 'a44.2';
 const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
 const BRAND_THEME_STYLESHEET = `/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css?v=${BRAND_THEME_VERSION}`;
 const BRAND_MARK_DATA_URL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 418.364 370.498'%3E%3Cg fill='%23956132' fill-rule='evenodd'%3E%3Cpath d='M116.788 17.028h184.788l97.12 168.215-97.12 168.222H116.788L19.661 185.243Zm194.619-17.028H106.958L0 185.243l106.95 185.255h204.457l106.957-185.255Z'/%3E%3Cpath d='M147.381 70.015h123.598l66.534 115.231-66.534 115.234H147.381L80.847 185.246Zm133.447-17.051H137.539L61.164 185.246l76.375 132.293h143.286l76.372-132.293Z'/%3E%3C/g%3E%3C/svg%3E";
-
-let approvedLightThemeObserver;
 
 function applyApprovedLightTheme() {
     const body = document.body;
@@ -16,25 +14,7 @@ function applyApprovedLightTheme() {
 
     body.classList.add('nutrezee-brand-theme');
     body.classList.remove('dark-theme');
-    if (body.dataset.theme !== 'light') {
-        body.dataset.theme = 'light';
-    }
     return true;
-}
-
-function installApprovedLightThemeGuard() {
-    if (!document.body || typeof MutationObserver === 'undefined') {
-        return;
-    }
-
-    approvedLightThemeObserver?.disconnect();
-    approvedLightThemeObserver = new MutationObserver(() => {
-        applyApprovedLightTheme();
-    });
-    approvedLightThemeObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class', 'data-theme'],
-    });
 }
 
 function applyAccessibleBrandIdentity() {
@@ -71,13 +51,10 @@ function installBrandTheme() {
             'DOMContentLoaded',
             () => {
                 applyDocumentBrandIdentity();
-                installApprovedLightThemeGuard();
                 applyAccessibleBrandIdentity();
             },
             { once: true }
         );
-    } else {
-        installApprovedLightThemeGuard();
     }
 
     if (!document.getElementById(BRAND_THEME_STYLESHEET_ID)) {
@@ -113,9 +90,9 @@ function installBrandTheme() {
 // Fleet-Ops order-details page; no second admin shell, route redirect or Nutrezee login is added.
 export default {
     setupExtension(_app, universe) {
-        // A43/A44 — brand the existing Fleet-Ops shell through extension-owned assets only and
-        // keep the approved light presentation independent of Fleetbase's saved theme preference.
-        // Application/vendor source and every route, permission and data workflow remain unchanged.
+        // A43/A44 — brand the existing Fleet-Ops shell through extension-owned assets only. The
+        // saved dark class is normalized once after Fleetbase boot; no competing theme observer or
+        // preference write is installed. Routes, permissions and data workflows remain unchanged.
         installBrandTheme();
 
         // `UniverseService#getService()` accepts the Fleetbase service alias, not the Ember
