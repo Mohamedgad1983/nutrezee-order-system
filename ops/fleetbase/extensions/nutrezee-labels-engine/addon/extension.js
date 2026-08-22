@@ -1,9 +1,88 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
 
+const BRAND_THEME_VERSION = 'a43.2';
+const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
+const BRAND_THEME_STYLESHEET = `/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css?v=${BRAND_THEME_VERSION}`;
+const BRAND_MARK_DATA_URL =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 418.364 370.498'%3E%3Cg fill='%23956132' fill-rule='evenodd'%3E%3Cpath d='M116.788 17.028h184.788l97.12 168.215-97.12 168.222H116.788L19.661 185.243Zm194.619-17.028H106.958L0 185.243l106.95 185.255h204.457l106.957-185.255Z'/%3E%3Cpath d='M147.381 70.015h123.598l66.534 115.231-66.534 115.234H147.381L80.847 185.246Zm133.447-17.051H137.539L61.164 185.246l76.375 132.293h143.286l76.372-132.293Z'/%3E%3C/g%3E%3C/svg%3E";
+
+function applyAccessibleBrandIdentity() {
+    const brandLink = document.querySelector('.next-view-header a.navbar-logo');
+    if (!brandLink) {
+        return false;
+    }
+
+    brandLink.setAttribute('aria-label', 'Nutreeze');
+    brandLink.setAttribute('title', 'Nutreeze');
+
+    const brandImage = brandLink.querySelector('img');
+    brandImage?.setAttribute('alt', 'Nutreeze');
+    return true;
+}
+
+function applyDocumentBrandIdentity() {
+    document.documentElement.dataset.nutrezeeBrand = 'official';
+    document.body?.classList.add('nutrezee-brand-theme');
+    if (document.title !== 'Nutreeze | Fleet-Ops') {
+        document.title = 'Nutreeze | Fleet-Ops';
+    }
+}
+
+function installBrandTheme() {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    applyDocumentBrandIdentity();
+
+    if (!document.body) {
+        document.addEventListener(
+            'DOMContentLoaded',
+            () => {
+                applyDocumentBrandIdentity();
+                applyAccessibleBrandIdentity();
+            },
+            { once: true }
+        );
+    }
+
+    if (!document.getElementById(BRAND_THEME_STYLESHEET_ID)) {
+        const stylesheet = document.createElement('link');
+        stylesheet.id = BRAND_THEME_STYLESHEET_ID;
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = BRAND_THEME_STYLESHEET;
+        stylesheet.dataset.nutrezeeThemeVersion = BRAND_THEME_VERSION;
+        document.head.appendChild(stylesheet);
+    }
+
+    if (!document.querySelector('link[data-nutrezee-favicon]')) {
+        const favicon = document.createElement('link');
+        favicon.rel = 'icon';
+        favicon.type = 'image/svg+xml';
+        favicon.href = BRAND_MARK_DATA_URL;
+        favicon.dataset.nutrezeeFavicon = 'official';
+        document.head.appendChild(favicon);
+    }
+
+    if (!applyAccessibleBrandIdentity() && typeof MutationObserver !== 'undefined') {
+        const observer = new MutationObserver(() => {
+            if (applyAccessibleBrandIdentity()) {
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        globalThis.setTimeout(() => observer.disconnect(), 10000);
+    }
+}
+
 // A28 — supported Fleetbase extension point. The feature appears as a tab on the existing
 // Fleet-Ops order-details page; no second admin shell, route redirect or Nutrezee login is added.
 export default {
     setupExtension(_app, universe) {
+        // A43 — brand the existing Fleet-Ops shell through extension-owned assets only. Fleetbase
+        // application/vendor source and every route, permission and data workflow remain unchanged.
+        installBrandTheme();
+
         // `UniverseService#getService()` accepts the Fleetbase service alias, not the Ember
         // container registration name. This is the same supported wiring used by Fleet-Ops.
         const menuService = universe.getService('menu');

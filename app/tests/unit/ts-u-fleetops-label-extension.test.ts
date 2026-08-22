@@ -6,8 +6,12 @@ const read = (path: string): string => readFileSync(new URL(path, root), 'utf8')
 
 const packageJson = JSON.parse(read('package.json')) as {
   name: string;
+  version: string;
   keywords: string[];
   license: string;
+};
+const extensionJson = JSON.parse(read('extension.json')) as {
+  version: string;
 };
 const extension = read('addon/extension.js');
 const component = read('addon/components/order-label.js');
@@ -20,12 +24,43 @@ const routes = read('addon/routes.js');
 const readme = read('README.md');
 const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
-describe('TS-U A28 Fleet-Ops label extension boundary', () => {
+describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
+    expect(packageJson.version).toBe('0.3.1');
+    expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
     expect(packageJson.license).toBe('AGPL-3.0-or-later');
+  });
+
+  it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a43.2'");
+    expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
+    expect(extension).toContain("document.body?.classList.add('nutrezee-brand-theme')");
+    expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
+    expect(extension).toContain("document.title = 'Nutreeze | Fleet-Ops'");
+    expect(extension).toContain("'DOMContentLoaded'");
+    expect(extension).toContain('/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css');
+    expect(extension).toContain("brandLink.setAttribute('aria-label', 'Nutreeze')");
+    expect(extension).toContain("favicon.dataset.nutrezeeFavicon = 'official'");
+    expect(extension).toContain('installBrandTheme();');
+    expect(styles).toContain('body.nutrezee-brand-theme');
+    expect(styles).toContain('--nz-brand: #956132');
+    expect(styles).toContain('body.nutrezee-brand-theme.dark-theme');
+    expect(styles).toContain('.next-view-header .navbar-logo::before');
+    expect(styles).toContain('.next-sidebar-navigator-item.is-active');
+    expect(styles).toContain('.next-table-wrapper tbody tr:hover td');
+    expect(styles).toContain('@media (max-width: 760px)');
+    expect(styles).toContain('.next-sidebar-footer .fleetbase-attribution-notice');
+    expect(styles).not.toMatch(/fleetbase-attribution-notice[^{}]*\{[^}]*display:\s*none/);
+    expect(readme).toMatch(/Fleetbase application\s+and vendor source remain unchanged/);
+  });
+
+  it('does not retrigger its document observer by rewriting the title', () => {
+    expect(extension).toMatch(
+      /const observer = new MutationObserver\(\(\) => \{\s*if \(applyAccessibleBrandIdentity\(\)\) \{\s*observer\.disconnect\(\);\s*\}\s*\}\);/,
+    );
   });
 
   it('registers individual and batch operations inside supported Fleet-Ops registries only', () => {

@@ -2,7 +2,7 @@
 
 **Purpose:** the single live, ordered list of the next eligible work. `Continue Nutrezee OS Agent` reads the **top unblocked item** here, executes it per `AUTO_EXECUTION_RULES.md`, then re-writes this file (strike the finished item, promote the next, append anything discovered). This is dynamic state — it changes every session. The static plan lives in `codex_implementation_sequence.md`; this file is its live cursor.
 
-**Last updated:** 2026-08-21 · **Frontier:** **WP-KDS-02 is DONE and production-active under A35; no KDS blocker remains. WP-OPS-03 and WP-OPS-02 remain code/CI-complete but BLOCKED AT RELEASE under A22/A21.** Staging still lacks migrations `0025/0026`, the two protected least-privilege Fleetbase service identities/tokens, and a dedicated named Logistics Manager account; PR #43 remains intentionally unmerged until those release inputs exist. **WP-OPS-01 is production-active under A37–A42:** the guarded 01:00 Kuwait rolling +1/+2 sync is reconciled through Aug-23, with Aug-22 at 674 current source orders (500 assigned, 174 held) plus ten audited missing-source tombstones; started jobs remain immutable. The separate A23/A24 Partner snapshot stays read-only/non-authoritative. WP-LBL-A27/A28/A29 is deployed inside Fleet-Ops with permanent barcodes and exact read-only Partner v2 nutrition sourcing; 552 complete orders are renderable and 187 incomplete orders block explicitly, while complete daily Fleetbase assignment and the physical 100 × 70 mm print/camera pilot remain operational dependencies. WP-LOC-A30 staging software and the bilingual Fleet-Ops Driver Locations screen are deployed and browser-verified with append-only storage and Partner-pin precedence; no capture/correction was submitted. Android 14 bilingual emulator error-path proof is green, while physical assigned-driver call/navigation/GPS-capture/persistence UAT and explicit production activation approval remain open. The legacy-replacement engineering frontier is exhausted and sponsor/workshop-gated. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. Staging remains seeded for UAT with `cutover_catalog=false`.
+**Last updated:** 2026-08-22 · **Frontier:** **WP-OPS-04 is DONE and live under A43 with the official Nutreeze Fleet-Ops visual system. WP-KDS-02 is DONE and production-active under A35; no KDS blocker remains. WP-OPS-03 and WP-OPS-02 remain code/CI-complete but BLOCKED AT RELEASE under A22/A21.** Staging still lacks migrations `0025/0026`, the two protected least-privilege Fleetbase service identities/tokens, and a dedicated named Logistics Manager account; PR #43 remains intentionally unmerged until those release inputs exist. **WP-OPS-01 is production-active under A37–A42:** the guarded 01:00 Kuwait rolling +1/+2 sync is reconciled through Aug-23, with Aug-22 at 674 current source orders (500 assigned, 174 held) plus ten audited missing-source tombstones; started jobs remain immutable. The separate A23/A24 Partner snapshot stays read-only/non-authoritative. WP-LBL-A27/A28/A29 is deployed inside Fleet-Ops with permanent barcodes and exact read-only Partner v2 nutrition sourcing; 552 complete orders are renderable and 187 incomplete orders block explicitly, while complete daily Fleetbase assignment and the physical 100 × 70 mm print/camera pilot remain operational dependencies. WP-LOC-A30 staging software and the bilingual Fleet-Ops Driver Locations screen are deployed and browser-verified with append-only storage and Partner-pin precedence; no capture/correction was submitted. Android 14 bilingual emulator error-path proof is green, while physical assigned-driver call/navigation/GPS-capture/persistence UAT and explicit production activation approval remain open. The legacy-replacement engineering frontier is exhausted and sponsor/workshop-gated. · **Goal:** replace the legacy daily order operation (not MVP theory) — see `Legacy_Core_Gap_To_Cutover.md`. Staging remains seeded for UAT with `cutover_catalog=false`.
 
 ---
 
@@ -27,6 +27,19 @@
 ---
 
 ## Engineering Queue (take the top unblocked item)
+
+### ✅ WP-OPS-04 — Nutreeze Fleet-Ops visual system · **DONE + LIVE 2026-08-22**
+- A43 applies the official Nutreeze PDF mark and `#956132` bronze to the existing Fleet-Ops shell
+  through the separately maintained Console extension only.
+- Scope: accessible header identity/favicon, responsive light/dark navigation, tables, forms and
+  existing Nutrezee extension panels. Fleetbase legal/version attribution stays visible.
+- No route/auth/permission/data-workflow change, no Fleetbase application/vendor source edit, and
+  no change to the exact 100 x 70 mm label print contract.
+- Result: extension v0.3.1 / Console a43.2, commits `e5c421b` + `2b4d809`, PR #52. Focused
+  11/11, full Vitest 72 files / 407 tests, lint/typecheck/build, scans, snapshot 8/8, rolling sync
+  9/9, push/PR CI 14/14, local dark/light visual proof and signed-in live Chrome acceptance all
+  green. Final Console image `28eaa18b83f7`; the first a43.1 image was safely rolled back and fixed
+  after live Chrome caught a recursive title observer. No backend/data workflow or vendor change.
 
 ### 🛑 WP-OPS-03 — unlimited driver-to-driver order reassignment · **BLOCKED AT RELEASE · size M · blocked_by: protected order-manager token + named manager account + deployment/staging/Navigator proof**
 - A22 grants `logistics_manager` every current Nutrezee delivery/driver permission, including password rotation and a dedicated bulk-reassignment grant; unrelated finance, staff/RBAC, catalog, and system-admin permissions remain excluded.
