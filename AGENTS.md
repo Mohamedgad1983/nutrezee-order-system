@@ -204,6 +204,17 @@ but must not freeze an unstarted pre-dispatched job. Partner and legacy remain r
 vendor source, Navigator `/legacy`, secret generation, paid-license purchase, retry behavior and
 the separate A30 production-activation gate remain unchanged.
 
+## Nutreeze Fleet-Ops visual-system amendment
+
+AMENDMENT A43 2026-08-22 — Mohamed supplied the official Nutreeze logo PDF and directed the
+existing Fleet-Ops administration interface to use a beautiful Nutreeze front-end design. Scope
+is presentation-only through the separately identifiable Nutrezee Console extension: exact logo
+geometry/color, accessible header identity/favicon, responsive light/dark shell styling, navigation,
+tables, forms and existing Nutrezee extension screens. Fleetbase legal/version attribution must
+remain visible, existing routes/auth/permissions/data workflows must remain unchanged, and the
+legacy 100 x 70 mm print contract must remain isolated. Fleetbase application/vendor source,
+Navigator `/legacy`, Partner/legacy writes, secrets and production data mutation remain prohibited.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

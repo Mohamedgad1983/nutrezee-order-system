@@ -1,23 +1,492 @@
 /* A28 — exact legacy label inside Fleet-Ops. The barcode occupies the reference label's unused
  * lower strip; no legacy field, table column, caption or field order is removed. */
 
+/* A43 — Nutreeze visual system for the existing Fleet-Ops shell. The theme is installed by the
+ * separately maintained extension and deliberately avoids Fleetbase application/vendor source. */
+body.nutrezee-brand-theme {
+    --nz-brand: #956132;
+    --nz-brand-hover: #78491f;
+    --nz-brand-bright: #bd8a58;
+    --nz-brand-soft: rgb(149 97 50 / 12%);
+    --nz-brand-line: rgb(149 97 50 / 28%);
+    --nz-bg: #f5f1eb;
+    --nz-surface: #fffdf9;
+    --nz-surface-raised: #ffffff;
+    --nz-surface-soft: #eee7df;
+    --nz-input: #fffefa;
+    --nz-text: #2d251f;
+    --nz-muted: #76695e;
+    --nz-border: #ded3c7;
+    --nz-row-hover: #f9f3ec;
+    --nz-sidebar: #191411;
+    --nz-sidebar-raised: #251c17;
+    --nz-sidebar-text: #f6efe7;
+    --nz-sidebar-muted: #b9aa9c;
+    --nz-positive: #23845b;
+    --nz-warning: #b47419;
+    --nz-danger: #b84a43;
+    --nz-focus: rgb(149 97 50 / 35%);
+    --nz-shadow-sm: 0 4px 14px rgb(63 40 22 / 8%);
+    --nz-shadow-lg: 0 18px 44px rgb(63 40 22 / 12%);
+    color: var(--nz-text);
+    background: var(--nz-bg);
+    font-family: "Inter UI", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+}
+
+body.nutrezee-brand-theme.dark-theme,
+body.nutrezee-brand-theme[data-theme="dark"] {
+    --nz-brand-hover: #ad7743;
+    --nz-brand-bright: #d0a170;
+    --nz-brand-soft: rgb(189 138 88 / 14%);
+    --nz-brand-line: rgb(189 138 88 / 27%);
+    --nz-bg: #120f0d;
+    --nz-surface: #1c1713;
+    --nz-surface-raised: #221b16;
+    --nz-surface-soft: #2a211b;
+    --nz-input: #17120f;
+    --nz-text: #f5eee7;
+    --nz-muted: #b9aa9c;
+    --nz-border: #413126;
+    --nz-row-hover: #2a201a;
+    --nz-sidebar: #0e0c0a;
+    --nz-sidebar-raised: #19130f;
+    --nz-sidebar-text: #f7f1ea;
+    --nz-sidebar-muted: #a79788;
+    --nz-positive: #4db887;
+    --nz-warning: #dda84d;
+    --nz-danger: #e47a72;
+    --nz-shadow-sm: 0 5px 16px rgb(0 0 0 / 24%);
+    --nz-shadow-lg: 0 20px 48px rgb(0 0 0 / 34%);
+}
+
+body.nutrezee-brand-theme,
+body.nutrezee-brand-theme .fleetbase-next-container,
+body.nutrezee-brand-theme main.next-view-container {
+    background-color: var(--nz-bg);
+}
+
+body.nutrezee-brand-theme main.next-view-container {
+    background-image:
+        radial-gradient(circle at 86% 8%, rgb(149 97 50 / 9%), transparent 25rem),
+        linear-gradient(145deg, transparent 0 62%, rgb(149 97 50 / 3%) 100%);
+}
+
+body.nutrezee-brand-theme .next-view-header {
+    min-height: 3.75rem;
+    border-bottom: 1px solid rgb(189 138 88 / 20%);
+    background:
+        radial-gradient(circle at 18% -120%, rgb(149 97 50 / 55%), transparent 24rem),
+        linear-gradient(105deg, #17110e 0%, #211812 55%, #18120f 100%);
+    color: #f8f2eb;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+}
+
+body.nutrezee-brand-theme .next-view-header .navbar-logo {
+    display: inline-flex;
+    width: 9.6rem;
+    height: 2.25rem;
+    align-items: center;
+    gap: 0.62rem;
+    flex: 0 0 9.6rem;
+    margin-right: 1rem;
+    color: #fff;
+    text-decoration: none;
+}
+
+body.nutrezee-brand-theme .next-view-header .navbar-logo img {
+    display: none !important;
+}
+
+body.nutrezee-brand-theme .next-view-header .navbar-logo::before {
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 418.364 370.498'%3E%3Cg fill='%23956132' fill-rule='evenodd'%3E%3Cpath d='M116.788 17.028h184.788l97.12 168.215-97.12 168.222H116.788L19.661 185.243Zm194.619-17.028H106.958L0 185.243l106.95 185.255h204.457l106.957-185.255Z'/%3E%3Cpath d='M147.381 70.015h123.598l66.534 115.231-66.534 115.234H147.381L80.847 185.246Zm133.447-17.051H137.539L61.164 185.246l76.375 132.293h143.286l76.372-132.293Z'/%3E%3C/g%3E%3C/svg%3E");
+    content: "";
+    filter: drop-shadow(0 3px 8px rgb(0 0 0 / 24%));
+}
+
+body.nutrezee-brand-theme .next-view-header .navbar-logo::after {
+    content: "Nutreeze";
+    color: #fffaf5;
+    font-size: 1rem;
+    font-weight: 720;
+    letter-spacing: 0.012em;
+}
+
+body.nutrezee-brand-theme .next-view-header .next-view-header-item,
+body.nutrezee-brand-theme .next-view-header .snm-item,
+body.nutrezee-brand-theme .next-view-header button {
+    border-color: transparent;
+    border-radius: 0.65rem;
+    color: #dacfc4;
+    transition: color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+body.nutrezee-brand-theme .next-view-header .next-view-header-item:hover,
+body.nutrezee-brand-theme .next-view-header .snm-item:hover,
+body.nutrezee-brand-theme .next-view-header button:hover {
+    background: rgb(189 138 88 / 12%);
+    color: #fff;
+}
+
+body.nutrezee-brand-theme .next-view-header .next-view-header-item.active,
+body.nutrezee-brand-theme .next-view-header .snm-item.active {
+    background: linear-gradient(135deg, rgb(149 97 50 / 50%), rgb(149 97 50 / 24%));
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgb(213 170 126 / 18%);
+}
+
+body.nutrezee-brand-theme .next-sidebar {
+    border-right: 1px solid rgb(189 138 88 / 18%);
+    background:
+        radial-gradient(circle at -20% 16%, rgb(149 97 50 / 23%), transparent 18rem),
+        linear-gradient(180deg, var(--nz-sidebar-raised), var(--nz-sidebar));
+    color: var(--nz-sidebar-text);
+    box-shadow: 10px 0 32px rgb(0 0 0 / 8%);
+}
+
+body.nutrezee-brand-theme .next-sidebar-content,
+body.nutrezee-brand-theme .next-sidebar-content-inner,
+body.nutrezee-brand-theme .next-sidebar-navigator,
+body.nutrezee-brand-theme .next-sidebar-navigator-viewport,
+body.nutrezee-brand-theme .next-sidebar-navigator-view {
+    background: transparent;
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-primary-action {
+    min-height: 2.45rem;
+    border: 1px solid rgb(255 255 255 / 9%);
+    border-radius: 0.72rem;
+    background: linear-gradient(135deg, #a86f37, var(--nz-brand));
+    color: #fff;
+    font-weight: 650;
+    box-shadow: 0 9px 22px rgb(61 34 14 / 36%);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-primary-action:hover {
+    border-color: rgb(255 255 255 / 18%);
+    background: linear-gradient(135deg, #ba8048, #a86f37);
+    box-shadow: 0 11px 25px rgb(61 34 14 / 44%);
+    transform: translateY(-1px);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-search {
+    border: 1px solid rgb(189 138 88 / 20%);
+    border-radius: 0.7rem;
+    background: rgb(255 255 255 / 5%);
+    color: var(--nz-sidebar-muted);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-search:focus-within {
+    border-color: rgb(189 138 88 / 60%);
+    background: rgb(255 255 255 / 8%);
+    box-shadow: 0 0 0 3px rgb(149 97 50 / 18%);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-search input {
+    border: 0;
+    background: transparent;
+    color: var(--nz-sidebar-text);
+    box-shadow: none;
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-search input::placeholder {
+    color: var(--nz-sidebar-muted);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-kbd {
+    border: 1px solid rgb(255 255 255 / 9%);
+    background: rgb(255 255 255 / 7%);
+    color: var(--nz-sidebar-muted);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-item,
+body.nutrezee-brand-theme .next-sidebar-navigator-back {
+    min-height: 2.2rem;
+    margin-block: 0.12rem;
+    border: 1px solid transparent;
+    border-radius: 0.58rem;
+    color: var(--nz-sidebar-muted);
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-item:hover,
+body.nutrezee-brand-theme .next-sidebar-navigator-back:hover {
+    border-color: rgb(189 138 88 / 14%);
+    background: rgb(189 138 88 / 9%);
+    color: var(--nz-sidebar-text);
+    transform: translateX(2px);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-item.is-active,
+body.nutrezee-brand-theme .next-sidebar-navigator-item.is-parent-active {
+    border-color: rgb(189 138 88 / 28%);
+    background: linear-gradient(90deg, rgb(149 97 50 / 40%), rgb(149 97 50 / 14%));
+    color: #fff;
+    box-shadow: inset 3px 0 0 var(--nz-brand-bright), 0 8px 18px rgb(0 0 0 / 12%);
+}
+
+body.nutrezee-brand-theme .next-sidebar-navigator-item svg,
+body.nutrezee-brand-theme .next-sidebar-navigator-back svg {
+    color: var(--nz-brand-bright);
+}
+
+body.nutrezee-brand-theme .next-sidebar-footer {
+    border-top: 1px solid rgb(189 138 88 / 17%);
+    background: rgb(0 0 0 / 12%);
+    color: var(--nz-sidebar-muted);
+}
+
+body.nutrezee-brand-theme .next-sidebar-footer::before {
+    display: block;
+    margin-bottom: 0.45rem;
+    color: var(--nz-brand-bright);
+    content: "NUTREEZE  ·  STAY HEALTHY";
+    font-size: 0.61rem;
+    font-weight: 720;
+    letter-spacing: 0.12em;
+}
+
+body.nutrezee-brand-theme .next-sidebar-footer .fleetbase-attribution-notice,
+body.nutrezee-brand-theme .next-sidebar-footer a,
+body.nutrezee-brand-theme .next-sidebar-footer button {
+    color: var(--nz-sidebar-muted);
+}
+
+body.nutrezee-brand-theme .next-view-section {
+    min-width: 0;
+    padding: 1rem 1.15rem 1.25rem;
+}
+
+body.nutrezee-brand-theme .next-view-section-subheader {
+    min-height: 4.35rem;
+    margin-bottom: 0.9rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--nz-border);
+    border-radius: 0.9rem;
+    background: linear-gradient(145deg, var(--nz-surface-raised), var(--nz-surface));
+    color: var(--nz-text);
+    box-shadow: var(--nz-shadow-sm);
+}
+
+body.nutrezee-brand-theme .next-view-section-subheader-title {
+    color: var(--nz-text);
+    font-size: 1.08rem;
+    font-weight: 720;
+    letter-spacing: -0.015em;
+}
+
+body.nutrezee-brand-theme .next-view-section-subheader-title::after {
+    display: block;
+    width: 2.6rem;
+    height: 0.17rem;
+    margin-top: 0.45rem;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--nz-brand), var(--nz-brand-bright));
+    content: "";
+}
+
+body.nutrezee-brand-theme .next-table-wrapper {
+    overflow: hidden;
+    border: 1px solid var(--nz-border);
+    border-radius: 0.95rem;
+    background: var(--nz-surface);
+    box-shadow: var(--nz-shadow-lg);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper table {
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--nz-text);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper thead,
+body.nutrezee-brand-theme .next-table-wrapper thead tr,
+body.nutrezee-brand-theme .next-table-wrapper thead th {
+    background: var(--nz-surface-soft);
+    color: var(--nz-muted);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper thead th {
+    height: 2.65rem;
+    border-color: var(--nz-border);
+    font-size: 0.67rem;
+    font-weight: 720;
+    letter-spacing: 0.06em;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody tr,
+body.nutrezee-brand-theme .next-table-wrapper tbody td {
+    background: var(--nz-surface);
+    color: var(--nz-text);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody td {
+    height: 2.85rem;
+    border-color: var(--nz-border);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody tr:hover td {
+    background: var(--nz-row-hover);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody tr:hover td:first-child {
+    box-shadow: inset 3px 0 0 var(--nz-brand);
+}
+
+body.nutrezee-brand-theme .next-table-wrapper a,
+body.nutrezee-brand-theme .next-table-wrapper button:not(.btn) {
+    color: inherit;
+}
+
+body.nutrezee-brand-theme input:not([type="checkbox"]):not([type="radio"]),
+body.nutrezee-brand-theme select,
+body.nutrezee-brand-theme textarea {
+    border-color: var(--nz-border);
+    border-radius: 0.65rem;
+    background: var(--nz-input);
+    color: var(--nz-text);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+body.nutrezee-brand-theme input:not([type="checkbox"]):not([type="radio"])::placeholder,
+body.nutrezee-brand-theme textarea::placeholder {
+    color: var(--nz-muted);
+}
+
+body.nutrezee-brand-theme input:not([type="checkbox"]):not([type="radio"]):focus,
+body.nutrezee-brand-theme select:focus,
+body.nutrezee-brand-theme textarea:focus {
+    border-color: var(--nz-brand);
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--nz-focus);
+}
+
+body.nutrezee-brand-theme input[type="checkbox"],
+body.nutrezee-brand-theme input[type="radio"] {
+    accent-color: var(--nz-brand);
+}
+
+body.nutrezee-brand-theme .btn {
+    border-radius: 0.62rem;
+    font-weight: 640;
+    transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+body.nutrezee-brand-theme .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+body.nutrezee-brand-theme .btn-primary {
+    border-color: #78491f;
+    background: linear-gradient(135deg, #a86f37, var(--nz-brand));
+    color: #fff;
+    box-shadow: 0 6px 16px rgb(84 49 22 / 22%);
+}
+
+body.nutrezee-brand-theme .btn-primary:hover:not(:disabled) {
+    border-color: #8a572a;
+    background: linear-gradient(135deg, #b87c43, #9c682f);
+    box-shadow: 0 8px 20px rgb(84 49 22 / 30%);
+}
+
+body.nutrezee-brand-theme .btn-default,
+body.nutrezee-brand-theme .btn-secondary {
+    border-color: var(--nz-border);
+    background: var(--nz-surface-raised);
+    color: var(--nz-text);
+}
+
+body.nutrezee-brand-theme .btn-default:hover:not(:disabled),
+body.nutrezee-brand-theme .btn-secondary:hover:not(:disabled) {
+    border-color: var(--nz-brand-line);
+    background: var(--nz-brand-soft);
+}
+
+body.nutrezee-brand-theme [role="tooltip"] {
+    border: 1px solid var(--nz-brand-line);
+    border-radius: 0.55rem;
+    background: #211711;
+    color: #fffaf5;
+    box-shadow: var(--nz-shadow-sm);
+}
+
+body.nutrezee-brand-theme :focus-visible {
+    outline: 2px solid var(--nz-brand-bright);
+    outline-offset: 2px;
+}
+
+body.nutrezee-brand-theme .next-table-pagination,
+body.nutrezee-brand-theme .next-pagination,
+body.nutrezee-brand-theme .pagination {
+    border: 1px solid var(--nz-border);
+    border-radius: 0.7rem;
+    background: var(--nz-surface-raised);
+    color: var(--nz-muted);
+    box-shadow: var(--nz-shadow-sm);
+}
+
+body.nutrezee-brand-theme .next-table-pagination button,
+body.nutrezee-brand-theme .next-pagination button,
+body.nutrezee-brand-theme .pagination button {
+    border-color: var(--nz-border);
+    color: var(--nz-text);
+}
+
+@media (max-width: 1100px) {
+    body.nutrezee-brand-theme .next-view-header .navbar-logo {
+        width: 2.25rem;
+        flex-basis: 2.25rem;
+        margin-right: 0.65rem;
+    }
+
+    body.nutrezee-brand-theme .next-view-header .navbar-logo::after {
+        display: none;
+    }
+}
+
+@media (max-width: 760px) {
+    body.nutrezee-brand-theme .next-view-section {
+        padding: 0.7rem;
+    }
+
+    body.nutrezee-brand-theme .next-view-section-subheader {
+        min-height: 3.65rem;
+        padding: 0.72rem 0.8rem;
+        border-radius: 0.72rem;
+    }
+
+    body.nutrezee-brand-theme .next-table-wrapper {
+        overflow-x: auto;
+        border-radius: 0.72rem;
+    }
+}
+
 .nz-label-panel {
     padding: 1rem;
+    color: var(--nz-text, #2d251f);
 }
 
 .nz-batch-panel {
     padding: 1rem;
+    color: var(--nz-text, #2d251f);
 }
 
-.nz-location-panel { padding: 1rem; }
-.nz-location-table-wrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 0.375rem; background: #fff; }
+.nz-location-panel { padding: 1rem; color: var(--nz-text, #2d251f); }
+.nz-location-table-wrap { overflow-x: auto; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.75rem; background: var(--nz-surface, #fff); box-shadow: var(--nz-shadow-sm, none); }
 .nz-location-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.nz-location-table th, .nz-location-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid #e5e7eb; text-align: start; white-space: nowrap; }
-.nz-location-correction { margin-top: 1rem; padding: 1rem; border: 1px solid #60a5fa; border-radius: 0.375rem; background: #eff6ff; }
+.nz-location-table th, .nz-location-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--nz-border, #e5e7eb); text-align: start; white-space: nowrap; }
+.nz-location-table th { background: var(--nz-surface-soft, #f3f4f6); color: var(--nz-muted, #6b7280); font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.nz-location-table tbody tr:hover td { background: var(--nz-row-hover, #f9fafb); }
+.nz-location-correction { margin-top: 1rem; padding: 1rem; border: 1px solid var(--nz-brand-line, #60a5fa); border-radius: 0.75rem; background: var(--nz-brand-soft, #eff6ff); }
 .nz-location-correction h3 { margin: 0 0 0.75rem; }
 .nz-location-correction__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .nz-location-correction label > span { display: block; margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 600; }
-.nz-location-correction input, .nz-location-correction textarea { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background: #fff; }
+.nz-location-correction input, .nz-location-correction textarea { width: 100%; padding: 0.55rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.6rem; background: var(--nz-input, #fff); color: var(--nz-text, #111827); }
 .nz-location-reason { display: block; margin: 0.75rem 0; }
 
 .nz-label-panel__header,
@@ -37,15 +506,16 @@
 
 .nz-label-panel__header p {
     margin: 0.25rem 0 0;
-    color: #6b7280;
+    color: var(--nz-muted, #6b7280);
 }
 
 .nz-label-state {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    background: #f9fafb;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.7rem;
+    background: var(--nz-surface-soft, #f9fafb);
+    color: var(--nz-text, #111827);
 }
 
 .nz-label-state--error {
@@ -66,6 +536,24 @@
     background: #f0fdf4;
 }
 
+body.nutrezee-brand-theme.dark-theme .nz-label-state--error {
+    border-color: rgb(228 122 114 / 42%);
+    color: #ffaaa3;
+    background: rgb(184 74 67 / 16%);
+}
+
+body.nutrezee-brand-theme.dark-theme .nz-label-state--warning {
+    border-color: rgb(221 168 77 / 42%);
+    color: #f2c878;
+    background: rgb(180 116 25 / 16%);
+}
+
+body.nutrezee-brand-theme.dark-theme .nz-label-state--success {
+    border-color: rgb(77 184 135 / 42%);
+    color: #84d8b2;
+    background: rgb(35 132 91 / 16%);
+}
+
 .nz-batch-summary {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -75,9 +563,10 @@
 
 .nz-batch-summary > div {
     padding: 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    background: #fff;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.72rem;
+    background: var(--nz-surface, #fff);
+    box-shadow: var(--nz-shadow-sm, none);
 }
 
 .nz-batch-summary strong,
@@ -91,7 +580,7 @@
 
 .nz-batch-summary span {
     margin-top: 0.2rem;
-    color: #6b7280;
+    color: var(--nz-muted, #6b7280);
     font-size: 0.75rem;
 }
 
@@ -112,9 +601,10 @@
 .nz-batch-controls select {
     width: 100%;
     padding: 0.55rem 0.625rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    background: #fff;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.6rem;
+    background: var(--nz-input, #fff);
+    color: var(--nz-text, #111827);
 }
 
 .nz-batch-controls--disabled {
@@ -123,9 +613,10 @@
 
 .nz-batch-order-list {
     overflow: hidden;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    background: #fff;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.75rem;
+    background: var(--nz-surface, #fff);
+    box-shadow: var(--nz-shadow-sm, none);
 }
 
 .nz-batch-order-list__header,
@@ -138,8 +629,8 @@
 }
 
 .nz-batch-order-list__header {
-    border-bottom: 1px solid #d1d5db;
-    background: #f9fafb;
+    border-bottom: 1px solid var(--nz-border, #d1d5db);
+    background: var(--nz-surface-soft, #f9fafb);
 }
 
 .nz-batch-order-list__rows {
@@ -149,8 +640,12 @@
 
 .nz-batch-order-row {
     grid-template-columns: 1.2rem minmax(7rem, 0.55fr) minmax(8rem, 1fr) minmax(8rem, 1fr);
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--nz-border, #e5e7eb);
     cursor: pointer;
+}
+
+.nz-batch-order-row:hover {
+    background: var(--nz-row-hover, #f9fafb);
 }
 
 .nz-batch-order-row:last-child {
@@ -169,9 +664,9 @@
 
 .nz-batch-print-actions {
     padding: 1rem;
-    border: 1px solid #86efac;
-    border-radius: 0.375rem;
-    background: #f0fdf4;
+    border: 1px solid rgb(35 132 91 / 38%);
+    border-radius: 0.72rem;
+    background: rgb(35 132 91 / 12%);
 }
 
 .nz-batch-print-actions h3,
@@ -181,14 +676,14 @@
 
 .nz-batch-print-actions p {
     margin-top: 0.25rem;
-    color: #4b5563;
+    color: var(--nz-muted, #4b5563);
 }
 
 .nz-batch-confirm {
     padding: 1rem;
-    border: 1px solid #60a5fa;
-    border-radius: 0.375rem;
-    background: #eff6ff;
+    border: 1px solid var(--nz-brand-line, #60a5fa);
+    border-radius: 0.72rem;
+    background: var(--nz-brand-soft, #eff6ff);
 }
 
 .nz-batch-confirm > div {
@@ -204,7 +699,8 @@
 }
 
 .nz-batch-label {
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.35rem;
     box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
 }
 
@@ -222,18 +718,47 @@
 
 .nz-label-reason input {
     width: min(28rem, 70vw);
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.6rem;
     padding: 0.5rem 0.625rem;
+    background: var(--nz-input, #fff);
+    color: var(--nz-text, #111827);
 }
 
 .nz-label-preview {
     width: fit-content;
     max-width: 100%;
     overflow: auto;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.35rem;
     box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
     background: white;
+}
+
+@media (max-width: 760px) {
+    .nz-label-panel,
+    .nz-batch-panel,
+    .nz-location-panel {
+        padding: 0.7rem 0;
+    }
+
+    .nz-batch-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .nz-batch-controls,
+    .nz-location-correction__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .nz-batch-primary-action,
+    .nz-batch-print-actions,
+    .nz-batch-confirm,
+    .nz-label-panel__header,
+    .nz-label-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
 }
 
 .nz-legacy-label {

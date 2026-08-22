@@ -28,6 +28,17 @@
 
 ## Engineering Queue (take the top unblocked item)
 
+### ▶ WP-OPS-04 — Nutreeze Fleet-Ops visual system · **IN PROGRESS · size S · blocked_by: none**
+- A43 applies the official Nutreeze PDF mark and `#956132` bronze to the existing Fleet-Ops shell
+  through the separately maintained Console extension only.
+- Scope: accessible header identity/favicon, responsive light/dark navigation, tables, forms and
+  existing Nutrezee extension panels. Fleetbase legal/version attribution stays visible.
+- No route/auth/permission/data-workflow change, no Fleetbase application/vendor source edit, and
+  no change to the exact 100 x 70 mm label print contract.
+- Local result: focused 10/10, full Vitest 72 files / 406 tests, lint/typecheck/build, scans,
+  snapshot 8/8, rolling sync 9/9 and dark/light visual browser proof all green. Push CI and staged
+  Console rebuild/browser acceptance remain.
+
 ### 🛑 WP-OPS-03 — unlimited driver-to-driver order reassignment · **BLOCKED AT RELEASE · size M · blocked_by: protected order-manager token + named manager account + deployment/staging/Navigator proof**
 - A22 grants `logistics_manager` every current Nutrezee delivery/driver permission, including password rotation and a dedicated bulk-reassignment grant; unrelated finance, staff/RBAC, catalog, and system-admin permissions remain excluded.
 - The manager chooses source driver, target driver, date, and any number of eligible assigned orders; there is no product/UI batch-size cap. The API processes the selection in bounded upstream chunks and reports completed/failed outcomes.
