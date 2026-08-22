@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.3');
+    expect(packageJson.version).toBe('0.3.4');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -35,7 +35,7 @@ describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   });
 
   it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
-    expect(extension).toContain("const BRAND_THEME_VERSION = 'a44.2'");
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a44.3'");
     expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
     expect(extension).toContain("body.classList.add('nutrezee-brand-theme')");
     expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
@@ -57,7 +57,7 @@ describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   });
 
   it('keeps the approved warm light presentation on the real Fleetbase DOM', () => {
-    expect(extension).toContain("body.classList.remove('dark-theme')");
+    expect(extension).not.toContain("body.classList.remove('dark-theme')");
     expect(extension).not.toContain('approvedLightThemeObserver');
     expect(extension).not.toContain('installApprovedLightThemeGuard');
     expect(extension).not.toContain("body.dataset.theme = 'light'");
@@ -66,7 +66,14 @@ describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
     expect(styles).toMatch(/next-table-wrapper tbody td \{[\s\S]*?background: var\(--nz-surface\) !important/);
     expect(styles).toContain('body.nutrezee-brand-theme .btn-magic');
     expect(styles).toMatch(/\.btn-magic \{[\s\S]*?background: var\(--nz-surface-raised\) !important/);
-    expect(readme).toContain('0.7.48-a44.2');
+    expect(styles).toContain('[data-test-driver-identity-compact] .min-w-0.truncate');
+    expect(styles).toContain('[data-test-resource-identity-meta-badge]');
+    expect(styles).toContain('input.fleetbase-checkbox:checked');
+    expect(styles).toContain('.available-status-badge .status-badge-inner-wrap');
+    expect(styles).toContain('[role="tooltip"].ember-attacher');
+    expect(styles).toContain('.floating-pagination .pagination-showing');
+    expect(styles).not.toMatch(/\.dark-theme \.nz-label-state--/);
+    expect(readme).toContain('0.7.48-a44.3');
   });
 
   it('does not retrigger its document observer by rewriting the title', () => {

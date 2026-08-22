@@ -1,6 +1,6 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
 
-const BRAND_THEME_VERSION = 'a44.2';
+const BRAND_THEME_VERSION = 'a44.3';
 const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
 const BRAND_THEME_STYLESHEET = `/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css?v=${BRAND_THEME_VERSION}`;
 const BRAND_MARK_DATA_URL =
@@ -13,7 +13,6 @@ function applyApprovedLightTheme() {
     }
 
     body.classList.add('nutrezee-brand-theme');
-    body.classList.remove('dark-theme');
     return true;
 }
 
@@ -91,8 +90,9 @@ function installBrandTheme() {
 export default {
     setupExtension(_app, universe) {
         // A43/A44 — brand the existing Fleet-Ops shell through extension-owned assets only. The
-        // saved dark class is normalized once after Fleetbase boot; no competing theme observer or
-        // preference write is installed. Routes, permissions and data workflows remain unchanged.
+        // saved dark preference is normalized visually by extension-owned, high-specificity CSS;
+        // Fleetbase remains free to retain its own body class/data attribute and no competing theme
+        // observer or preference write is installed. Routes, permissions and workflows are unchanged.
         installBrandTheme();
 
         // `UniverseService#getService()` accepts the Fleetbase service alias, not the Ember
