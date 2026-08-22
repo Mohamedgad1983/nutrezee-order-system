@@ -36,8 +36,9 @@
 - No route/auth/permission/data-workflow change, no Fleetbase application/vendor source edit, and
   no Fleetbase preference write, and no change to the exact 100 x 70 mm label print contract.
 - Result: extension v0.3.3 / Console a44.2, A43 PR #52 merge `a52f1ff`, A44 commits `76075d7` +
-  `4f7b2aa` in PR #53. Focused 12/12, full Vitest 72 files / 408 tests, lint/typecheck/build, scans,
-  snapshot 8/8, rolling sync 9/9, A44 push/PR CI 14/14 and signed-in live Chrome acceptance all green.
+  `4f7b2aa`, PR #53 merge `973050f`. Focused 12/12, full Vitest 72 files / 408 tests,
+  lint/typecheck/build, scans, snapshot 8/8, rolling sync 9/9, feature-final and merge CI all 14/14,
+  and signed-in live Chrome acceptance all green.
   Final Console image `42e4785faf08`; the first a44.1 live swap was safely rolled back after Chrome
   caught a recursive theme observer, which a44.2 removes together with any `data-theme` write.
   No backend/data workflow or vendor change.
