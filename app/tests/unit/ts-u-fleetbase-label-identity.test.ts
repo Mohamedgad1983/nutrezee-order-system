@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FleetbaseIdentityService,
   HttpFleetbaseIdentityGateway,
+  type FleetbaseDriverProjection,
   type FleetbaseIdentityGateway,
   type FleetbaseOrderProjection,
 } from '../../apps/api/src/modules/m25-label/fleetbase-identity.service';
@@ -16,7 +17,9 @@ class FakeGateway implements FleetbaseIdentityGateway {
     type: 'driver',
     verified: true,
   };
-  driverResults = [{ public_id: 'driver_1', internal_id: 'A1', name: 'Driver One' }];
+  driverResults: FleetbaseDriverProjection[] = [
+    { public_id: 'driver_1', internal_id: 'A1', name: 'Driver One' },
+  ];
   orderResults: FleetbaseOrderProjection[] = [];
   oneOrder: FleetbaseOrderProjection = {
     id: 'order_1',
@@ -29,6 +32,10 @@ class FakeGateway implements FleetbaseIdentityGateway {
 
   async session() {
     return this.sessionResult;
+  }
+
+  async drivers() {
+    return this.driverResults;
   }
 
   async driversForUser(_token: string, userUuid: string) {
@@ -202,6 +209,66 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
   });
 
+  it('assigns stable distinct colors and current vehicle/phone by immutable driver id', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'ops-1', type: 'admin', verified: true };
+    gateway.driverResults = [
+      {
+        public_id: 'driver_b', name: 'Name Can Change', phone: '+96550000002',
+        vehicle: { plate_number: 'KWT-202' },
+      },
+      {
+        public_id: 'driver_a', name: 'Another Name', phone: '+96550000001',
+        vehicle: { plate_number: 'KWT-101' },
+      },
+    ];
+    gateway.orderResults = [
+      {
+        id: 'order_b', meta: { delivery_date: '2099-05-12' },
+        driver_assigned: { public_id: 'driver_b', name: 'Stale Name' },
+      },
+      {
+        id: 'order_a', meta: { delivery_date: '2099-05-12' },
+        driver_assigned: { public_id: 'driver_a', name: 'Old Name' },
+      },
+    ];
+    const identity = new FleetbaseIdentityService(gateway);
+
+    const { orders } = await identity.ordersForOperatorDate('token', '2099-05-12');
+
+    expect(orders[0]?.driver_assigned).toMatchObject({
+      public_id: 'driver_b', phone: '+96550000002',
+      vehicle: { plate_number: 'KWT-202' }, label_color: 'blue',
+    });
+    expect(orders[1]?.driver_assigned).toMatchObject({
+      public_id: 'driver_a', phone: '+96550000001',
+      vehicle: { plate_number: 'KWT-101' }, label_color: 'red',
+    });
+    expect(orders[0]?.driver_assigned?.label_color)
+      .not.toBe(orders[1]?.driver_assigned?.label_color);
+  });
+
+  it('blocks an assigned label when the current Fleetbase vehicle plate is absent', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'ops-1', type: 'admin', verified: true };
+    gateway.driverResults = [{ public_id: 'driver_1', phone: '+96550000001' }];
+    gateway.orderResults = [{
+      id: 'order_1', meta: { delivery_date: '2099-05-12' },
+      driver_assigned: {
+        public_id: 'driver_1',
+        // An embedded order snapshot cannot substitute for the current driver directory.
+        vehicle: { plate_number: 'STALE-PLATE' },
+      },
+    }];
+    const identity = new FleetbaseIdentityService(gateway);
+
+    await expect(identity.ordersForOperatorDate('token', '2099-05-12'))
+      .rejects.toMatchObject({
+        code: 'upstream_unavailable',
+        detail: { reason: 'assigned_driver_vehicle_plate_missing' },
+      });
+  });
+
   it('rejects invalid dates and orders with no authoritative delivery date', async () => {
     const identity = new FleetbaseIdentityService(new FakeGateway());
 
@@ -234,7 +301,9 @@ describe('TS-U Fleetbase identity boundary', () => {
       await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual([
         { public_id: 'driver_exact', user_uuid: 'user-exact' },
       ]);
-      expect(requested).toEqual(['https://fleetbase.test/int/v1/drivers?limit=-1']);
+      expect(requested).toEqual([
+        'https://fleetbase.test/int/v1/drivers?limit=-1&with%5B%5D=vehicle',
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
     }

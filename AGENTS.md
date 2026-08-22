@@ -88,6 +88,26 @@ current-day order/assignment authority, and production/Partner writes, secret ge
 unattended dispatch activation, Fleetbase vendor-source edits, and Navigator `/legacy` remain
 prohibited.
 
+## Assigned-driver missing-location recovery amendment
+
+AMENDMENT A30 2026-08-08 — Mohamed authorized completing the recurring missing-customer-
+location workflow for the Nutreeze Driver App and the existing Fleet-Ops admin. For a currently
+assigned Fleetbase order whose authoritative Partner location is missing or invalid, Navigator may
+route the assigned driver to the nearest safe known operational anchor in the same routing area,
+clearly labeled as a fallback rather than the customer's pin. The driver then calls the customer,
+captures the exact location from current GPS or a customer-shared coordinates/maps link, and submits
+it to the Nutrezee API. Fleetbase identity and current assignment remain the sole driver authority.
+
+Accepted locations are stored in an append-only audited ledger keyed by the stable Partner customer
+reference and may be reused on later Partner rows only when their authoritative pin is still missing
+or invalid. A valid Partner pin always wins and is never overwritten; corrections to an accepted
+capture require an audited Fleet-Ops review action. The driver may see customer name, area and phone
+only for their own current work. Anchor-customer identity must never be exposed. Partner and legacy
+remain read-only; no location is written back to either source. Implementation and staging proof are
+authorized, but production activation, unattended dispatch, Fleetbase vendor-source edits,
+Navigator `/legacy`, secret generation and paid-license purchase remain prohibited until explicit
+release approval.
+
 ## Partner daily dispatch amendment
 
 AMENDMENT 2026-07-19 — Mohamed authorized an operational, read-only Partner API →
@@ -129,6 +149,82 @@ earlier than the previously documented 06:00 source publication. The resulting
 manifest must remain labeled non-authoritative and must not enable or feed the
 dispatch timer. All A23 storage, PII, write-prohibition, and A19 boundaries remain
 in force.
+
+## Rolling Fleetbase synchronization 01:00 schedule amendment
+
+AMENDMENT A38 2026-08-12 — Mohamed corrected the production rolling Fleetbase
+synchronization schedule to **01:00 Kuwait** (`22:00 UTC` on the preceding
+calendar day), superseding only A37's 07:00 timing. The job continues to refresh
+the +1/+2-day horizon with independent per-date reconciliation and `Restart=no`;
+its executable wrapper must reject starts outside 00:45–01:45 Kuwait. Applying
+this schedule correction must restart only the timer and must not trigger an
+additional dispatch run. Partner and legacy remain read-only, and the A30
+production-activation gate remains separate.
+
+## Nullable Partner time-slot amendment
+
+AMENDMENT A39 2026-08-16 — Mohamed directed immediate repair of the live rolling
+Fleetbase synchronization after Partner returned a legitimate daily-delivery row
+whose legacy `time_slot` object contained null `id`, `title`, `start`, and `end`
+values. These presentation fields are optional; their absence must not block an
+otherwise valid delivery. Non-null values remain strictly type/length validated,
+and Fleetbase scheduling continues to use only the protected pickup
+`dispatch_time`. All count/digest, exact membership, location-hold, idempotency,
+read-only Partner/legacy, `Restart=no`, and separate A30 activation controls remain
+unchanged.
+
+## Driver box color + vehicle/phone label amendment
+
+AMENDMENT A40 2026-08-16 — Mohamed requires every current Fleetbase-assigned
+driver's meal boxes to carry a visually distinct driver color plus the driver's
+current vehicle number and phone number, because a driver's display name may
+change. The color identity must be derived from the immutable Fleetbase driver
+public id across the complete current company driver directory, never from the
+name, customer, area, or order. The permanent customer Code 128/QR payload and
+bars remain black and unchanged for scanner reliability; color is restricted to
+a prominent label band/border. Fleet-Ops must read the phone and vehicle plate
+server-side from the current Fleetbase driver/vehicle assignment and fail closed
+before printing if an assigned driver's public id, unique color, phone, or
+vehicle plate is missing. Reassignment must produce the newly assigned driver's
+identity on a fresh preview. This supersedes the earlier driver-phone prohibition
+only for authenticated internal box-label rendering; it does not authorize phone
+storage, logging, Partner exposure, public APIs, or any Fleetbase/Partner write.
+
+## Unstarted rolling-sync reconciliation amendment
+
+AMENDMENT A42 2026-08-21 — Mohamed authorized immediate repair of the production rolling
+Fleetbase synchronization after the current +1-day Partner snapshot legitimately changed from
+684 to 674 distinct orders: 123 existing rows advanced from `ordered` to `driver_assigned`, three
+received timestamp-only updates, and ten unstarted source rows disappeared. Both lifecycle states
+are already dispatch-approved. An integration-owned Fleetbase job may therefore be atomically
+refreshed, reassigned, held, canceled or tombstoned from a stable count/digest-locked Partner
+snapshot until Navigator records `started` or `started_at`; a started job remains immutable and
+must fail closed on any source, routability or driver change. Raw hashes remain audit provenance
+but must not freeze an unstarted pre-dispatched job. Partner and legacy remain read-only; Fleetbase
+vendor source, Navigator `/legacy`, secret generation, paid-license purchase, retry behavior and
+the separate A30 production-activation gate remain unchanged.
+
+## Nutreeze Fleet-Ops visual-system amendment
+
+AMENDMENT A43 2026-08-22 — Mohamed supplied the official Nutreeze logo PDF and directed the
+existing Fleet-Ops administration interface to use a beautiful Nutreeze front-end design. Scope
+is presentation-only through the separately identifiable Nutrezee Console extension: exact logo
+geometry/color, accessible header identity/favicon, responsive light/dark shell styling, navigation,
+tables, forms and existing Nutrezee extension screens. Fleetbase legal/version attribution must
+remain visible, existing routes/auth/permissions/data workflows must remain unchanged, and the
+legacy 100 x 70 mm print contract must remain isolated. Fleetbase application/vendor source,
+Navigator `/legacy`, Partner/legacy writes, secrets and production data mutation remain prohibited.
+
+## Nutreeze Fleet-Ops approved light-theme parity amendment
+
+AMENDMENT A44 2026-08-22 — After comparing the deployed Fleet-Ops screen with the approved
+local design, Mohamed selected the warm light Nutreeze presentation as the production target.
+The separately identifiable Console extension must normalize Fleet-Ops to that light visual
+system even when Fleetbase or the browser has persisted a dark-theme preference, and it must
+style the real Fleetbase sticky table cells and button variants that were absent from the
+simplified preview fixture. This is presentation-only and may not mutate Fleetbase settings or
+application/vendor source. Fleetbase attribution, routes, auth, permissions, data workflows,
+the 100 x 70 mm print contract and all A43 prohibitions remain unchanged.
 
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 

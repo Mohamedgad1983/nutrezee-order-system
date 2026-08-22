@@ -1,8 +1,8 @@
 import type { Pool } from 'pg';
 import { createHash } from 'node:crypto';
 import type {
-  LabelAddressContract, LabelDocumentContract, LabelMealRowContract, LabelMealSource,
-  LabelNutritionTotalsContract,
+  DriverLabelColorToken, LabelAddressContract, LabelDocumentContract, LabelMealRowContract,
+  LabelMealSource, LabelNutritionTotalsContract,
 } from '@nutrezee/shared';
 import { code128Svg } from './code128';
 import { withTransaction } from '../../platform/db/tx';
@@ -49,8 +49,18 @@ export interface BatchLabelCandidate {
   areaKey: string;
   areaLabel: string;
   driverId: string | null;
-  driverName: string | null;
+  driverLabel: string | null;
   driverRef: string | null;
+  driverPhone: string | null;
+  vehicleNumber: string | null;
+  driverColor: DriverLabelColorToken | null;
+}
+
+export interface FleetbaseDriverLabelSource {
+  driverRef: string | null;
+  driverPhone: string | null;
+  vehicleNumber: string | null;
+  driverColor: DriverLabelColorToken | null;
 }
 
 export interface BatchLabelFilter {
@@ -90,7 +100,7 @@ export class LabelService {
     actor: StaffContext,
     orderId: string,
     deliveryDate: string,
-    source?: { driverRef?: string | null },
+    source?: Partial<FleetbaseDriverLabelSource>,
   ): Promise<LabelDocumentContract> {
     if (!DATE_RE.test(deliveryDate ?? '')) {
       throw new LabelError('validation_failed', { field: 'delivery_date' });
@@ -170,6 +180,9 @@ export class LabelService {
       snacks_per_day: null,
       legacy_user_id: (r.legacy_user_id as string) ?? null,
       driver_ref: driverRef,
+      driver_color: source?.driverColor ?? null,
+      driver_phone: source?.driverPhone ?? null,
+      vehicle_number: source?.vehicleNumber ?? null,
       order_number: r.order_number as string,
       address,
       phone: (r.phone_normalized as string) ?? null,
@@ -220,11 +233,39 @@ export class LabelService {
 
   fleetbaseDriverRef(order: FleetbaseOrderProjection): string | null {
     const driver = order.driver_assigned;
-    return driver?.internal_id?.trim()
-      || driver?.name?.trim()
-      || driver?.public_id?.trim()
+    return driver?.public_id?.trim()
       || driver?.id?.trim()
       || null;
+  }
+
+  /**
+   * Resolve the current Fleetbase assignment into the operational box identity. Names are
+   * deliberately excluded: the immutable driver public id owns the color, while the visible
+   * label carries the current phone and assigned vehicle plate. An assigned row with incomplete
+   * identity fails closed instead of printing a misleading box.
+   */
+  fleetbaseDriverSource(order: FleetbaseOrderProjection): FleetbaseDriverLabelSource {
+    const driver = order.driver_assigned;
+    if (!driver) {
+      return { driverRef: null, driverPhone: null, vehicleNumber: null, driverColor: null };
+    }
+    const driverRef = this.fleetbaseDriverRef(order);
+    const driverPhone = driver.phone?.trim() || null;
+    const vehicleNumber = driver.vehicle?.plate_number?.trim() || null;
+    const driverColor = driver.label_color ?? null;
+    const missing = [
+      !driverRef && 'driver_public_id',
+      !driverPhone && 'driver_phone',
+      !vehicleNumber && 'vehicle_number',
+      !driverColor && 'driver_color',
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw new LabelError('conflict', {
+        reason: 'fleetbase_driver_label_identity_incomplete',
+        missing,
+      });
+    }
+    return { driverRef, driverPhone, vehicleNumber, driverColor };
   }
 
   /**
@@ -273,11 +314,8 @@ export class LabelService {
         order.meta?.area_ar,
         row.local_area_name,
       ])[0] ?? '';
-      const driver = order?.driver_assigned;
-      const driverId = driver?.public_id?.trim() || driver?.id?.trim() || null;
-      const driverName = driver?.name?.trim()
-        || driver?.internal_id?.trim()
-        || driverId;
+      const driverSource = this.fleetbaseDriverSource(order);
+      const driverId = driverSource.driverRef;
       const orderNumber = compactStrings([
         order.meta?.source_order_number,
         order.meta?.external_ref,
@@ -290,8 +328,10 @@ export class LabelService {
         areaKey: area || NO_AREA_KEY,
         areaLabel: area || 'No area / بدون منطقة',
         driverId,
-        driverName: driverName ?? null,
-        driverRef: order ? this.fleetbaseDriverRef(order) : null,
+        driverLabel: driverSource.vehicleNumber && driverSource.driverPhone
+          ? `${driverSource.vehicleNumber} · ${driverSource.driverPhone}`
+          : null,
+        ...driverSource,
       };
     });
   }
@@ -357,6 +397,9 @@ export class LabelService {
         const [label, history] = await Promise.all([
           this.build(actor, candidate.localOrderId, deliveryDate, {
             driverRef: candidate.driverRef,
+            driverPhone: candidate.driverPhone,
+            vehicleNumber: candidate.vehicleNumber,
+            driverColor: candidate.driverColor,
           }),
           this.printHistory(candidate.localOrderId, deliveryDate),
         ]);

@@ -144,6 +144,10 @@ export interface LabelAddressContract {
   direction: string | null;
 }
 
+export type DriverLabelColorToken =
+  | 'red' | 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'pink' | 'navy'
+  | 'brown' | 'cyan' | 'olive' | 'amber' | 'magenta' | 'slate' | 'lime' | 'coral';
+
 /** The complete, render-ready legacy label. Field order mirrors the printed label exactly. */
 export interface LabelDocumentContract {
   order_id: string;
@@ -159,6 +163,9 @@ export interface LabelDocumentContract {
   snacks_per_day: number | null;
   legacy_user_id: string | null;
   driver_ref: string | null;
+  driver_color: DriverLabelColorToken | null;
+  driver_phone: string | null;
+  vehicle_number: string | null;
   order_number: string;
   address: LabelAddressContract;
   phone: string | null;
@@ -221,4 +228,77 @@ export interface CollectionManifestContract {
   collected: number;
   remaining: number;
   entries: CollectionManifestEntryContract[];
+}
+
+// ---------------------------------------------------------------------------
+// WP-LOC-A30 — assigned-driver missing-location recovery
+// ---------------------------------------------------------------------------
+
+export type DriverLocationCaptureMethod = 'current_gps' | 'shared_coordinates';
+export type DriverLocationOutcome = 'accepted' | 'already_captured' | 'partner_pin_available';
+export type DriverLocationFallbackSource = 'known_stop_anchor' | 'area_centroid';
+
+export interface DriverLocationPointContract {
+  latitude: number;
+  longitude: number;
+}
+
+export interface DriverLocationFallbackContract extends DriverLocationPointContract {
+  source: DriverLocationFallbackSource;
+  label_en: string;
+  label_ar: string;
+}
+
+export interface DriverLocationManifestEntryContract {
+  fleetbase_order_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  area: string | null;
+  phone: string | null;
+  state: 'needs_capture' | 'captured' | 'blocked';
+  blocked_reason: 'missing_customer_reference' | 'fallback_unavailable' | null;
+  fallback: DriverLocationFallbackContract | null;
+  exact_location: (DriverLocationPointContract & {
+    captured_at: string;
+    capture_method: DriverLocationCaptureMethod | 'operator_correction';
+  }) | null;
+}
+
+export interface DriverLocationManifestContract {
+  delivery_date: string;
+  driver_ref: string;
+  total: number;
+  pending: number;
+  captured: number;
+  blocked: number;
+  entries: DriverLocationManifestEntryContract[];
+}
+
+export interface DriverLocationCaptureRequestContract extends DriverLocationPointContract {
+  fleetbase_order_id: string;
+  delivery_date?: string;
+  capture_method: DriverLocationCaptureMethod;
+  accuracy_meters?: number;
+}
+
+export interface DriverLocationCaptureResultContract extends DriverLocationPointContract {
+  outcome: DriverLocationOutcome;
+  fleetbase_order_id: string;
+  captured_at: string | null;
+  message_en: string;
+  message_ar: string;
+}
+
+export interface FleetOpsDriverLocationContract extends DriverLocationPointContract {
+  id: string;
+  partner_customer_ref: string;
+  fleetbase_order_id: string;
+  source_order_number: string | null;
+  delivery_date: string;
+  fleetbase_driver_id: string | null;
+  capture_method: DriverLocationCaptureMethod | 'operator_correction';
+  accuracy_meters: number | null;
+  supersedes_id: string | null;
+  correction_reason: string | null;
+  captured_at: string;
 }
