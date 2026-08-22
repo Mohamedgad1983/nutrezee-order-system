@@ -78,3 +78,9 @@ For the corrected A43 branding release, use Console application version `0.7.48-
 theme query `?v=a43.2`, and the same cachebuster on the Console scripts and `/extensions.json`. Rebuild
 only through the documented local package dependency/registration wiring; Fleetbase application
 and vendor source remain unchanged.
+
+For the corrected A44 production-parity release, use Console application version `0.7.48-a44.2`,
+extension version `0.3.3`, and `?v=a44.2` on the extension theme, Console scripts, and
+`/extensions.json`. The extension normalizes the saved dark class once after Fleetbase boot; it does
+not write Fleetbase preferences or install a competing theme observer. Application/vendor source
+remains unchanged.

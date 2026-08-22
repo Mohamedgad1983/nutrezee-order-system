@@ -1,8 +1,9 @@
 /* A28 — exact legacy label inside Fleet-Ops. The barcode occupies the reference label's unused
  * lower strip; no legacy field, table column, caption or field order is removed. */
 
-/* A43 — Nutreeze visual system for the existing Fleet-Ops shell. The theme is installed by the
- * separately maintained extension and deliberately avoids Fleetbase application/vendor source. */
+/* A43/A44 — Nutreeze visual system for the existing Fleet-Ops shell. The theme is installed by
+ * the separately maintained extension, uses the approved warm light presentation in production,
+ * and deliberately avoids Fleetbase application/vendor source. */
 body.nutrezee-brand-theme {
     --nz-brand: #956132;
     --nz-brand-hover: #78491f;
@@ -33,32 +34,6 @@ body.nutrezee-brand-theme {
     font-family: "Inter UI", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
-}
-
-body.nutrezee-brand-theme.dark-theme,
-body.nutrezee-brand-theme[data-theme="dark"] {
-    --nz-brand-hover: #ad7743;
-    --nz-brand-bright: #d0a170;
-    --nz-brand-soft: rgb(189 138 88 / 14%);
-    --nz-brand-line: rgb(189 138 88 / 27%);
-    --nz-bg: #120f0d;
-    --nz-surface: #1c1713;
-    --nz-surface-raised: #221b16;
-    --nz-surface-soft: #2a211b;
-    --nz-input: #17120f;
-    --nz-text: #f5eee7;
-    --nz-muted: #b9aa9c;
-    --nz-border: #413126;
-    --nz-row-hover: #2a201a;
-    --nz-sidebar: #0e0c0a;
-    --nz-sidebar-raised: #19130f;
-    --nz-sidebar-text: #f7f1ea;
-    --nz-sidebar-muted: #a79788;
-    --nz-positive: #4db887;
-    --nz-warning: #dda84d;
-    --nz-danger: #e47a72;
-    --nz-shadow-sm: 0 5px 16px rgb(0 0 0 / 24%);
-    --nz-shadow-lg: 0 20px 48px rgb(0 0 0 / 34%);
 }
 
 body.nutrezee-brand-theme,
@@ -306,8 +281,8 @@ body.nutrezee-brand-theme .next-table-wrapper table {
 body.nutrezee-brand-theme .next-table-wrapper thead,
 body.nutrezee-brand-theme .next-table-wrapper thead tr,
 body.nutrezee-brand-theme .next-table-wrapper thead th {
-    background: var(--nz-surface-soft);
-    color: var(--nz-muted);
+    background: var(--nz-surface-soft) !important;
+    color: var(--nz-muted) !important;
 }
 
 body.nutrezee-brand-theme .next-table-wrapper thead th {
@@ -320,17 +295,17 @@ body.nutrezee-brand-theme .next-table-wrapper thead th {
 
 body.nutrezee-brand-theme .next-table-wrapper tbody tr,
 body.nutrezee-brand-theme .next-table-wrapper tbody td {
-    background: var(--nz-surface);
-    color: var(--nz-text);
+    background: var(--nz-surface) !important;
+    color: var(--nz-text) !important;
 }
 
 body.nutrezee-brand-theme .next-table-wrapper tbody td {
     height: 2.85rem;
-    border-color: var(--nz-border);
+    border-color: var(--nz-border) !important;
 }
 
 body.nutrezee-brand-theme .next-table-wrapper tbody tr:hover td {
-    background: var(--nz-row-hover);
+    background: var(--nz-row-hover) !important;
 }
 
 body.nutrezee-brand-theme .next-table-wrapper tbody tr:hover td:first-child {
@@ -381,30 +356,34 @@ body.nutrezee-brand-theme .btn:hover:not(:disabled) {
     transform: translateY(-1px);
 }
 
+body.nutrezee-brand-theme .next-view-section-subheader .btn-primary,
 body.nutrezee-brand-theme .btn-primary {
-    border-color: #78491f;
-    background: linear-gradient(135deg, #a86f37, var(--nz-brand));
-    color: #fff;
+    border-color: #78491f !important;
+    background: linear-gradient(135deg, #a86f37, var(--nz-brand)) !important;
+    color: #fff !important;
     box-shadow: 0 6px 16px rgb(84 49 22 / 22%);
 }
 
+body.nutrezee-brand-theme .next-view-section-subheader .btn-primary:hover:not(:disabled),
 body.nutrezee-brand-theme .btn-primary:hover:not(:disabled) {
-    border-color: #8a572a;
-    background: linear-gradient(135deg, #b87c43, #9c682f);
+    border-color: #8a572a !important;
+    background: linear-gradient(135deg, #b87c43, #9c682f) !important;
     box-shadow: 0 8px 20px rgb(84 49 22 / 30%);
 }
 
 body.nutrezee-brand-theme .btn-default,
-body.nutrezee-brand-theme .btn-secondary {
-    border-color: var(--nz-border);
-    background: var(--nz-surface-raised);
-    color: var(--nz-text);
+body.nutrezee-brand-theme .btn-secondary,
+body.nutrezee-brand-theme .btn-magic {
+    border-color: var(--nz-border) !important;
+    background: var(--nz-surface-raised) !important;
+    color: var(--nz-text) !important;
 }
 
 body.nutrezee-brand-theme .btn-default:hover:not(:disabled),
-body.nutrezee-brand-theme .btn-secondary:hover:not(:disabled) {
-    border-color: var(--nz-brand-line);
-    background: var(--nz-brand-soft);
+body.nutrezee-brand-theme .btn-secondary:hover:not(:disabled),
+body.nutrezee-brand-theme .btn-magic:hover:not(:disabled) {
+    border-color: var(--nz-brand-line) !important;
+    background: var(--nz-brand-soft) !important;
 }
 
 body.nutrezee-brand-theme [role="tooltip"] {

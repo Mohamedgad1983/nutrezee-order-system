@@ -24,10 +24,10 @@ const routes = read('addon/routes.js');
 const readme = read('README.md');
 const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
-describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
+describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.1');
+    expect(packageJson.version).toBe('0.3.3');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -35,9 +35,9 @@ describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
   });
 
   it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
-    expect(extension).toContain("const BRAND_THEME_VERSION = 'a43.2'");
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a44.2'");
     expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
-    expect(extension).toContain("document.body?.classList.add('nutrezee-brand-theme')");
+    expect(extension).toContain("body.classList.add('nutrezee-brand-theme')");
     expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
     expect(extension).toContain("document.title = 'Nutreeze | Fleet-Ops'");
     expect(extension).toContain("'DOMContentLoaded'");
@@ -47,7 +47,6 @@ describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
     expect(extension).toContain('installBrandTheme();');
     expect(styles).toContain('body.nutrezee-brand-theme');
     expect(styles).toContain('--nz-brand: #956132');
-    expect(styles).toContain('body.nutrezee-brand-theme.dark-theme');
     expect(styles).toContain('.next-view-header .navbar-logo::before');
     expect(styles).toContain('.next-sidebar-navigator-item.is-active');
     expect(styles).toContain('.next-table-wrapper tbody tr:hover td');
@@ -55,6 +54,19 @@ describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('.next-sidebar-footer .fleetbase-attribution-notice');
     expect(styles).not.toMatch(/fleetbase-attribution-notice[^{}]*\{[^}]*display:\s*none/);
     expect(readme).toMatch(/Fleetbase application\s+and vendor source remain unchanged/);
+  });
+
+  it('keeps the approved warm light presentation on the real Fleetbase DOM', () => {
+    expect(extension).toContain("body.classList.remove('dark-theme')");
+    expect(extension).not.toContain('approvedLightThemeObserver');
+    expect(extension).not.toContain('installApprovedLightThemeGuard');
+    expect(extension).not.toContain("body.dataset.theme = 'light'");
+    expect(styles).not.toContain('--nz-bg: #120f0d');
+    expect(styles).toContain('.next-table-wrapper tbody td {');
+    expect(styles).toMatch(/next-table-wrapper tbody td \{[\s\S]*?background: var\(--nz-surface\) !important/);
+    expect(styles).toContain('body.nutrezee-brand-theme .btn-magic');
+    expect(styles).toMatch(/\.btn-magic \{[\s\S]*?background: var\(--nz-surface-raised\) !important/);
+    expect(readme).toContain('0.7.48-a44.2');
   });
 
   it('does not retrigger its document observer by rewriting the title', () => {
