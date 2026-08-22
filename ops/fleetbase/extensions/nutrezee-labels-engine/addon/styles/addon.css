@@ -33,6 +33,7 @@ body.nutrezee-brand-theme {
     background: var(--nz-bg);
     font-family: "Inter UI", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    color-scheme: light;
     text-rendering: optimizeLegibility;
 }
 
@@ -312,6 +313,82 @@ body.nutrezee-brand-theme .next-table-wrapper tbody tr:hover td:first-child {
     box-shadow: inset 3px 0 0 var(--nz-brand);
 }
 
+/* Fleetbase reapplies its persisted dark marker after extension setup. Keep that application state
+ * untouched and neutralize only the real dark utility classes rendered inside the warm table. */
+body.nutrezee-brand-theme .next-table-wrapper {
+    color: var(--nz-text) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-driver-identity-compact],
+body.nutrezee-brand-theme .next-table-wrapper [data-test-vehicle-identity-compact] {
+    background: transparent !important;
+    color: var(--nz-text) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-driver-identity-compact] .min-w-0.truncate,
+body.nutrezee-brand-theme .next-table-wrapper [data-test-vehicle-identity-compact] .min-w-0.truncate {
+    color: var(--nz-text) !important;
+    font-weight: 650;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-driver-identity-compact]:hover .min-w-0.truncate,
+body.nutrezee-brand-theme .next-table-wrapper [data-test-vehicle-identity-compact]:hover .min-w-0.truncate {
+    color: var(--nz-brand-hover) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-driver-identity-compact] img.flb--img,
+body.nutrezee-brand-theme .next-table-wrapper [data-test-vehicle-identity-compact] img.flb--img {
+    border-color: var(--nz-border) !important;
+    border-radius: 999px !important;
+    background: #f1e7dc !important;
+    box-shadow: none !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-resource-identity-status-dot] {
+    color: var(--nz-brand-bright) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-resource-identity-meta-badge] {
+    border: 1px solid var(--nz-border) !important;
+    background: var(--nz-surface-soft) !important;
+    color: var(--nz-muted) !important;
+    box-shadow: none !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper [data-test-resource-identity-meta-badge] * {
+    color: inherit !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper input.fleetbase-checkbox {
+    border-color: #c7b6a6 !important;
+    background-color: var(--nz-surface-raised) !important;
+    color: var(--nz-brand) !important;
+    box-shadow: none !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper input.fleetbase-checkbox:checked,
+body.nutrezee-brand-theme .next-table-wrapper input.fleetbase-checkbox:indeterminate {
+    border-color: var(--nz-brand) !important;
+    background-color: var(--nz-brand) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper .available-status-badge .status-badge-inner-wrap {
+    border: 1px solid rgb(35 132 91 / 18%) !important;
+    background: rgb(35 132 91 / 14%) !important;
+    color: var(--nz-positive) !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody td:last-child .btn:has(svg[data-icon="ellipsis"]) {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.nutrezee-brand-theme .next-table-wrapper tbody td:last-child .btn:has(svg[data-icon="ellipsis"]):hover {
+    border-color: var(--nz-brand-line) !important;
+    background: var(--nz-brand-soft) !important;
+}
+
 body.nutrezee-brand-theme .next-table-wrapper a,
 body.nutrezee-brand-theme .next-table-wrapper button:not(.btn) {
     color: inherit;
@@ -386,7 +463,29 @@ body.nutrezee-brand-theme .btn-magic:hover:not(:disabled) {
     background: var(--nz-brand-soft) !important;
 }
 
-body.nutrezee-brand-theme [role="tooltip"] {
+body.nutrezee-brand-theme .next-view-section-subheader input.w-64 {
+    width: 12rem !important;
+}
+
+body.nutrezee-brand-theme .next-view-section-subheader .btn:has(svg[data-icon="filter"])::after {
+    margin-inline-start: 0.42rem;
+    content: "Filter";
+}
+
+body.nutrezee-brand-theme .next-view-section-subheader .btn:has(svg[data-icon="arrows-rotate"])::after {
+    margin-inline-start: 0.42rem;
+    content: "Refresh";
+}
+
+/* The tooltip host keeps its full rectangle while the inner scale is hidden. Styling that host
+ * caused the two black bars seen in production; only the visible inner tooltip gets a surface. */
+body.nutrezee-brand-theme [role="tooltip"].ember-attacher {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.nutrezee-brand-theme .ember-attacher-tooltip:not(.ember-attacher-hide) .ui-input-info {
     border: 1px solid var(--nz-brand-line);
     border-radius: 0.55rem;
     background: #211711;
@@ -401,19 +500,34 @@ body.nutrezee-brand-theme :focus-visible {
 
 body.nutrezee-brand-theme .next-table-pagination,
 body.nutrezee-brand-theme .next-pagination,
-body.nutrezee-brand-theme .pagination {
-    border: 1px solid var(--nz-border);
-    border-radius: 0.7rem;
-    background: var(--nz-surface-raised);
-    color: var(--nz-muted);
-    box-shadow: var(--nz-shadow-sm);
+body.nutrezee-brand-theme .pagination,
+body.nutrezee-brand-theme .floating-pagination {
+    border: 1px solid var(--nz-border) !important;
+    border-radius: 0.7rem !important;
+    background: rgb(255 253 249 / 96%) !important;
+    color: var(--nz-muted) !important;
+    box-shadow: var(--nz-shadow-sm) !important;
 }
 
 body.nutrezee-brand-theme .next-table-pagination button,
 body.nutrezee-brand-theme .next-pagination button,
-body.nutrezee-brand-theme .pagination button {
-    border-color: var(--nz-border);
-    color: var(--nz-text);
+body.nutrezee-brand-theme .pagination button,
+body.nutrezee-brand-theme .floating-pagination button,
+body.nutrezee-brand-theme .floating-pagination a {
+    border-color: var(--nz-border) !important;
+    background: var(--nz-surface-raised) !important;
+    color: var(--nz-text) !important;
+}
+
+body.nutrezee-brand-theme .floating-pagination .pagination-showing,
+body.nutrezee-brand-theme .floating-pagination .fleetbase-pagination-meta-info-content {
+    color: var(--nz-muted) !important;
+}
+
+body.nutrezee-brand-theme .floating-pagination .page-item.active {
+    border-color: var(--nz-brand-line) !important;
+    background: var(--nz-brand-soft) !important;
+    color: var(--nz-brand-hover) !important;
 }
 
 @media (max-width: 1100px) {
@@ -442,6 +556,11 @@ body.nutrezee-brand-theme .pagination button {
     body.nutrezee-brand-theme .next-table-wrapper {
         overflow-x: auto;
         border-radius: 0.72rem;
+    }
+
+    body.nutrezee-brand-theme .next-view-section-subheader .btn:has(svg[data-icon="filter"])::after,
+    body.nutrezee-brand-theme .next-view-section-subheader .btn:has(svg[data-icon="arrows-rotate"])::after {
+        display: none;
     }
 }
 
@@ -513,24 +632,6 @@ body.nutrezee-brand-theme .pagination button {
     border-color: #86efac;
     color: #166534;
     background: #f0fdf4;
-}
-
-body.nutrezee-brand-theme.dark-theme .nz-label-state--error {
-    border-color: rgb(228 122 114 / 42%);
-    color: #ffaaa3;
-    background: rgb(184 74 67 / 16%);
-}
-
-body.nutrezee-brand-theme.dark-theme .nz-label-state--warning {
-    border-color: rgb(221 168 77 / 42%);
-    color: #f2c878;
-    background: rgb(180 116 25 / 16%);
-}
-
-body.nutrezee-brand-theme.dark-theme .nz-label-state--success {
-    border-color: rgb(77 184 135 / 42%);
-    color: #84d8b2;
-    background: rgb(35 132 91 / 16%);
 }
 
 .nz-batch-summary {
