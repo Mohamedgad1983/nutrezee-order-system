@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.0');
+    expect(packageJson.version).toBe('0.3.1');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -35,9 +35,10 @@ describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
   });
 
   it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
-    expect(extension).toContain("const BRAND_THEME_VERSION = 'a43.1'");
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a43.2'");
     expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
     expect(extension).toContain("document.body?.classList.add('nutrezee-brand-theme')");
+    expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
     expect(extension).toContain("document.title = 'Nutreeze | Fleet-Ops'");
     expect(extension).toContain("'DOMContentLoaded'");
     expect(extension).toContain('/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css');
@@ -54,6 +55,12 @@ describe('TS-U A28/A43 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('.next-sidebar-footer .fleetbase-attribution-notice');
     expect(styles).not.toMatch(/fleetbase-attribution-notice[^{}]*\{[^}]*display:\s*none/);
     expect(readme).toMatch(/Fleetbase application\s+and vendor source remain unchanged/);
+  });
+
+  it('does not retrigger its document observer by rewriting the title', () => {
+    expect(extension).toMatch(
+      /const observer = new MutationObserver\(\(\) => \{\s*if \(applyAccessibleBrandIdentity\(\)\) \{\s*observer\.disconnect\(\);\s*\}\s*\}\);/,
+    );
   });
 
   it('registers individual and batch operations inside supported Fleet-Ops registries only', () => {

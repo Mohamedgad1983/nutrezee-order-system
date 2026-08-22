@@ -74,7 +74,7 @@ rotate Fleetbase's extension-list cache key for the deployment as well. This
 ensures every existing operator browser fetches the ten-extension manifest;
 clearing one browser's storage is not an acceptable deployment fix.
 
-For the A43 branding release, use Console application version `0.7.48-a43.1`, the extension theme
-query `?v=a43.1`, and the same cachebuster on the Console scripts and `/extensions.json`. Rebuild
+For the corrected A43 branding release, use Console application version `0.7.48-a43.2`, the extension
+theme query `?v=a43.2`, and the same cachebuster on the Console scripts and `/extensions.json`. Rebuild
 only through the documented local package dependency/registration wiring; Fleetbase application
 and vendor source remain unchanged.

@@ -1,6 +1,6 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
 
-const BRAND_THEME_VERSION = 'a43.1';
+const BRAND_THEME_VERSION = 'a43.2';
 const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
 const BRAND_THEME_STYLESHEET = `/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css?v=${BRAND_THEME_VERSION}`;
 const BRAND_MARK_DATA_URL =
@@ -23,7 +23,9 @@ function applyAccessibleBrandIdentity() {
 function applyDocumentBrandIdentity() {
     document.documentElement.dataset.nutrezeeBrand = 'official';
     document.body?.classList.add('nutrezee-brand-theme');
-    document.title = 'Nutreeze | Fleet-Ops';
+    if (document.title !== 'Nutreeze | Fleet-Ops') {
+        document.title = 'Nutreeze | Fleet-Ops';
+    }
 }
 
 function installBrandTheme() {
@@ -64,7 +66,6 @@ function installBrandTheme() {
 
     if (!applyAccessibleBrandIdentity() && typeof MutationObserver !== 'undefined') {
         const observer = new MutationObserver(() => {
-            applyDocumentBrandIdentity();
             if (applyAccessibleBrandIdentity()) {
                 observer.disconnect();
             }
