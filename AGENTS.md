@@ -215,6 +215,17 @@ remain visible, existing routes/auth/permissions/data workflows must remain unch
 legacy 100 x 70 mm print contract must remain isolated. Fleetbase application/vendor source,
 Navigator `/legacy`, Partner/legacy writes, secrets and production data mutation remain prohibited.
 
+## Nutreeze Fleet-Ops approved light-theme parity amendment
+
+AMENDMENT A44 2026-08-22 — After comparing the deployed Fleet-Ops screen with the approved
+local design, Mohamed selected the warm light Nutreeze presentation as the production target.
+The separately identifiable Console extension must normalize Fleet-Ops to that light visual
+system even when Fleetbase or the browser has persisted a dark-theme preference, and it must
+style the real Fleetbase sticky table cells and button variants that were absent from the
+simplified preview fixture. This is presentation-only and may not mutate Fleetbase settings or
+application/vendor source. Fleetbase attribution, routes, auth, permissions, data workflows,
+the 100 x 70 mm print contract and all A43 prohibitions remain unchanged.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:
