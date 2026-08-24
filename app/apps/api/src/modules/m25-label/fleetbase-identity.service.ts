@@ -1,4 +1,5 @@
 import type { StaffContext } from '../../platform/auth/session.service';
+import type { DriverLabelColorToken } from '@nutrezee/shared';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -8,13 +9,44 @@ export interface FleetbaseOrderProjection {
   scheduled_at?: string | null;
   status?: string | null;
   meta?: Record<string, unknown> | null;
-  driver_assigned?: { id?: string; public_id?: string; internal_id?: string; name?: string } | null;
+  driver_assigned?: {
+    id?: string;
+    public_id?: string;
+    user_uuid?: string;
+    internal_id?: string | null;
+    name?: string | null;
+    phone?: string | null;
+    vehicle_uuid?: string | null;
+    vehicle?: { plate_number?: string | null } | null;
+    label_color?: DriverLabelColorToken | null;
+  } | null;
+  customer?: {
+    name?: string | null;
+    phone?: string | null;
+    meta?: Record<string, unknown> | null;
+  } | null;
+  payload?: {
+    meta?: Record<string, unknown> | null;
+    dropoff?: {
+      name?: string | null;
+      phone?: string | null;
+      location?: { type?: string; coordinates?: unknown } | null;
+    } | null;
+  } | null;
 }
 
 export interface FleetbaseAssignedOrder {
   fleetbaseOrderId: string;
   localOrderId?: string;
   orderNumber?: string;
+  sourceCustomerRef?: string;
+  customerName?: string;
+  phone?: string;
+  area?: string;
+  callCustomerRequired?: boolean;
+  authoritativePinValid?: boolean;
+  fallbackSource?: 'known_stop_anchor' | 'area_centroid';
+  fallbackLocation?: { latitude: number; longitude: number };
 }
 
 export interface FleetbaseDriverContext {
@@ -32,18 +64,26 @@ interface FleetbaseSession {
   verified?: boolean;
 }
 
-interface FleetbaseDriverProjection {
+export interface FleetbaseDriverProjection {
   id?: string;
   public_id?: string;
   user_uuid?: string;
   internal_id?: string | null;
   name?: string | null;
+  phone?: string | null;
+  vehicle_uuid?: string | null;
+  vehicle?: { plate_number?: string | null } | null;
 }
 
 export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
+  drivers(token: string): Promise<FleetbaseDriverProjection[]>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
-  assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
+  assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]>;
   orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]>;
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection>;
 }
@@ -59,8 +99,11 @@ export class FleetbaseIdentityError extends Error {
 
 /**
  * Validates Fleetbase bearer tokens against Fleetbase itself. The Nutrezee API never receives a
- * Fleetbase password and never stores or logs the token. For drivers, the verified session UUID is
- * resolved to exactly one Fleetbase driver before any assigned-order query is accepted.
+ * Fleetbase password and never stores or logs the token. For drivers, the authenticated Fleetbase
+ * driver session UUID is resolved to exactly one Fleetbase driver before any assigned-order query
+ * is accepted. Fleetbase's driver password endpoint intentionally permits company-provisioned
+ * driver users without email/SMS verification, so that unrelated verification flag is not used as
+ * an authorization gate here.
  */
 export class FleetbaseIdentityService {
   private gateway: FleetbaseIdentityGateway | null;
@@ -97,9 +140,6 @@ export class FleetbaseIdentityService {
     const safeToken = requireToken(token);
     const session = await this.client().session(safeToken);
     if (!session.user) throw new FleetbaseIdentityError('invalid_token');
-    if (session.verified === false) {
-      throw new FleetbaseIdentityError('forbidden', { reason: 'verified_driver_required' });
-    }
     if (session.type !== 'driver') {
       throw new FleetbaseIdentityError('forbidden', { reason: 'driver_session_required' });
     }
@@ -114,7 +154,7 @@ export class FleetbaseIdentityService {
     const driverId = driver.public_id ?? driver.id;
     if (!driverId) throw new FleetbaseIdentityError('identity_ambiguous', { reason: 'driver_has_no_public_id' });
 
-    const orders = await this.client().assignedOrders(safeToken, driverId);
+    const orders = await this.client().assignedOrders(safeToken, driverId, deliveryDate);
     const assignedOrders = orders
       .filter((order) => fleetbaseOrderDate(order) === deliveryDate)
       .map(toAssignedOrder)
@@ -134,10 +174,14 @@ export class FleetbaseIdentityService {
     actor: StaffContext;
     order: FleetbaseOrderProjection;
   }> {
-    const actor = await this.operatorContext(token);
-    const order = await this.client().order(requireToken(token), orderId);
+    const safeToken = requireToken(token);
+    const actor = await this.operatorContext(safeToken);
+    const [order, drivers] = await Promise.all([
+      this.client().order(safeToken, orderId),
+      this.client().drivers(safeToken),
+    ]);
     if (!order?.id) throw new FleetbaseIdentityError('upstream_unavailable');
-    return { actor, order };
+    return { actor, order: enrichDriverAssignments([order], drivers)[0]! };
   }
 
   /**
@@ -154,7 +198,11 @@ export class FleetbaseIdentityService {
     }
     const safeToken = requireToken(token);
     const actor = await this.operatorContext(safeToken);
-    const orders = (await this.client().orders(safeToken, deliveryDate))
+    const [sourceOrders, drivers] = await Promise.all([
+      this.client().orders(safeToken, deliveryDate),
+      this.client().drivers(safeToken),
+    ]);
+    const orders = enrichDriverAssignments(sourceOrders, drivers)
       .filter((order) => order.id && fleetbaseOrderDate(order) === deliveryDate)
       .filter((order) => !isHeldOrCancelled(order));
     return { actor, orders };
@@ -195,21 +243,34 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return this.request('GET', '/int/v1/auth/session', token);
   }
 
-  async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
+  async drivers(token: string): Promise<FleetbaseDriverProjection[]> {
     const response = await this.request<unknown>(
-      // Fleetbase 0.7.48 exposes user_uuid in the protected internal driver projection, but its
-      // DriverFilter silently ignores a user_uuid query parameter. Fetch the current company's
-      // bounded driver set and enforce the exact UUID comparison here rather than trusting a
-      // non-functional upstream filter.
-      'GET', '/int/v1/drivers?limit=-1', token,
+      'GET', '/int/v1/drivers?limit=-1&with%5B%5D=vehicle', token,
     );
-    return arrayPayload<FleetbaseDriverProjection>(response)
-      .filter((driver) => driver.user_uuid === userUuid);
+    return arrayPayload<FleetbaseDriverProjection>(response);
   }
 
-  async assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]> {
+  async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
+    // Fleetbase 0.7.48's internal Console directory returns no rows for a driver bearer. Its
+    // consumable driver route is the session-scoped authority used by Navigator and returns the
+    // current driver without exposing user_uuid. Retain the server-derived UUID filter as upstream
+    // defense in depth and let driverContext fail closed unless exactly one driver is returned.
     const response = await this.request<unknown>(
-      'GET', `/v1/orders?driver=${encodeURIComponent(driverId)}&limit=-1`, token,
+      'GET', `/v1/drivers?user_uuid=${encodeURIComponent(userUuid)}&limit=-1`, token,
+    );
+    return arrayPayload<FleetbaseDriverProjection>(response);
+  }
+
+  async assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]> {
+    const response = await this.request<unknown>(
+      'GET',
+      `/v1/orders?driver_assigned=${encodeURIComponent(driverId)}`
+        + `&scheduled_at=${encodeURIComponent(deliveryDate)}&limit=-1`,
+      token,
     );
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
@@ -266,7 +327,14 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     try {
       const response = await fetch(`${this.base}${path}`, {
         method,
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        // The driver order collection can be a large Fleetbase document. Request the identity
+        // representation explicitly so Node/Undici never has to decode a partially terminated
+        // compressed response while enforcing the same bounded timeout.
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Accept-Encoding': 'identity',
+        },
         signal: controller.signal,
       });
       const text = await response.text();
@@ -282,11 +350,21 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
       return body as T;
     } catch (error) {
       if (error instanceof FleetbaseIdentityError) throw error;
-      throw new FleetbaseIdentityError('upstream_unavailable');
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'fleetbase_transport_failure',
+        operation: fleetbaseOperation(path),
+      });
     } finally {
       clearTimeout(timer);
     }
   }
+}
+
+function fleetbaseOperation(path: string): 'session' | 'driver' | 'orders' | 'order' {
+  if (path.startsWith('/int/v1/auth/session')) return 'session';
+  if (path.startsWith('/v1/drivers')) return 'driver';
+  if (/^\/v1\/orders\/[^?]+/.test(path)) return 'order';
+  return 'orders';
 }
 
 function requireToken(token: string): string {
@@ -339,6 +417,76 @@ function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
   return typeof holdReason === 'string' && holdReason.trim().length > 0;
 }
 
+const DRIVER_LABEL_COLORS: readonly DriverLabelColorToken[] = [
+  'red', 'blue', 'green', 'orange', 'purple', 'teal', 'pink', 'navy',
+  'brown', 'cyan', 'olive', 'amber', 'magenta', 'slate', 'lime', 'coral',
+];
+
+function enrichDriverAssignments(
+  orders: FleetbaseOrderProjection[],
+  drivers: FleetbaseDriverProjection[],
+): FleetbaseOrderProjection[] {
+  const directory = new Map<string, FleetbaseDriverProjection>();
+  for (const driver of drivers) {
+    const id = cleanString(driver.public_id) ?? cleanString(driver.id);
+    if (!id || directory.has(id)) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: id ? 'fleetbase_driver_directory_duplicate' : 'fleetbase_driver_public_id_missing',
+      });
+    }
+    directory.set(id, driver);
+  }
+  if (directory.size > DRIVER_LABEL_COLORS.length) {
+    throw new FleetbaseIdentityError('upstream_unavailable', {
+      reason: 'driver_label_color_capacity_exceeded',
+      capacity: DRIVER_LABEL_COLORS.length,
+    });
+  }
+  const colors = new Map(
+    [...directory.keys()].sort().map((id, index) => [id, DRIVER_LABEL_COLORS[index]!] as const),
+  );
+
+  return orders.map((order) => {
+    const assigned = order.driver_assigned;
+    if (!assigned) return order;
+    const id = cleanString(assigned.public_id) ?? cleanString(assigned.id);
+    if (!id) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_public_id_missing',
+      });
+    }
+    const profile = directory.get(id);
+    if (!profile) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_not_in_company_directory',
+      });
+    }
+    const phone = cleanString(profile.phone);
+    if (!phone) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_phone_missing',
+      });
+    }
+    const plateNumber = cleanString(profile.vehicle?.plate_number);
+    if (!plateNumber) {
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'assigned_driver_vehicle_plate_missing',
+      });
+    }
+    return {
+      ...order,
+      driver_assigned: {
+        ...assigned,
+        ...profile,
+        public_id: id,
+        phone,
+        vehicle: { ...(assigned.vehicle ?? {}), ...(profile.vehicle ?? {}), plate_number: plateNumber },
+        label_color: colors.get(id)!,
+      },
+    };
+  });
+}
+
 function toAssignedOrder(order: FleetbaseOrderProjection): FleetbaseAssignedOrder | null {
   if (!order.id) return null;
   const localOrderId = stringMeta(order.meta, 'nutrezee_order_id');
@@ -347,10 +495,73 @@ function toAssignedOrder(order: FleetbaseOrderProjection): FleetbaseAssignedOrde
     ?? order.internal_id?.trim()
     ?? undefined;
   if (!localOrderId && !orderNumber) return null;
-  return { fleetbaseOrderId: order.id, localOrderId, orderNumber };
+  const payloadMeta = order.payload?.meta;
+  const sourceCustomerRef = stringMeta(order.meta, 'source_customer_ref')
+    ?? stringMeta(order.customer?.meta, 'source_customer_ref')
+    ?? stringMeta(payloadMeta, 'source_customer_ref');
+  const customerName = cleanString(order.customer?.name) ?? cleanString(order.payload?.dropoff?.name);
+  const phone = cleanString(order.customer?.phone) ?? cleanString(order.payload?.dropoff?.phone);
+  const area = stringMeta(order.meta, 'routing_area')
+    ?? stringMeta(order.meta, 'area_en')
+    ?? stringMeta(payloadMeta, 'routing_area')
+    ?? stringMeta(payloadMeta, 'area_en');
+  const callCustomerRequired = booleanMeta(order.meta, 'call_customer_required')
+    ?? booleanMeta(payloadMeta, 'call_customer_required');
+  const pinSource = stringMeta(order.meta, 'pin_source') ?? stringMeta(payloadMeta, 'pin_source');
+  const locationAccuracy = stringMeta(order.meta, 'location_accuracy')
+    ?? stringMeta(payloadMeta, 'location_accuracy');
+  const authoritativePinValid = pinSource === 'vendor' && locationAccuracy === 'customer_pin';
+  const fallbackSourceRaw = stringMeta(order.meta, 'fallback_source')
+    ?? stringMeta(payloadMeta, 'fallback_source')
+    ?? pinSource;
+  const fallbackSource = fallbackSourceRaw === 'known_stop_anchor'
+    ? 'known_stop_anchor' : (fallbackSourceRaw === 'area_fallback' ? 'area_centroid' : undefined);
+  const fallbackLocation = coordinateMeta(order.meta)
+    ?? coordinateMeta(payloadMeta)
+    ?? geoJsonPoint(order.payload?.dropoff?.location?.coordinates);
+  const assignment: FleetbaseAssignedOrder = { fleetbaseOrderId: order.id, localOrderId, orderNumber };
+  if (sourceCustomerRef) assignment.sourceCustomerRef = sourceCustomerRef;
+  if (customerName) assignment.customerName = customerName;
+  if (phone) assignment.phone = phone;
+  if (area) assignment.area = area;
+  if (callCustomerRequired !== undefined) assignment.callCustomerRequired = callCustomerRequired;
+  if (pinSource || locationAccuracy) assignment.authoritativePinValid = authoritativePinValid;
+  if (fallbackSource) assignment.fallbackSource = fallbackSource;
+  if (fallbackLocation) assignment.fallbackLocation = fallbackLocation;
+  return assignment;
 }
 
 function stringMeta(meta: Record<string, unknown> | null | undefined, key: string): string | undefined {
   const value = meta?.[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function booleanMeta(
+  meta: Record<string, unknown> | null | undefined,
+  key: string,
+): boolean | undefined {
+  const value = meta?.[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function coordinateMeta(
+  meta: Record<string, unknown> | null | undefined,
+): { latitude: number; longitude: number } | undefined {
+  const latitude = meta?.fallback_latitude;
+  const longitude = meta?.fallback_longitude;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude)
+    || typeof longitude !== 'number' || !Number.isFinite(longitude)) return undefined;
+  return { latitude, longitude };
+}
+
+function geoJsonPoint(value: unknown): { latitude: number; longitude: number } | undefined {
+  if (!Array.isArray(value) || value.length < 2) return undefined;
+  const [longitude, latitude] = value;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude)
+    || typeof longitude !== 'number' || !Number.isFinite(longitude)) return undefined;
+  return { latitude, longitude };
 }

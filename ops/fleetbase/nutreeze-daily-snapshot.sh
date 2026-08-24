@@ -6,7 +6,6 @@ RUNNER="${NUTREEZE_SNAPSHOT_RUNNER:-/opt/fleetbase/integrations/nutreeze-orders/
 SNAPSHOT_DIR="${NUTREEZE_SNAPSHOT_DIR:-/var/lib/nutreeze-partner-snapshots}"
 DELIVERY_DATE="${NUTREEZE_SNAPSHOT_DATE:-$(TZ=Asia/Kuwait date +%F)}"
 CAPTURED_AT="${NUTREEZE_SNAPSHOT_CAPTURED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-MEAL_SINCE=2026-01-01T00:00:00+03:00
 RETENTION_DAYS="${NUTREEZE_SNAPSHOT_RETENTION_DAYS:-30}"
 FIRST_LOG=
 SECOND_LOG=
@@ -23,6 +22,18 @@ log_event() {
   EVENT="$1"
   shift
   jq -cn --arg event "$EVENT" "$@" '{event: $event} + $ARGS.named'
+}
+
+relay_runner_fatal() {
+  LOG_FILE="$1"
+  jq -c '
+    select(.event == "fatal")
+    | {
+        event: "snapshot_source_error",
+        stage: (.stage // "unknown"),
+        error_code: (.error_code // "unknown")
+      }
+  ' "$LOG_FILE" 2>/dev/null | tail -n 1 >&2 || true
 }
 
 case "$DELIVERY_DATE" in
@@ -53,9 +64,9 @@ chmod 0600 "$FIRST_LOG" "$SECOND_LOG"
 
 if ! "$RUNNER" \
   "--delivery-date=$DELIVERY_DATE" \
-  "--meal-since=$MEAL_SINCE" \
   --limit=1000 \
   --dry-run > "$FIRST_LOG"; then
+  relay_runner_fatal "$FIRST_LOG"
   log_event fatal --arg stage first_source_pass --arg error_code source_read_failed >&2
   exit 33
 fi
@@ -81,11 +92,11 @@ fi
 
 if ! "$RUNNER" \
   "--delivery-date=$DELIVERY_DATE" \
-  "--meal-since=$MEAL_SINCE" \
   --limit=1000 \
   "--expected-count=$COUNT" \
   "--expected-digest=$DIGEST" \
   --dry-run > "$SECOND_LOG"; then
+  relay_runner_fatal "$SECOND_LOG"
   log_event fatal --arg stage second_source_pass --arg error_code unstable_or_failed_source_read >&2
   exit 36
 fi
@@ -95,6 +106,8 @@ SAFE_SUMMARY="$(printf '%s\n' "$SECOND_SUMMARY" | jq -ceS '
   select(
     .event == "daily_source_summary"
     and (.delivery_date | type == "string")
+    and .source_selector == "partner_daily_deliveries_v1"
+    and .source_endpoint == "/integration/daily-deliveries"
     and (.daily_orders | type == "number")
     and (.source_digest | type == "string" and test("^[a-f0-9]{64}$"))
     and .manifest_checked == true
@@ -102,11 +115,16 @@ SAFE_SUMMARY="$(printf '%s\n' "$SECOND_SUMMARY" | jq -ceS '
   )
   | {
       delivery_date,
-      meal_pages,
-      meal_response_rows,
-      daily_meal_rows,
-      order_pages,
-      order_response_rows,
+      source_selector,
+      source_endpoint,
+      delivery_pages,
+      delivery_response_rows,
+      source_declared_deliveries,
+      source_declared_distinct_orders,
+      source_declared_scheduled,
+      source_declared_on_hold,
+      source_declared_cancelled,
+      duplicate_delivery_rows_collapsed,
       daily_orders,
       orders_with_real_pin,
       orders_dispatchable,
@@ -145,16 +163,15 @@ TEMP_SNAPSHOT="$(mktemp "$SNAPSHOT_DIR/.$DELIVERY_DATE.XXXXXX")"
 jq -cnS \
   --arg captured_at_utc "$CAPTURED_AT" \
   --arg delivery_date "$DELIVERY_DATE" \
-  --arg history_floor "$MEAL_SINCE" \
   --arg completeness_status "$COMPLETENESS_STATUS" \
   --argjson summary "$SAFE_SUMMARY" \
   '{
-    schema_version: 1,
+    schema_version: 2,
     event: "daily_readonly_snapshot",
     source: "partner_api",
     captured_at_utc: $captured_at_utc,
     delivery_date: $delivery_date,
-    history_floor: $history_floor,
+    source_selector: "partner_daily_deliveries_v1",
     stable_two_pass: true,
     authoritative_expected_total: false,
     completeness_status: $completeness_status,

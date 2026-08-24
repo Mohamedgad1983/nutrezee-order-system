@@ -1,6 +1,10 @@
 import { htmlSafe } from '@ember/template';
 
 const DASH = '-';
+const DRIVER_COLORS = new Set([
+    'red', 'blue', 'green', 'orange', 'purple', 'teal', 'pink', 'navy',
+    'brown', 'cyan', 'olive', 'amber', 'magenta', 'slate', 'lime', 'coral',
+]);
 
 export default function normalizeLabel(document) {
     const value = (input) =>
@@ -17,6 +21,9 @@ export default function normalizeLabel(document) {
               calories: numberValue(meal.calories),
           }))
         : [];
+    const driverColor = DRIVER_COLORS.has(document?.driver_color)
+        ? document.driver_color
+        : null;
     return {
         ...document,
         fullName: value(document?.full_name),
@@ -29,6 +36,9 @@ export default function normalizeLabel(document) {
         snacksPerDay: numberValue(document?.snacks_per_day),
         legacyUserId: value(document?.legacy_user_id),
         driverRef: value(document?.driver_ref),
+        driverPhone: value(document?.driver_phone),
+        vehicleNumber: value(document?.vehicle_number),
+        driverColorClass: driverColor ? `nz-driver-color--${driverColor}` : '',
         orderNumber: value(document?.order_number),
         area: value(document?.address?.area),
         block: value(document?.address?.block),

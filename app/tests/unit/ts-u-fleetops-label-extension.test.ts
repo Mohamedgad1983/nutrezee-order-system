@@ -6,8 +6,12 @@ const read = (path: string): string => readFileSync(new URL(path, root), 'utf8')
 
 const packageJson = JSON.parse(read('package.json')) as {
   name: string;
+  version: string;
   keywords: string[];
   license: string;
+};
+const extensionJson = JSON.parse(read('extension.json')) as {
+  version: string;
 };
 const extension = read('addon/extension.js');
 const component = read('addon/components/order-label.js');
@@ -20,12 +24,62 @@ const routes = read('addon/routes.js');
 const readme = read('README.md');
 const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
-describe('TS-U A28 Fleet-Ops label extension boundary', () => {
+describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
+    expect(packageJson.version).toBe('0.3.4');
+    expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
     expect(packageJson.license).toBe('AGPL-3.0-or-later');
+  });
+
+  it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a44.3'");
+    expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
+    expect(extension).toContain("body.classList.add('nutrezee-brand-theme')");
+    expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
+    expect(extension).toContain("document.title = 'Nutreeze | Fleet-Ops'");
+    expect(extension).toContain("'DOMContentLoaded'");
+    expect(extension).toContain('/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css');
+    expect(extension).toContain("brandLink.setAttribute('aria-label', 'Nutreeze')");
+    expect(extension).toContain("favicon.dataset.nutrezeeFavicon = 'official'");
+    expect(extension).toContain('installBrandTheme();');
+    expect(styles).toContain('body.nutrezee-brand-theme');
+    expect(styles).toContain('--nz-brand: #956132');
+    expect(styles).toContain('.next-view-header .navbar-logo::before');
+    expect(styles).toContain('.next-sidebar-navigator-item.is-active');
+    expect(styles).toContain('.next-table-wrapper tbody tr:hover td');
+    expect(styles).toContain('@media (max-width: 760px)');
+    expect(styles).toContain('.next-sidebar-footer .fleetbase-attribution-notice');
+    expect(styles).not.toMatch(/fleetbase-attribution-notice[^{}]*\{[^}]*display:\s*none/);
+    expect(readme).toMatch(/Fleetbase application\s+and vendor source remain unchanged/);
+  });
+
+  it('keeps the approved warm light presentation on the real Fleetbase DOM', () => {
+    expect(extension).not.toContain("body.classList.remove('dark-theme')");
+    expect(extension).not.toContain('approvedLightThemeObserver');
+    expect(extension).not.toContain('installApprovedLightThemeGuard');
+    expect(extension).not.toContain("body.dataset.theme = 'light'");
+    expect(styles).not.toContain('--nz-bg: #120f0d');
+    expect(styles).toContain('.next-table-wrapper tbody td {');
+    expect(styles).toMatch(/next-table-wrapper tbody td \{[\s\S]*?background: var\(--nz-surface\) !important/);
+    expect(styles).toContain('body.nutrezee-brand-theme .btn-magic');
+    expect(styles).toMatch(/\.btn-magic \{[\s\S]*?background: var\(--nz-surface-raised\) !important/);
+    expect(styles).toContain('[data-test-driver-identity-compact] .min-w-0.truncate');
+    expect(styles).toContain('[data-test-resource-identity-meta-badge]');
+    expect(styles).toContain('input.fleetbase-checkbox:checked');
+    expect(styles).toContain('.available-status-badge .status-badge-inner-wrap');
+    expect(styles).toContain('[role="tooltip"].ember-attacher');
+    expect(styles).toContain('.floating-pagination .pagination-showing');
+    expect(styles).not.toMatch(/\.dark-theme \.nz-label-state--/);
+    expect(readme).toContain('0.7.48-a44.3');
+  });
+
+  it('does not retrigger its document observer by rewriting the title', () => {
+    expect(extension).toMatch(
+      /const observer = new MutationObserver\(\(\) => \{\s*if \(applyAccessibleBrandIdentity\(\)\) \{\s*observer\.disconnect\(\);\s*\}\s*\}\);/,
+    );
   });
 
   it('registers individual and batch operations inside supported Fleet-Ops registries only', () => {
@@ -115,6 +169,24 @@ describe('TS-U A28 Fleet-Ops label extension boundary', () => {
     expect(styles).toContain('grid-template-columns: minmax(0, 51%) minmax(0, 49%)');
     expect(styles).toContain('border-bottom: 0.18mm dashed');
     expect(styles).toMatch(/\.nz-legacy-label__barcode\s*\{/);
+  });
+
+  it('prints vehicle and phone in a driver color while keeping the barcode black', () => {
+    expect(template).toContain('CAR / سيارة');
+    expect(template).toContain('TEL / هاتف');
+    expect(template).toContain('this.label.vehicleNumber');
+    expect(template).toContain('this.label.driverPhone');
+    expect(template).not.toContain('Driver ID');
+    expect(batchTemplate).toContain('item.label.driverColorClass');
+    expect(batchTemplate).toContain('item.label.vehicleNumber');
+    expect(batchTemplate).toContain('item.label.driverPhone');
+    expect(batchTemplate).not.toContain('order.driver_name');
+    expect(normalize).toContain('DRIVER_COLORS');
+    expect(normalize).toContain('driver_color');
+    expect(styles).toContain('.nz-driver-color--red');
+    expect(styles).toContain('.nz-driver-color--coral');
+    expect(styles).toContain('-webkit-print-color-adjust: exact');
+    expect(styles).toMatch(/\.nz-barcode-svg svg[\s\S]*fill: #000/);
   });
 
   it('renders an explicit empty meal state instead of fabricated nutrition', () => {
