@@ -95,8 +95,11 @@ export class FleetbaseIdentityError extends Error {
 
 /**
  * Validates Fleetbase bearer tokens against Fleetbase itself. The Nutrezee API never receives a
- * Fleetbase password and never stores or logs the token. For drivers, the verified session UUID is
- * resolved to exactly one Fleetbase driver before any assigned-order query is accepted.
+ * Fleetbase password and never stores or logs the token. For drivers, the authenticated Fleetbase
+ * driver session UUID is resolved to exactly one Fleetbase driver before any assigned-order query
+ * is accepted. Fleetbase's driver password endpoint intentionally permits company-provisioned
+ * driver users without email/SMS verification, so that unrelated verification flag is not used as
+ * an authorization gate here.
  */
 export class FleetbaseIdentityService {
   private gateway: FleetbaseIdentityGateway | null;
@@ -133,9 +136,6 @@ export class FleetbaseIdentityService {
     const safeToken = requireToken(token);
     const session = await this.client().session(safeToken);
     if (!session.user) throw new FleetbaseIdentityError('invalid_token');
-    if (session.verified === false) {
-      throw new FleetbaseIdentityError('forbidden', { reason: 'verified_driver_required' });
-    }
     if (session.type !== 'driver') {
       throw new FleetbaseIdentityError('forbidden', { reason: 'driver_session_required' });
     }

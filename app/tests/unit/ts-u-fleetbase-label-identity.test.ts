@@ -127,16 +127,18 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
   });
 
-  it('rejects an unverified Fleetbase driver before resolving assignments', async () => {
+  it('accepts a password-authenticated Fleetbase driver without email or SMS verification', async () => {
     const gateway = new FakeGateway();
     gateway.sessionResult = { user: 'driver-user', type: 'driver', verified: false };
     const identity = new FleetbaseIdentityService(gateway);
 
-    await expect(identity.driverContext('token', '2099-05-12')).rejects.toMatchObject({
-      code: 'forbidden',
-      detail: { reason: 'verified_driver_required' },
+    await expect(identity.driverContext('token', '2099-05-12')).resolves.toMatchObject({
+      actorId: 'fleetbase:driver-user',
+      actorRole: 'fleetbase_driver',
+      driverId: 'driver_1',
     });
-    expect(gateway.driverUserQuery).toBeNull();
+    expect(gateway.driverUserQuery).toBe('driver-user');
+    expect(gateway.assignmentDriverQuery).toBe('driver_1');
   });
 
   it('rejects operations users from driver endpoints and drivers from Fleet-Ops endpoints', async () => {
