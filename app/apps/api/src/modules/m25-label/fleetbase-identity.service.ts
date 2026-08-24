@@ -259,7 +259,7 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
 
   async assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]> {
     const response = await this.request<unknown>(
-      'GET', `/v1/orders?driver=${encodeURIComponent(driverId)}&limit=-1`, token,
+      'GET', `/v1/orders?driver_assigned=${encodeURIComponent(driverId)}&limit=-1`, token,
     );
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
