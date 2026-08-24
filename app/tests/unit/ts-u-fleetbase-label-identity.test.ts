@@ -286,25 +286,22 @@ describe('TS-U Fleetbase identity boundary', () => {
     );
   });
 
-  it('filters the protected Fleetbase driver projection by exact user_uuid itself', async () => {
+  it('uses the Navigator session-scoped driver route with the server-derived user UUID', async () => {
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
     globalThis.fetch = (async (input: string | URL | Request) => {
       requested.push(String(input));
       return new Response(JSON.stringify({
-        data: [
-          { public_id: 'driver_other', user_uuid: 'user-other' },
-          { public_id: 'driver_exact', user_uuid: 'user-exact' },
-        ],
+        data: [{ id: 'driver_exact', user: 'user_public_reference' }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     try {
       const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
-      await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual([
-        { public_id: 'driver_exact', user_uuid: 'user-exact' },
-      ]);
+      await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual(
+        [{ id: 'driver_exact', user: 'user_public_reference' }],
+      );
       expect(requested).toEqual([
-        'https://fleetbase.test/int/v1/drivers?limit=-1&with%5B%5D=vehicle',
+        'https://fleetbase.test/v1/drivers?user_uuid=user-exact&limit=-1',
       ]);
     } finally {
       globalThis.fetch = originalFetch;
