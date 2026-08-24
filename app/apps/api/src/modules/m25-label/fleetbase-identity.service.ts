@@ -316,7 +316,14 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     try {
       const response = await fetch(`${this.base}${path}`, {
         method,
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        // The driver order collection can be a large Fleetbase document. Request the identity
+        // representation explicitly so Node/Undici never has to decode a partially terminated
+        // compressed response while enforcing the same bounded timeout.
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Accept-Encoding': 'identity',
+        },
         signal: controller.signal,
       });
       const text = await response.text();
@@ -332,11 +339,21 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
       return body as T;
     } catch (error) {
       if (error instanceof FleetbaseIdentityError) throw error;
-      throw new FleetbaseIdentityError('upstream_unavailable');
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'fleetbase_transport_failure',
+        operation: fleetbaseOperation(path),
+      });
     } finally {
       clearTimeout(timer);
     }
   }
+}
+
+function fleetbaseOperation(path: string): 'session' | 'driver' | 'orders' | 'order' {
+  if (path.startsWith('/int/v1/auth/session')) return 'session';
+  if (path.startsWith('/v1/drivers')) return 'driver';
+  if (/^\/v1\/orders\/[^?]+/.test(path)) return 'order';
+  return 'orders';
 }
 
 function requireToken(token: string): string {

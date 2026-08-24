@@ -311,8 +311,10 @@ describe('TS-U Fleetbase identity boundary', () => {
   it('uses Navigator\'s driver_assigned query contract for the current driver orders', async () => {
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
-    globalThis.fetch = (async (input: string | URL | Request) => {
+    const requestedHeaders: HeadersInit[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       requested.push(String(input));
+      requestedHeaders.push(init?.headers ?? {});
       return new Response(JSON.stringify({ data: [{ id: 'order_1' }] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -326,6 +328,25 @@ describe('TS-U Fleetbase identity boundary', () => {
       expect(requested).toEqual([
         'https://fleetbase.test/v1/orders?driver_assigned=driver%2Fexact&limit=-1',
       ]);
+      expect(requestedHeaders).toEqual([
+        expect.objectContaining({ 'Accept-Encoding': 'identity' }),
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('reports only the safe Fleetbase operation when the upstream transport fails', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError('socket details must not escape');
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      await expect(gateway.assignedOrders('token', 'driver_exact')).rejects.toMatchObject({
+        code: 'upstream_unavailable',
+        detail: { reason: 'fleetbase_transport_failure', operation: 'orders' },
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
