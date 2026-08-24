@@ -79,7 +79,11 @@ export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
   drivers(token: string): Promise<FleetbaseDriverProjection[]>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
-  assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
+  assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]>;
   orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]>;
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection>;
 }
@@ -150,7 +154,7 @@ export class FleetbaseIdentityService {
     const driverId = driver.public_id ?? driver.id;
     if (!driverId) throw new FleetbaseIdentityError('identity_ambiguous', { reason: 'driver_has_no_public_id' });
 
-    const orders = await this.client().assignedOrders(safeToken, driverId);
+    const orders = await this.client().assignedOrders(safeToken, driverId, deliveryDate);
     const assignedOrders = orders
       .filter((order) => fleetbaseOrderDate(order) === deliveryDate)
       .map(toAssignedOrder)
@@ -257,9 +261,16 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return arrayPayload<FleetbaseDriverProjection>(response);
   }
 
-  async assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]> {
+  async assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]> {
     const response = await this.request<unknown>(
-      'GET', `/v1/orders?driver_assigned=${encodeURIComponent(driverId)}&limit=-1`, token,
+      'GET',
+      `/v1/orders?driver_assigned=${encodeURIComponent(driverId)}`
+        + `&scheduled_at=${encodeURIComponent(deliveryDate)}&limit=-1`,
+      token,
     );
     return arrayPayload<FleetbaseOrderProjection>(response);
   }

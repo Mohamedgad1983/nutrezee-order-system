@@ -322,11 +322,11 @@ describe('TS-U Fleetbase identity boundary', () => {
     }) as typeof fetch;
     try {
       const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
-      await expect(gateway.assignedOrders('token', 'driver/exact')).resolves.toEqual([
+      await expect(gateway.assignedOrders('token', 'driver/exact', '2099-05-12')).resolves.toEqual([
         { id: 'order_1' },
       ]);
       expect(requested).toEqual([
-        'https://fleetbase.test/v1/orders?driver_assigned=driver%2Fexact&limit=-1',
+        'https://fleetbase.test/v1/orders?driver_assigned=driver%2Fexact&scheduled_at=2099-05-12&limit=-1',
       ]);
       expect(requestedHeaders).toEqual([
         expect.objectContaining({ 'Accept-Encoding': 'identity' }),
@@ -343,7 +343,7 @@ describe('TS-U Fleetbase identity boundary', () => {
     }) as typeof fetch;
     try {
       const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
-      await expect(gateway.assignedOrders('token', 'driver_exact')).rejects.toMatchObject({
+      await expect(gateway.assignedOrders('token', 'driver_exact', '2099-05-12')).rejects.toMatchObject({
         code: 'upstream_unavailable',
         detail: { reason: 'fleetbase_transport_failure', operation: 'orders' },
       });
