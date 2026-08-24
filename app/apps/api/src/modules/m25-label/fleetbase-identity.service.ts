@@ -79,7 +79,11 @@ export interface FleetbaseIdentityGateway {
   session(token: string): Promise<FleetbaseSession>;
   drivers(token: string): Promise<FleetbaseDriverProjection[]>;
   driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]>;
-  assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]>;
+  assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]>;
   orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]>;
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection>;
 }
@@ -95,8 +99,11 @@ export class FleetbaseIdentityError extends Error {
 
 /**
  * Validates Fleetbase bearer tokens against Fleetbase itself. The Nutrezee API never receives a
- * Fleetbase password and never stores or logs the token. For drivers, the verified session UUID is
- * resolved to exactly one Fleetbase driver before any assigned-order query is accepted.
+ * Fleetbase password and never stores or logs the token. For drivers, the authenticated Fleetbase
+ * driver session UUID is resolved to exactly one Fleetbase driver before any assigned-order query
+ * is accepted. Fleetbase's driver password endpoint intentionally permits company-provisioned
+ * driver users without email/SMS verification, so that unrelated verification flag is not used as
+ * an authorization gate here.
  */
 export class FleetbaseIdentityService {
   private gateway: FleetbaseIdentityGateway | null;
@@ -133,9 +140,6 @@ export class FleetbaseIdentityService {
     const safeToken = requireToken(token);
     const session = await this.client().session(safeToken);
     if (!session.user) throw new FleetbaseIdentityError('invalid_token');
-    if (session.verified === false) {
-      throw new FleetbaseIdentityError('forbidden', { reason: 'verified_driver_required' });
-    }
     if (session.type !== 'driver') {
       throw new FleetbaseIdentityError('forbidden', { reason: 'driver_session_required' });
     }
@@ -150,7 +154,7 @@ export class FleetbaseIdentityService {
     const driverId = driver.public_id ?? driver.id;
     if (!driverId) throw new FleetbaseIdentityError('identity_ambiguous', { reason: 'driver_has_no_public_id' });
 
-    const orders = await this.client().assignedOrders(safeToken, driverId);
+    const orders = await this.client().assignedOrders(safeToken, driverId, deliveryDate);
     const assignedOrders = orders
       .filter((order) => fleetbaseOrderDate(order) === deliveryDate)
       .map(toAssignedOrder)
@@ -247,17 +251,26 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
   }
 
   async driversForUser(token: string, userUuid: string): Promise<FleetbaseDriverProjection[]> {
-    // Fleetbase 0.7.48 exposes user_uuid in the protected internal driver projection, but its
-    // DriverFilter silently ignores a user_uuid query parameter. Fetch the current company's
-    // bounded driver set and enforce the exact UUID comparison here rather than trusting a
-    // non-functional upstream filter.
-    return (await this.drivers(token))
-      .filter((driver) => driver.user_uuid === userUuid);
+    // Fleetbase 0.7.48's internal Console directory returns no rows for a driver bearer. Its
+    // consumable driver route is the session-scoped authority used by Navigator and returns the
+    // current driver without exposing user_uuid. Retain the server-derived UUID filter as upstream
+    // defense in depth and let driverContext fail closed unless exactly one driver is returned.
+    const response = await this.request<unknown>(
+      'GET', `/v1/drivers?user_uuid=${encodeURIComponent(userUuid)}&limit=-1`, token,
+    );
+    return arrayPayload<FleetbaseDriverProjection>(response);
   }
 
-  async assignedOrders(token: string, driverId: string): Promise<FleetbaseOrderProjection[]> {
+  async assignedOrders(
+    token: string,
+    driverId: string,
+    deliveryDate: string,
+  ): Promise<FleetbaseOrderProjection[]> {
     const response = await this.request<unknown>(
-      'GET', `/v1/orders?driver=${encodeURIComponent(driverId)}&limit=-1`, token,
+      'GET',
+      `/v1/orders?driver_assigned=${encodeURIComponent(driverId)}`
+        + `&scheduled_at=${encodeURIComponent(deliveryDate)}&limit=-1`,
+      token,
     );
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
@@ -314,7 +327,14 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     try {
       const response = await fetch(`${this.base}${path}`, {
         method,
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        // The driver order collection can be a large Fleetbase document. Request the identity
+        // representation explicitly so Node/Undici never has to decode a partially terminated
+        // compressed response while enforcing the same bounded timeout.
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Accept-Encoding': 'identity',
+        },
         signal: controller.signal,
       });
       const text = await response.text();
@@ -330,11 +350,21 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
       return body as T;
     } catch (error) {
       if (error instanceof FleetbaseIdentityError) throw error;
-      throw new FleetbaseIdentityError('upstream_unavailable');
+      throw new FleetbaseIdentityError('upstream_unavailable', {
+        reason: 'fleetbase_transport_failure',
+        operation: fleetbaseOperation(path),
+      });
     } finally {
       clearTimeout(timer);
     }
   }
+}
+
+function fleetbaseOperation(path: string): 'session' | 'driver' | 'orders' | 'order' {
+  if (path.startsWith('/int/v1/auth/session')) return 'session';
+  if (path.startsWith('/v1/drivers')) return 'driver';
+  if (/^\/v1\/orders\/[^?]+/.test(path)) return 'order';
+  return 'orders';
 }
 
 function requireToken(token: string): string {
