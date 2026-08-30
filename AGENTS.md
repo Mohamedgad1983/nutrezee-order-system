@@ -226,6 +226,20 @@ simplified preview fixture. This is presentation-only and may not mutate Fleetba
 application/vendor source. Fleetbase attribution, routes, auth, permissions, data workflows,
 the 100 x 70 mm print contract and all A43 prohibitions remain unchanged.
 
+## Fleet-Ops production performance amendment
+
+AMENDMENT A45 2026-08-23 — After live Chrome and HTTP inspection proved that Console a44.3
+was deployed as an uncompressed development build with cache-clearing HTML headers and a
+92.7-second cold reload, Mohamed explicitly directed the performance defect to be fixed. Scope is
+configuration-only in the self-hosted Console build/serve layer plus the separately identifiable
+Nutrezee extension release marker: build with Ember `production` while explicitly preserving
+runtime configuration, retain a stable alias for the extension-owned theme when production asset
+fingerprinting applies, enable HTTP compression, and use revalidation/immutable caching without
+origin-wide cache clearing. The approved warm-light design, extension registry, accessible identity,
+Fleetbase attribution, routes, auth, permissions, data workflows and exact 100 x 70 mm print contract
+must remain unchanged. Fleetbase application/vendor source, Navigator `/legacy`, Partner/legacy
+writes, secrets and production data mutation remain prohibited.
+
 ## ⭐ Standing command — "Continue Nutrezee OS Agent"
 
 When the user says **"Continue Nutrezee OS Agent"** (or starts any Build/Sprint session), do **not** wait for a detailed prompt. Run the OS:

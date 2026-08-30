@@ -20,7 +20,9 @@ Caddy proxy network. Report: `/root/fleetbase_install_report.md`. Repo branch `b
 3. `console/fleetbase.config.json` (this dir) — runtime API_HOST/socket for the console.
 4. `docker-compose.override.yml` (this dir) — pins the api image to v0.7.48, **removes ALL 4 host ports**
    (`!reset null`), dual-homes console/httpd/socket on the external `nutrezee_default` net (aliases).
-5. `docker compose build console httpd` (console built `development` so runtime config is honored).
+5. Build Console with the tracked A45 production overlay in `console/`: Ember `production`,
+   `DISABLE_RUNTIME_CONFIG=false`, fingerprint-safe Nutrezee theme alias, gzip and governed cache
+   headers. Do not use a development build to preserve runtime config.
 6. `docker compose up -d` then `docker compose exec application sh deploy.sh` (migrate+seed; 125 tables).
 7. Caddy: append `caddy-fleetbase.snippet` to `/opt/nutrezee/repo/docker/Caddyfile`, `caddy validate`,
    graceful `caddy reload`. (ADD-only; existing blocks untouched.)

@@ -24,10 +24,10 @@ const routes = read('addon/routes.js');
 const readme = read('README.md');
 const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', import.meta.url), 'utf8');
 
-describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
+describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.4');
+    expect(packageJson.version).toBe('0.3.5');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -35,7 +35,7 @@ describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
   });
 
   it('brands the existing Fleet-Ops shell from extension-owned assets only', () => {
-    expect(extension).toContain("const BRAND_THEME_VERSION = 'a44.3'");
+    expect(extension).toContain("const BRAND_THEME_VERSION = 'a45.1'");
     expect(extension).toContain("document.documentElement.dataset.nutrezeeBrand = 'official'");
     expect(extension).toContain("body.classList.add('nutrezee-brand-theme')");
     expect(extension).toContain("if (document.title !== 'Nutreeze | Fleet-Ops')");
@@ -73,7 +73,7 @@ describe('TS-U A28/A43/A44 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('[role="tooltip"].ember-attacher');
     expect(styles).toContain('.floating-pagination .pagination-showing');
     expect(styles).not.toMatch(/\.dark-theme \.nz-label-state--/);
-    expect(readme).toContain('0.7.48-a44.3');
+    expect(readme).toContain('0.7.48-a45.1');
   });
 
   it('does not retrigger its document observer by rewriting the title', () => {

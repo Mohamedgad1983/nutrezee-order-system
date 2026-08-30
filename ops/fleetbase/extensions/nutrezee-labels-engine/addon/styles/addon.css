@@ -1,7 +1,7 @@
 /* A28 — exact legacy label inside Fleet-Ops. The barcode occupies the reference label's unused
  * lower strip; no legacy field, table column, caption or field order is removed. */
 
-/* A43/A44 — Nutreeze visual system for the existing Fleet-Ops shell. The theme is installed by
+/* A43/A44/A45 — Nutreeze visual system for the existing Fleet-Ops shell. The theme is installed by
  * the separately maintained extension, uses the approved warm light presentation in production,
  * and deliberately avoids Fleetbase application/vendor source. */
 body.nutrezee-brand-theme {

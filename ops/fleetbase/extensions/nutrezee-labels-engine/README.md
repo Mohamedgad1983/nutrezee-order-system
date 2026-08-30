@@ -84,3 +84,11 @@ extension version `0.3.4`, and `?v=a44.3` on the extension theme, Console script
 `/extensions.json`. The extension leaves Fleetbase's saved theme marker and preference untouched,
 then normalizes the real Console components visually through extension-owned CSS. It does not install
 a competing theme observer. Application/vendor source remains unchanged.
+
+For the A45 performance release, use Console application version `0.7.48-a45.1`, extension version
+`0.3.5`, and theme query `?v=a45.1`. Build with Ember `production` and
+`DISABLE_RUNTIME_CONFIG=false`; never use a development build as a runtime-config workaround. The
+tracked Console serve overlay keeps a stable theme alias if Ember fingerprints the engine stylesheet,
+enables gzip, revalidates HTML/runtime manifests, caches fingerprinted assets immutably, and never
+sends an origin-wide `Clear-Site-Data` header. These serving changes do not alter the approved design,
+Fleetbase application/vendor source, routes, permissions or workflows.
