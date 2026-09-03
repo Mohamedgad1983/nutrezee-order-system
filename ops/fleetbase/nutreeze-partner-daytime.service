@@ -1,0 +1,22 @@
+[Unit]
+Description=Nutrezee Partner API daytime CANCEL-ONLY reconciliation for today (every 30 min 03:00-19:59 Kuwait) — WP-OPS-07 A50
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=NUTREEZE_DAILY_MODE=daytime
+ExecStartPre=/opt/fleetbase/integrations/nutreeze-orders/healthcheck.sh
+ExecStart=/opt/fleetbase/integrations/nutreeze-orders/daily-sync.sh
+TimeoutStartSec=20min
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

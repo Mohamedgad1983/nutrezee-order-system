@@ -28,7 +28,7 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ▶ WP-OPS-07 — Near-live Partner mirror + freshness indicator · **PART 1 LIVE ON STAGING 2026-09-03 · part 2 (Fleetbase dispatch cadence) blocked_by: owner rule for post-03:00 changes**
+### ▶ WP-OPS-07 — Near-live Partner mirror (part 1 LIVE) · Fleetbase evening refresh + daytime cancel-only (part 2, A50) · **BUILT 2026-09-03, PR pending, install after merge**
 
 ### ✅ WP-OPS-06 — Partner daily-deliveries → Nutrezee order feed · **LIVE ON STAGING 2026-09-03 (09-05 applied, 02:20 Kuwait timer enabled)**
 - A47: Fleet-Ops barcode labels and the Navigator collection scan need current orders in Nutrezee Postgres; the legacy scrape is frozen at order 24675. The API now imports Partner `/integration/daily-deliveries` per date through the governed M19 runner (`partner_daily`).
