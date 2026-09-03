@@ -249,3 +249,11 @@ Mohamed can rotate the Partner key after handover:
 4. Revoke the old key only after the dry run returns HTTP 200 and reconciles.
 
 No application rebuild or container restart is required.
+
+## Same-day 02:00 Kuwait run (A46)
+
+Drivers collect boxes at about 03:00 Kuwait, so the 01:00 rolling run is not the last word on
+today's assignments. `nutreeze-partner-sameday.timer` (23:00 UTC = 02:00 Kuwait) runs
+`daily-sync.sh` with `NUTREEZE_DAILY_MODE=sameday`: guarded window 01:45–02:45 Kuwait, targets
+**today and +1 day**, same dry-run → count/digest → verified apply sequence. A started job still
+fails closed. Units: `nutreeze-partner-sameday.service` / `.timer`; tests: `test-daily-sync.sh`.

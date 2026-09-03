@@ -162,3 +162,13 @@ Operational note from Mohamed: drivers collect at about **03:00 Kuwait**. The 00
 therefore the last chance for Partner assignments to reach Navigator; 226 Saturday orders were still
 unassigned in Partner at apply time. Recommendation (not implemented): a second guarded run at
 ~02:00 Kuwait for the next-day date, or Partner assignment completed before midnight.
+
+## Same-day 02:00 Kuwait sync (owner-directed, 2026-09-03 ~10:45Z)
+
+`daily-sync.sh` gained `NUTREEZE_DAILY_MODE=sameday` (window 01:45–02:45 Kuwait, targets today
+and +1 day; rolling mode unchanged). Tests 14/14 on the VPS (the new default-date case needs GNU
+`date`, so run the harness on Linux). Installed `nutreeze-partner-sameday.service/.timer`
+(`OnCalendar=*-*-* 23:00:00 UTC`), `daemon-reload`, `enable --now`; previous `daily-sync.sh`
+backed up to `backups/a46-20260903T0814Z/daily-sync.sh`. `list-timers`: next same-day run
+Fri 2026-09-04 01:01 CEST = 02:01 Kuwait; rolling and snapshot timers untouched and enabled.
+Owner authorization for this systemd persistence is Mohamed's explicit instruction in chat.

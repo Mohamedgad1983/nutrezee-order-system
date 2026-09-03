@@ -6,6 +6,18 @@ RUNNER="${NUTREEZE_DAILY_RUNNER:-/opt/fleetbase/integrations/nutreeze-orders/run
 CONFIG_ROOT="${NUTREEZE_DAILY_CONFIG_ROOT:-/opt/fleetbase/api/storage/app/integrations/config}"
 CONTAINER_CONFIG_ROOT="${NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT:-/fleetbase/api/storage/app/integrations/config}"
 TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
+# rolling (default): 01:00 Kuwait, refresh +1/+2 days.
+# sameday (A46):     02:00 Kuwait, refresh today (drivers collect ~03:00) and +1 day,
+#                    so Partner driver assignments made after midnight still reach Navigator.
+MODE="${NUTREEZE_DAILY_MODE:-rolling}"
+case "$MODE" in
+  rolling) WINDOW_START=45;  WINDOW_END=105; WINDOW_LABEL='00:45-01:45' ;;
+  sameday) WINDOW_START=105; WINDOW_END=165; WINDOW_LABEL='01:45-02:45' ;;
+  *)
+    printf '%s\n' 'unsupported NUTREEZE_DAILY_MODE' >&2
+    exit 26
+    ;;
+esac
 if [ "${NUTREEZE_DAILY_TEST_MODE:-0}" = 1 ]; then
   NOW_MINUTES="${NUTREEZE_DAILY_TEST_NOW_MINUTES:-60}"
   TARGET_DATES="${NUTREEZE_DAILY_TARGET_DATES:-}"
@@ -19,13 +31,17 @@ MANIFEST_LOG="$(mktemp /var/tmp/nutreeze-partner-manifest.XXXXXX)"
 trap 'find /var/tmp -maxdepth 1 -type f -name "$(basename "$MANIFEST_LOG")" -delete' EXIT HUP INT TERM
 chmod 600 "$MANIFEST_LOG"
 
-if [ "$NOW_MINUTES" -lt 45 ] || [ "$NOW_MINUTES" -gt 105 ]; then
-  printf '%s\n' 'outside guarded 00:45-01:45 Kuwait sync window' >&2
+if [ "$NOW_MINUTES" -lt "$WINDOW_START" ] || [ "$NOW_MINUTES" -gt "$WINDOW_END" ]; then
+  printf '%s\n' "outside guarded $WINDOW_LABEL Kuwait sync window" >&2
   exit 25
 fi
 
 if [ -z "$TARGET_DATES" ]; then
-  TARGET_DATES="$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F) $(TZ=Asia/Kuwait date -d "$TODAY +2 days" +%F)"
+  if [ "$MODE" = sameday ]; then
+    TARGET_DATES="$TODAY $(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F)"
+  else
+    TARGET_DATES="$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F) $(TZ=Asia/Kuwait date -d "$TODAY +2 days" +%F)"
+  fi
 fi
 
 set -- $TARGET_DATES

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Nutrezee Fleetbase orders for today at 02:00 Kuwait (drivers collect ~03:00)
+
+[Timer]
+OnCalendar=*-*-* 23:00:00 UTC
+Persistent=false
+RandomizedDelaySec=120
+Unit=nutreeze-partner-sameday.service
+
+[Install]
+WantedBy=timers.target
