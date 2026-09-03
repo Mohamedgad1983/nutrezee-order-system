@@ -30,3 +30,11 @@ company drivers with `id` = public id, `phone`, `vehicle.plate_number`, `created
 
 TS-U identity: public directory URL + wrapped/plain unwrapping; colour stability/plate exclusion;
 existing colour/plate/phone fail-closed tests unchanged. Full Vitest green locally.
+
+## Staging deploy (Verified 2026-09-03)
+
+PR #60 CI 29/29 → merged `ed2d497`. `releases/a49-src-d6dce4e.tgz` (sha256 `61ef6843…`), no new migrations,
+API image `nutrezee-api:a49-d6dce4e` built and running (`--no-deps`, Postgres untouched), admin nginx restarted;
+`/health` 200 public, `ops.nutreeze.com/nz/health` 200; compiled service contains the public directory call.
+Rollback: `nutrezee-api:a48-40923eb`. Live proof of a coloured band on a driver-assigned order = owner reload of
+NUT0275153784KW (RAVI → brown, plate 24-40149).
