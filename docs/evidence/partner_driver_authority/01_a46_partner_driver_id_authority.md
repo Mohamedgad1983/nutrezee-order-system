@@ -62,8 +62,9 @@ on driver.
    hash) and the mapping version moves to 4. The rolling timer targets only +1/+2 days, whose
    jobs are unstarted, so the first run reconciles them; do **not** run it manually against a
    date with started jobs or it aborts with `daily_started_snapshot_changed`.
-5. Fix the 6 vehicle plates that differ between the workbook and Fleetbase (labels print the
-   plate): Area-1, -3, -4, -6, -7, -9.
+5. Vehicle plates: Mohamed confirmed on 2026-09-03 that the color/vehicle workbook
+   (`Nutrezee_Driver.xlsx`, the source of the current Fleetbase plates) is correct; the older
+   phone-units workbook is stale. No plate correction needed.
 
 ## Verification (2026-09-03)
 
