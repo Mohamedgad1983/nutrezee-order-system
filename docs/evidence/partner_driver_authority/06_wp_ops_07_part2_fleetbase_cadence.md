@@ -30,3 +30,14 @@ Fleetbase took Partner's state only at 00:00 / 01:00 / 02:00 Kuwait. A driver as
 
 Nightly 00:00 snapshot / 01:00 rolling / 02:00 same-day timers; A46 Partner driver authority; pin/hold rules.
 Tomorrow's orders (evening mode) still go through the full guarded sync — nobody has started them.
+
+## Staging install (Verified 2026-09-03)
+
+PR #63 CI 29/29 → merged `df6a28e`; candidate files on the VPS matched the merged tree by md5 before install.
+Previous importer / scripts saved in `/opt/fleetbase/backups/a50-pre-bridge/`. Installed importer: `php -l` clean,
+self-test **43/43** in `fleetbase-application-1`; `daily-sync.sh` + `run.sh` (0700 root) in
+`/opt/fleetbase/integrations/nutreeze-orders/`; both timers enabled + active (daytime next 14:45 CEST = 15:45 Kuwait,
+evening next 19:05 CEST = 20:05 Kuwait). Nightly 00:00 / 01:00 / 02:00 timers untouched.
+
+First manual daytime run (cancel-only, today 2026-09-03, 16:0x Kuwait): 774 source orders, 0 withdrawal candidates,
+0 withdrawn, 0 blocked-started, verification passed, `horizon_complete 1/0`. Nothing else in the day was touched.
