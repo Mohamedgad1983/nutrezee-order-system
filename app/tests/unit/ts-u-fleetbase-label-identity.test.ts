@@ -308,6 +308,62 @@ describe('TS-U Fleetbase identity boundary', () => {
     }
   });
 
+  it('reads the company directory from the public driver resource and unwraps wrapped lists (A49)', async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    let shape = 0;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requested.push(String(input));
+      shape += 1;
+      const rows = [{ id: 'driver_1', phone: '+96550000001', vehicle: { plate_number: '24-40149' }, created_at: '2026-07-18T12:50:10Z' }];
+      const body = shape === 1 ? rows : { drivers: rows };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      const plain = await gateway.drivers('token');
+      const wrapped = await gateway.drivers('token');
+      expect(plain).toHaveLength(1);
+      expect(wrapped).toEqual(plain);
+      expect(requested).toEqual([
+        'https://fleetbase.test/v1/drivers?limit=-1',
+        'https://fleetbase.test/v1/drivers?limit=-1',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('keeps label colours stable by creation order and skips drivers without a plate (A49)', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'ops-1', type: 'admin', verified: true };
+    gateway.driverResults = [
+      { public_id: 'driver_z_newest', phone: '+96550000003', vehicle: { plate_number: '24-40452' }, created_at: '2026-07-18T12:50:09Z' },
+      { public_id: 'driver_demo', phone: '+96550000000', vehicle: null, created_at: '2026-06-27T07:19:09Z' },
+      { public_id: 'driver_m_first', phone: '+96550000001', vehicle: { plate_number: '24-40125' }, created_at: '2026-07-18T12:50:03Z' },
+      { public_id: 'driver_a_second', phone: '+96550000002', vehicle: { plate_number: '21-79872' }, created_at: '2026-07-18T12:50:04Z' },
+    ];
+    gateway.orderResults = ['driver_z_newest', 'driver_m_first', 'driver_a_second'].map((id, index) => ({
+      id: `order_${index}`, meta: { delivery_date: '2099-05-12' }, driver_assigned: { public_id: id },
+    }));
+    const identity = new FleetbaseIdentityService(gateway);
+    const { orders } = await identity.ordersForOperatorDate('token', '2099-05-12');
+    const colourOf = (id: string) => orders.find((o) => o.driver_assigned?.public_id === id)?.driver_assigned?.label_color;
+    expect(colourOf('driver_m_first')).toBe('red');
+    expect(colourOf('driver_a_second')).toBe('blue');
+    expect(colourOf('driver_z_newest')).toBe('green');
+
+    // Adding a newer plated driver never recolours the existing units.
+    gateway.driverResults = [...gateway.driverResults,
+      { public_id: 'driver_b_added', phone: '+96550000004', vehicle: { plate_number: '21-00000' }, created_at: '2026-09-01T00:00:00Z' }];
+    gateway.orderResults = [...gateway.orderResults,
+      { id: 'order_added', meta: { delivery_date: '2099-05-12' }, driver_assigned: { public_id: 'driver_b_added' } }];
+    const again = await new FleetbaseIdentityService(gateway).ordersForOperatorDate('token', '2099-05-12');
+    const colourAgain = (id: string) => again.orders.find((o) => o.driver_assigned?.public_id === id)?.driver_assigned?.label_color;
+    expect([colourAgain('driver_m_first'), colourAgain('driver_a_second'), colourAgain('driver_z_newest'), colourAgain('driver_b_added')])
+      .toEqual(['red', 'blue', 'green', 'orange']);
+  });
+
   it('uses Navigator\'s driver_assigned query contract for the current driver orders', async () => {
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
