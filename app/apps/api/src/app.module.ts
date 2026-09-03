@@ -45,6 +45,7 @@ import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
 import { BatchRunner } from './modules/m19-migration/batch-runner';
 import { MigrationController } from './modules/m19-migration/migration.controller';
 import { MigrationService } from './modules/m19-migration/migration.service';
+import { PartnerDailyFeedClient, type PartnerDailyFeedGateway } from './modules/m19-migration/partner-daily-feed';
 import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controller';
 import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
 import { DriverCredentialController } from './modules/m24-fleetbase/driver-credential.controller';
@@ -69,6 +70,7 @@ import {
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
 export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
+const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
 
 @Module({
   controllers: [
@@ -253,15 +255,20 @@ export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
       ],
     },
     {
+      // WP-OPS-06: server-held Partner key; absent key -> feature disabled (endpoints return not_configured).
+      provide: PARTNER_DAILY_FEED,
+      useFactory: (): PartnerDailyFeedGateway | null => PartnerDailyFeedClient.fromEnv(),
+    },
+    {
       provide: MigrationService,
       useFactory: (
         runner: BatchRunner, customers: CustomerService, catalog: CatalogService,
         sync: SyncRecordService, orders: OrderService, payments: PaymentService,
-        settings: SettingsReader,
-      ) => new MigrationService(runner, customers, catalog, sync, orders, payments, settings),
+        settings: SettingsReader, partnerFeed: PartnerDailyFeedGateway | null,
+      ) => new MigrationService(runner, customers, catalog, sync, orders, payments, settings, partnerFeed),
       inject: [
         BatchRunner, CustomerService, CatalogService, SyncRecordService,
-        OrderService, PaymentService, SettingsReader,
+        OrderService, PaymentService, SettingsReader, PARTNER_DAILY_FEED,
       ],
     },
     // Wave-6 operational foundation (migration track): packing + driver/area assignment.

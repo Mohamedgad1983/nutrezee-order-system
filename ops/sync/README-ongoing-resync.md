@@ -74,3 +74,21 @@ exists — we never fabricate the link. To unblock them, import the missing cust
 phone — and name — are already in the same `view_<internal_id>` pages we parse). That customer
 re-pull/import is the recommended next build; once customers land, [B]/[C] create their orders
 automatically on the next run.
+
+## [E] Partner daily order feed (WP-OPS-06, A47) — replaces [A]–[C] for current orders
+
+Current orders no longer need the legacy scrape: the API imports Partner's
+`/integration/daily-deliveries` for a date through the governed M19 runner.
+
+```bash
+# dry-run today + tomorrow (Kuwait); prints counts only
+DATABASE_URL=… SYNC_TARGET=staging FEED_MODE=dry-run node /opt/nutrezee/sync/partner-daily-feed.mjs
+# apply (deliberate)
+DATABASE_URL=… SYNC_TARGET=staging FEED_MODE=apply ALLOW_APPLY=yes node /opt/nutrezee/sync/partner-daily-feed.mjs
+# explicit dates
+FEED_DATES="2026-09-06 2026-09-07" …
+```
+
+Endpoints: `POST /imports/partner-daily/fetch/dry-run` · `/apply` with `{"delivery_date":"YYYY-MM-DD"}`.
+Timer `ops/systemd/nutrezee-partner-daily-feed.timer` = 02:20 Kuwait (ships disabled).
+Identifier rule unchanged: orders by `order_number`, customers by normalized `+965` phone.
