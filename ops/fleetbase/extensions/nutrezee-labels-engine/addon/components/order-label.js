@@ -122,15 +122,12 @@ export default class OrderLabelComponent extends Component {
                 ? 'Reprint recorded. Opening print dialog…'
                 : 'Print recorded. Opening print dialog…';
             this.reprintReason = '';
-            document.body.classList.add('nutrezee-label-print-mode');
-            window.print();
-            document.body.classList.remove('nutrezee-label-print-mode');
+            printDetached('.nz-label-panel .nz-legacy-label', 'nutrezee-label-print-mode');
             const history = await this.request(
                 `/nz/fleet-ops/labels/${encoded}/print-history`
             );
             this.history = Array.isArray(history?.items) ? history.items : [];
         } catch (error) {
-            document.body.classList.remove('nutrezee-label-print-mode');
             this.error = messageOf(error);
         } finally {
             this.printing = false;
@@ -140,4 +137,27 @@ export default class OrderLabelComponent extends Component {
 
 function messageOf(error) {
     return error instanceof Error ? error.message : 'Unable to load the Nutrezee label.';
+}
+
+/**
+ * Print a clone of `selector` from a detached root under <body>. Fleetbase renders the order panel
+ * inside a transformed container, which turns `position: fixed` into a panel-relative offset and
+ * clipped the 100 x 70 mm sheet. The root exists only while the print dialog is open.
+ */
+export function printDetached(selector, modeClass) {
+    const source = document.querySelector(selector);
+    if (!source) {
+        throw new Error('Nothing to print yet. Reload the label and try again.');
+    }
+    const root = document.createElement('div');
+    root.className = 'nz-print-root';
+    root.appendChild(source.cloneNode(true));
+    document.body.appendChild(root);
+    document.body.classList.add(modeClass);
+    try {
+        window.print();
+    } finally {
+        document.body.classList.remove(modeClass);
+        root.remove();
+    }
 }

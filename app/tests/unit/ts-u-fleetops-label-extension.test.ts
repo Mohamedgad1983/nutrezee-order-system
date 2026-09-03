@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.6');
+    expect(packageJson.version).toBe('0.3.7');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -130,6 +130,13 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(component).not.toContain('A reprint reason is required.');
     expect(component).toContain('reason: this.isReprint && reason ? reason : undefined');
     expect(batchComponent).not.toContain('A reprint reason is required.');
+    // Printing clones the sheet out of Fleetbase's transformed panel (A48.2) and the band values stay LTR.
+    expect(component).toContain("printDetached('.nz-label-panel .nz-legacy-label', 'nutrezee-label-print-mode')");
+    expect(batchComponent).toContain("printDetached('.nz-batch-panel .nz-batch-labels', 'nutrezee-batch-print-mode')");
+    expect(component).not.toContain("document.body.classList.add('nutrezee-label-print-mode')");
+    expect(styles).toContain('.nz-print-root');
+    expect(styles).toMatch(/body\.nutrezee-label-print-mode > :not\(\.nz-print-root\)/);
+    expect(styles).toMatch(/\.nz-driver-band strong \{[^}]*unicode-bidi: isolate/);
     expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 
@@ -139,7 +146,7 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/printed'");
     expect(batchComponent).toContain("filter_type: this.filterType");
     expect(batchComponent).toContain("selection_ids: this.selectionIds");
-    expect(batchComponent).toContain("document.body.classList.add('nutrezee-batch-print-mode')");
+    expect(batchComponent).not.toContain("document.body.classList.add('nutrezee-batch-print-mode')");
     expect(batchComponent).toContain('this.awaitingConfirmation = true');
     expect(batchComponent.indexOf('window.print()')).toBeLessThan(
       batchComponent.indexOf("this.request('/nz/fleet-ops/labels/batch/printed'"),
