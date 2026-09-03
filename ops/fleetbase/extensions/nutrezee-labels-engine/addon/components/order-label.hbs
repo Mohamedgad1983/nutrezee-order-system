@@ -11,9 +11,12 @@
 
     {{#if this.loading}}
         <div class="nz-label-state">Loading label…</div>
-    {{else if this.error}}
-        <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
-    {{else if this.label}}
+    {{else}}
+        {{#if this.error}}
+            <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
+        {{/if}}
+    {{/if}}
+    {{#if this.label}}
         {{#if this.label.nutritionMissing}}
             <div class="nz-label-state nz-label-state--warning">
                 No authoritative dish detail is recorded for this delivery date. The printed table stays explicitly empty.
@@ -28,11 +31,11 @@
                 <strong>{{this.historyText}}</strong>
                 {{#if this.isReprint}}
                     <label class="nz-label-reason">
-                        <span>Reprint reason / سبب إعادة الطباعة</span>
+                        <span>Reprint reason (optional) / سبب إعادة الطباعة (اختياري)</span>
                         <input
                             type="text"
                             value={{this.reprintReason}}
-                            placeholder="Required before reprinting"
+                            placeholder="Optional / اختياري"
                             {{on "input" this.updateReason}}
                         />
                     </label>

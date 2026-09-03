@@ -140,9 +140,6 @@ export class LabelController {
     @Body() body: FleetbasePrintBody,
   ) {
     const kind = body?.kind === 'reprint' ? 'reprint' : 'print';
-    if (kind === 'reprint' && !body.reason?.trim()) {
-      throw new BadRequestException({ error_code: 'validation_failed', field: 'reason' });
-    }
     return this.wrap(async () => {
       const { actor, order } = await this.fleetbaseIdentity.verifiedOrderForOperator(
         this.bearer(req), fleetbaseOrderId,
@@ -183,10 +180,8 @@ export class LabelController {
     const ctx = await this.ctx(req);
     const kind = body?.kind === 'reprint' ? 'reprint' : 'print';
     await requirePermission(this.access, ctx, kind === 'reprint' ? 'label.reprint' : 'label.print');
+    // A48: reprints are unlimited; `reason` is optional free text on both routes.
     if (!body?.delivery_date) throw new BadRequestException({ error_code: 'validation_failed', field: 'delivery_date' });
-    if (kind === 'reprint' && !body.reason?.trim()) {
-      throw new BadRequestException({ error_code: 'validation_failed', field: 'reason' });
-    }
     return this.wrap(() => this.labels.recordPrint(ctx, orderId, body.delivery_date, {
       kind, reason: body.reason, batchRef: body.batch_ref,
     }));

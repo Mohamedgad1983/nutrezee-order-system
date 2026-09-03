@@ -368,7 +368,7 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
   });
 });
 
-describe('TS-I label printing — audited, reprint needs a reason, barcode never changes', () => {
+describe('TS-I label printing — audited, unlimited reprints (A48), barcode never changes', () => {
   it('keeps the same barcode across delivery dates and reprints', async () => {
     const s = await seed('Stable Barcode', 'N-LBL-STABLE');
     const dayA = await labels.build(actor, s.orderId, DATE_A);
@@ -386,10 +386,16 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
     expect(after.barcode_value).toBe(dayA.barcode_value);
   });
 
-  it('rejects a reprint with no reason', async () => {
-    const s = await seed('Needs Reason', 'N-LBL-REASON');
-    await expect(labels.recordPrint(actor, s.orderId, DATE_A, { kind: 'reprint', reason: '  ' }))
-      .rejects.toMatchObject({ code: 'validation_failed' });
+  it('accepts a reprint with no reason and stores null (A48)', async () => {
+    const s = await seed('No Reason Reprint', 'N-LBL-REASON');
+    await labels.recordPrint(actor, s.orderId, DATE_A, { kind: 'print' });
+    const second = await labels.recordPrint(actor, s.orderId, DATE_A, { kind: 'reprint', reason: '  ' });
+    const third = await labels.recordPrint(actor, s.orderId, DATE_A, { kind: 'reprint' });
+    expect(second.print_kind).toBe('reprint');
+    expect(third.barcode_value).toBe(second.barcode_value);
+    const history = await labels.printHistory(s.orderId, DATE_A);
+    expect(history).toHaveLength(3);
+    expect(history.filter((h) => h.print_kind === 'reprint').every((h) => h.reason === null)).toBe(true);
   });
 
   it('records print history and audits both kinds', async () => {
@@ -485,8 +491,10 @@ describe('TS-I label printing — audited, reprint needs a reason, barcode never
     );
     expect(audits.rows[0].n).toBe(2);
 
-    await expect(labels.recordCandidateBatchPrint(actor, DATE_B, selected))
-      .rejects.toMatchObject({ code: 'validation_failed', detail: { field: 'reason' } });
+    // A48: a batch containing already-printed labels needs no reason.
+    const reprintedNoReason = await labels.recordCandidateBatchPrint(actor, DATE_B, selected);
+    expect(reprintedNoReason.reprinted).toBe(2);
+    expect(reprintedNoReason.printed).toBe(0);
     const reprinted = await labels.recordCandidateBatchPrint(
       actor, DATE_B, selected, 'labels damaged during packing',
     );

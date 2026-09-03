@@ -205,11 +205,7 @@ export default class BatchLabelsComponent extends Component {
         if (!this.preview?.items?.length) {
             return;
         }
-        const reason = this.reprintReason.trim();
-        if (this.hasReprints && !reason) {
-            this.error = 'A reprint reason is required. / سبب إعادة الطباعة مطلوب.';
-            return;
-        }
+        // A48: reprints are unlimited; the reason is optional free text kept on the trail.
         this.error = null;
         this.notice = null;
         document.body.classList.add('nutrezee-batch-print-mode');
@@ -232,7 +228,7 @@ export default class BatchLabelsComponent extends Component {
                 method: 'POST',
                 body: JSON.stringify({
                     ...this.batchPayload(),
-                    reason: this.hasReprints ? this.reprintReason.trim() : undefined,
+                    reason: this.hasReprints && this.reprintReason.trim() ? this.reprintReason.trim() : undefined,
                 }),
             });
             this.awaitingConfirmation = false;
