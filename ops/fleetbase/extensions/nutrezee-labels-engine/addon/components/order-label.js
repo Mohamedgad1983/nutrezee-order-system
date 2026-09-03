@@ -103,11 +103,8 @@ export default class OrderLabelComponent extends Component {
         if (!this.label || this.printing) {
             return;
         }
+        // A48: reprints are unlimited; the reason is optional free text kept on the trail.
         const reason = this.reprintReason.trim();
-        if (this.isReprint && !reason) {
-            this.error = 'A reprint reason is required. / سبب إعادة الطباعة مطلوب.';
-            return;
-        }
 
         this.printing = true;
         this.error = null;
@@ -118,7 +115,7 @@ export default class OrderLabelComponent extends Component {
                 method: 'POST',
                 body: JSON.stringify({
                     kind: this.isReprint ? 'reprint' : 'print',
-                    reason: this.isReprint ? reason : undefined,
+                    reason: this.isReprint && reason ? reason : undefined,
                 }),
             });
             this.notice = this.isReprint

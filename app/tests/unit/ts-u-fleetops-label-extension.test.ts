@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.5');
+    expect(packageJson.version).toBe('0.3.6');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -126,7 +126,10 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(component).toContain('/nz/fleet-ops/labels/${encoded}/print-history');
     expect(component).toContain('/nz/fleet-ops/labels/${encoded}/printed');
     expect(component).toContain("kind: this.isReprint ? 'reprint' : 'print'");
-    expect(component).toContain('A reprint reason is required.');
+    // A48: reprints are unlimited; no client-side reason gate, reason is optional.
+    expect(component).not.toContain('A reprint reason is required.');
+    expect(component).toContain('reason: this.isReprint && reason ? reason : undefined');
+    expect(batchComponent).not.toContain('A reprint reason is required.');
     expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 

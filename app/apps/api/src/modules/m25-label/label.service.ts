@@ -417,8 +417,9 @@ export class LabelService {
 
   /**
    * Record one operator-confirmed physical batch in a single transaction. Existing rows become
-   * reprints and therefore require one reason covering the batch. Every event's audit is written
-   * in the same transaction as that event; cancelling the browser print dialog never calls here.
+   * reprints; an optional reason covers the batch (A48: reprints are unlimited and need no reason).
+   * Every event's audit is written in the same transaction as that event; cancelling the browser
+   * print dialog never calls here.
    */
   async recordCandidateBatchPrint(
     actor: StaffContext,
@@ -495,10 +496,6 @@ export class LabelService {
         const row = raw as Record<string, unknown>;
         return [row.order_id as string, Number(row.print_count)];
       }));
-      if ([...priorByOrder.values()].some((count) => count > 0) && !cleanReason) {
-        throw new LabelError('validation_failed', { field: 'reason' });
-      }
-
       const batchRef = newId();
       const items: Array<{
         id: string;
@@ -518,7 +515,7 @@ export class LabelService {
               batch_ref, printed_by)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [id, candidate.localOrderId, customerId, deliveryDate, barcodeValue, kind,
-            kind === 'reprint' ? cleanReason : null, batchRef, actor.staffId],
+            kind === 'reprint' && cleanReason ? cleanReason : null, batchRef, actor.staffId],
         );
         await this.audit.writeInTx(client, {
           eventType: kind === 'reprint' ? 'label.reprinted' : 'label.printed',
@@ -526,7 +523,7 @@ export class LabelService {
           entityType: 'label_print_event',
           entityId: id,
           severity: kind === 'reprint' ? 'warn' : 'info',
-          reason: kind === 'reprint' ? cleanReason : undefined,
+          reason: kind === 'reprint' && cleanReason ? cleanReason : undefined,
           relatedRefs: {
             order_id: candidate.localOrderId,
             customer_id: customerId,
@@ -584,8 +581,8 @@ export class LabelService {
   }
 
   /**
-   * Record that a label was physically printed. A reprint must carry a reason (enforced here and
-   * by a DB CHECK). The barcode value is stored so the trail proves reprints never change it.
+   * Record that a label was physically printed. Reprints are unlimited and a reason is optional
+   * (A48, 2026-09-03). The barcode value is stored so the trail proves reprints never change it.
    */
   async recordPrint(
     actor: StaffContext, orderId: string, deliveryDate: string,
@@ -595,7 +592,6 @@ export class LabelService {
       throw new LabelError('validation_failed', { field: 'delivery_date' });
     }
     const reason = (opts.reason ?? '').trim();
-    if (opts.kind === 'reprint' && !reason) throw new LabelError('validation_failed', { field: 'reason' });
 
     const { rows } = await this.pool.query(
       'SELECT customer_id, order_number FROM customer_order WHERE id=$1', [orderId],

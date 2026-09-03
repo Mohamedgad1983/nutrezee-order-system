@@ -117,13 +117,13 @@
                 {{#if this.hasReprints}}
                     <label class="nz-label-reason">
                         <span>
-                            {{this.preview.reprint_count}} already printed — reprint reason required /
-                            سبب إعادة الطباعة مطلوب
+                            {{this.preview.reprint_count}} already printed — reason optional /
+                            سبب إعادة الطباعة (اختياري)
                         </span>
                         <input
                             type="text"
                             value={{this.reprintReason}}
-                            placeholder="Reason for reprinting"
+                            placeholder="Optional / اختياري"
                             {{on "input" this.updateReason}}
                         />
                     </label>
