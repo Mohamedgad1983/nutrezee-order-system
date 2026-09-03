@@ -46,3 +46,10 @@ pre-existing legacy-plan days Partner no longer lists; those are not label candi
 Fleetbase). Max `order_number` 24675 → **28906**; 678 orders + 676 customers created today; temp admin removed.
 Sample for the owner's single-label check: Fleetbase `order_gb3TV5SHHe` (NUTREEZE-PARTNER-DAY-20260905-ORDER-18526, RAVI).
 Timer still disabled.
+
+## Timer enabled (Verified 2026-09-03, owner: "تفعيل timer الـ 02:20")
+
+`systemctl enable --now nutrezee-partner-daily-feed.timer` → enabled/active; next elapse Fri 2026-09-04 01:20 CEST
+= 23:20 UTC = **02:20 Kuwait**, targets today + tomorrow (Fri 0 rows, Sat 692). Wrapper smoke dry-run for 09-05 after the
+apply: 0 created / 691 matched / 0 errors. Timer order each night (Kuwait): 03:00 snapshot, 04:00 rolling +1/+2 (CEST
+clocks shown by systemd), 02:00 Fleetbase same-day, 02:20 Nutrezee feed, ~03:00 driver collection.

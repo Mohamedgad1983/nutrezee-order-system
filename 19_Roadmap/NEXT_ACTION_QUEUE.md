@@ -28,7 +28,7 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### ▶ WP-OPS-06 — Partner daily-deliveries → Nutrezee order feed · **DEPLOYED TO STAGING 2026-09-03 (dry-run clean) · size M · blocked_by: owner apply for 2026-09-05 + timer enable**
+### ✅ WP-OPS-06 — Partner daily-deliveries → Nutrezee order feed · **LIVE ON STAGING 2026-09-03 (09-05 applied, 02:20 Kuwait timer enabled)**
 - A47: Fleet-Ops barcode labels and the Navigator collection scan need current orders in Nutrezee Postgres; the legacy scrape is frozen at order 24675. The API now imports Partner `/integration/daily-deliveries` per date through the governed M19 runner (`partner_daily`).
 - Idempotent by `order_number` + `(order, date)`; customers by normalized `+965` phone; Partner cancel/on-hold mirror to `cancelled_day`/`skipped`; progressed days are never touched.
 - DoD: TS-U + TS-I (incl. end-to-end scan) green, typecheck/lint/build/scans, CI; owner deploys migration `0030`, sets the Partner key, runs dry-run → apply once, then enables the 02:20 Kuwait timer.
