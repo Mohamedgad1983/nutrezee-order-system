@@ -1342,8 +1342,10 @@ function resolveActiveDrivers(array $publicIds, string $companyUuid): array
 
 /**
  * Pure shape validation of the Partner-to-Fleetbase driver map. Each Partner
- * driver.id maps to exactly one Fleetbase driver public id and vice versa. The
- * optional `unit` is an operational label (e.g. "Area-3"), never a person.
+ * driver id maps to exactly one Fleetbase driver; a Fleetbase driver may carry
+ * several Partner aliases (Partner exposes both a numeric user id such as 19033
+ * and a unit code such as "A9"). The optional `unit` is an operational label
+ * (e.g. "Area-3"), never a person.
  */
 function validatePartnerDriverMap(array $config): array
 {
@@ -1359,7 +1361,6 @@ function validatePartnerDriverMap(array $config): array
     // Partner ids are kept as strings everywhere: PHP would silently turn a
     // numeric-string array key such as "42" into int 42.
     $seenPartnerIds = [];
-    $seenPublicIds = [];
     $drivers = [];
     foreach ($entries as $entry) {
         if (!is_array($entry)) {
@@ -1377,9 +1378,7 @@ function validatePartnerDriverMap(array $config): array
             throw new RuntimeException('partner_driver_map_partner_id');
         }
         $publicId = $entry['driver_public_id'] ?? null;
-        if (!is_string($publicId)
-            || !preg_match('/^driver_[A-Za-z0-9]{6,40}$/', $publicId)
-            || isset($seenPublicIds[$publicId])) {
+        if (!is_string($publicId) || !preg_match('/^driver_[A-Za-z0-9]{6,40}$/', $publicId)) {
             throw new RuntimeException('partner_driver_map_public_id');
         }
         $unit = $entry['unit'] ?? null;
@@ -1394,7 +1393,6 @@ function validatePartnerDriverMap(array $config): array
             'unit' => $unit === null ? null : trim($unit),
         ];
         $seenPartnerIds[$partnerId] = true;
-        $seenPublicIds[$publicId] = true;
     }
     usort($drivers, fn (array $a, array $b): int => strcmp($a['partner_driver_id'], $b['partner_driver_id']));
     return $drivers;
@@ -1409,7 +1407,7 @@ function validatePartnerDriverMap(array $config): array
 function loadPartnerDriverMap(string $path, string $companyUuid, array $rosterDrivers): array
 {
     $map = validatePartnerDriverMap(loadLockedJson($path, 'partner_driver_map'));
-    $publicIds = array_values(array_map(fn (array $entry): string => $entry['public_id'], $map));
+    $publicIds = array_values(array_unique(array_map(fn (array $entry): string => $entry['public_id'], $map)));
     $rosterPublicIds = array_values(array_map(fn (array $driver): string => $driver['public_id'], $rosterDrivers));
     sort($publicIds, SORT_STRING);
     sort($rosterPublicIds, SORT_STRING);
@@ -1417,7 +1415,7 @@ function loadPartnerDriverMap(string $path, string $companyUuid, array $rosterDr
         throw new RuntimeException('partner_driver_map_roster_mismatch');
     }
     $resolved = resolveActiveDrivers($publicIds, $companyUuid);
-    if (count($resolved) !== count($map)) {
+    if (count($resolved) !== count($publicIds)) {
         throw new RuntimeException('partner_driver_map_resolution');
     }
     $uuidByPublicId = [];
@@ -4430,6 +4428,24 @@ function runSelfTest(): array
         || $validated[0]['unit'] !== null) {
         throw new RuntimeException('self_test_partner_driver_map_valid');
     }
+    // Aliases: a numeric Partner user id and a unit code may name the same Fleetbase driver.
+    $aliasMap = validatePartnerDriverMap(array_replace($validMap, ['expected_count' => 3, 'drivers' => [
+        ...$validMap['drivers'],
+        ['partner_driver_id' => '19033', 'driver_public_id' => 'driver_BBBBBB', 'unit' => 'Area-2'],
+    ]]));
+    $aliasDrivers = [
+        ...$syntheticDrivers,
+        ['uuid' => 'driver-uuid-b', 'public_id' => 'driver_BBBBBB', 'partner_driver_id' => '19033', 'unit' => 'Area-2'],
+    ];
+    $aliasRows = applyPartnerDriverAssignments([
+        ['partner_driver_id' => '19033'] + $daily[0],
+    ], $aliasDrivers)['rows'];
+    $aliasAllocation = allocateDailyDrivers($aliasRows, $aliasDrivers);
+    if (count($aliasMap) !== 3
+        || ($aliasAllocation['assignments']['11'] ?? null) !== 'driver-uuid-b'
+        || $aliasAllocation['loads'] !== ['driver_AAAAAA' => 0, 'driver_BBBBBB' => 1]) {
+        throw new RuntimeException('self_test_partner_driver_map_alias');
+    }
     foreach ([
         [array_replace($validMap, ['schema_version' => 2]), 'partner_driver_map_shape'],
         [array_replace($validMap, ['expected_count' => 1]), 'partner_driver_map_shape'],
@@ -4437,10 +4453,6 @@ function runSelfTest(): array
             $validMap['drivers'][0],
             ['partner_driver_id' => '9', 'driver_public_id' => 'driver_AAAAAA'],
         ]]), 'partner_driver_map_partner_id'],
-        [array_replace($validMap, ['drivers' => [
-            $validMap['drivers'][0],
-            ['partner_driver_id' => '7', 'driver_public_id' => 'driver_BBBBBB'],
-        ]]), 'partner_driver_map_public_id'],
         [array_replace($validMap, ['drivers' => [
             $validMap['drivers'][0],
             ['partner_driver_id' => '7', 'driver_public_id' => 'not-a-driver'],

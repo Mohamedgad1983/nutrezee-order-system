@@ -50,11 +50,10 @@ on driver.
 
 ## Before go-live (owner)
 
-1. Fill `nutreeze-partner-driver-map.json` with the 9 real Partner `driver.id` values
-   (template: `ops/fleetbase/nutreeze-partner-driver-map.example.json`); install it root-owned
-   mode `0600` in the protected config directory.
-2. Reduce `nutreeze-driver-roster.json` to the same 9 public ids (`expected_count: 9`), removing
-   the two workbook example rows.
+1. Install `ops/fleetbase/nutreeze-partner-driver-map.2026-09-03.json` as
+   `config/nutreeze-partner-driver-map.json` (root-owned, mode `0600`).
+2. Replace `config/nutreeze-driver-roster.json` with `nutreeze-driver-roster.2026-09-03.json`
+   (the same 9 public ids; the two workbook example rows are dropped).
 3. Deploy the importer + run.sh, then `run.sh --delivery-date=<tomorrow> --limit=1000 --dry-run`
    and check `partner_driver_ids_unmapped = []`, `orders_held_no_partner_driver`, and
    `partner_driver_loads` against Partner before any apply.
@@ -65,6 +64,37 @@ on driver.
 5. Vehicle plates: Mohamed confirmed on 2026-09-03 that the color/vehicle workbook
    (`Nutrezee_Driver.xlsx`, the source of the current Fleetbase plates) is correct; the older
    phone-units workbook is stale. No plate correction needed.
+
+## Partner driver identities (read from nutreeze.com admin screen, 2026-09-03)
+
+Mohamed opened `Users → Drivers` and each driver's edit page in his own signed-in Chrome; the
+assistant only read the screen. Partner exposes two identifiers per driver: the numeric user id in
+the edit URL (`users/addUser/2/<id>`) and the `Unique user id` field (`A1`…`A9`), which equals the
+phone-unit number. Both are installed as aliases in `nutreeze-partner-driver-map.2026-09-03.json`.
+
+| Unique ID | Numeric id | Partner username | Unit | Fleetbase |
+|---|---|---|---|---|
+| A1 | 122 | Salato Din | Area-1 | `driver_ks697fB5LP` |
+| A2 | 123 | Vineesh | Area-2 | `driver_aCmTB03tMY` |
+| A3 | 124 | AMAN (Amandeep Nit Pal) | Area-3 | `driver_eVMKykp6nG` |
+| A4 | 125 | Nicholas Momanyi | Area-4 | `driver_1OyMcZZ71a` |
+| A5 | 126 | Naseer ahmad | Area-5 | `driver_z31exReMHy` |
+| A6 | 9286 | IBRAHIM Khaleelulla | Area-6 | `driver_l58j0Bwpyo` |
+| A7 | 17214 | Arsad Ali | Area-7 | `driver_mW76oeHnja` |
+| A8 | 17770 | fairoz (Shaik Feroz) | Area-8 | `driver_fpQEqYBGVG` |
+| A9 | 19033 | RAVI Bhardwaj Gurdeep | Area-9 | `driver_ioPJGOyvvu` |
+
+Excluded: `142` عبدالعزيز, `8416` Mustafa S, `8301` driver last (inactive), and **RAMZI AL QADRI**,
+who also carries Unique ID `A6` (duplicate of IBRAHIM). Any order Partner sends with an excluded
+driver is held as `unmapped_partner_driver` and listed in the dry-run summary — nothing is guessed.
+[NC] Which of the two `A6` accounts Partner actually uses for Area-6; Ramzi's numeric id was not
+read. Each driver's Partner *Service Area* list was recorded in the session notes and matches the
+per-driver Driver Orders export (Ravi: Rawda, Kaifan, Dasma, Yarmouk, Khaldiya …), confirming that
+Partner areas are driver-owned.
+
+Ravi cross-check (read-only MySQL, Kuwait 2026-09-03): of his 73 Partner orders, 47 exist in
+Fleetbase for the date and only 7 are assigned to him; 40 sit with six other drivers under the
+retired hash.
 
 ## Verification (2026-09-03)
 
