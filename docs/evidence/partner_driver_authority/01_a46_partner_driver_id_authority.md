@@ -1,6 +1,6 @@
 # 01 — A46: Partner `driver.id` becomes the Fleetbase assignment authority
 
-Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: PR #56 open (base `fix/a45-console-performance`); **installed on staging VPS 2026-09-03 10:15Z, dry-run only, no apply yet**
+Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: PR #56 open (base `fix/a45-console-performance`); **installed on staging VPS 2026-09-03 10:15Z; first apply (2026-09-05) verified 10:2xZ**
 
 ## Problem (Verified, read-only VPS trace 2026-09-03)
 
@@ -134,3 +134,31 @@ stay held until Partner assigns one; the nightly run picks them up the following
 old hash they were already dispatched to invented drivers, so the first A46 apply for 2026-09-05
 will demote them to held/unassigned. Operations should assign Saturday drivers in Partner before
 the 00:00 run, or accept that those orders appear in Navigator only after the next sync.
+
+## First apply: 2026-09-05 (owner-directed, 2026-09-03 ~10:25Z)
+
+Pre-apply: `mysqldump` of `fleetbase` → `backups/a46-20260903T0814Z/fleetbase-pre-apply-20260905.sql.gz`
+(30.6 MB). State before: 179 held, 517 dispatched by hash (incl. 16 on the fake "Unit-01" and
+104 on the fake "Ahmed Al-Salem"), 0 started.
+
+Command (same guards as the timer): fresh dry-run → `--expected-count=694`
+`--expected-digest=93363a17…` → `--verify --confirm-daily-sync=2026-09-05`.
+
+| event | result |
+|---|---|
+| write_summary | 5 orders/payloads/places updated, 689 unchanged, activity rows 0 |
+| base_verification | passed (694 orders, 691 customers) |
+| dispatch_summary | 363 dispatched (all real pin), held: 226 no Partner driver, 102 no pin, 2 invalid pin, 1 unapproved status, 2 source-missing tombstones |
+| daily_verification | **passed**, 696 Fleetbase orders, 363 assigned, 331 held, 0 unexplained |
+| complete | verified:true |
+
+Post-apply MySQL (read-only): all 363 dispatched rows carry `assignment_mode = partner_driver_id_v1`;
+loads Nicholas 50, Amandeep 47, Salato 43, Ibrahim 43, Naseer 40, Vineesh 40, Arsad 38,
+Shaik Feroz 33, Ravi 29; 331 `created`/unassigned; 2 canceled tombstones. No order remains on
+the two fake drivers. The SSH session hit its 600 s limit during the apply, but the run finished
+inside its transaction (log `/tmp/a46-apply-0905.log`, `complete` event present).
+
+Operational note from Mohamed: drivers collect at about **03:00 Kuwait**. The 00:00 rolling sync is
+therefore the last chance for Partner assignments to reach Navigator; 226 Saturday orders were still
+unassigned in Partner at apply time. Recommendation (not implemented): a second guarded run at
+~02:00 Kuwait for the next-day date, or Partner assignment completed before midnight.
