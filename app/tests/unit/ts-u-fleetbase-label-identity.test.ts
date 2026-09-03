@@ -127,16 +127,18 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
   });
 
-  it('rejects an unverified Fleetbase driver before resolving assignments', async () => {
+  it('accepts a password-authenticated Fleetbase driver without email or SMS verification', async () => {
     const gateway = new FakeGateway();
     gateway.sessionResult = { user: 'driver-user', type: 'driver', verified: false };
     const identity = new FleetbaseIdentityService(gateway);
 
-    await expect(identity.driverContext('token', '2099-05-12')).rejects.toMatchObject({
-      code: 'forbidden',
-      detail: { reason: 'verified_driver_required' },
+    await expect(identity.driverContext('token', '2099-05-12')).resolves.toMatchObject({
+      actorId: 'fleetbase:driver-user',
+      actorRole: 'fleetbase_driver',
+      driverId: 'driver_1',
     });
-    expect(gateway.driverUserQuery).toBeNull();
+    expect(gateway.driverUserQuery).toBe('driver-user');
+    expect(gateway.assignmentDriverQuery).toBe('driver_1');
   });
 
   it('rejects operations users from driver endpoints and drivers from Fleet-Ops endpoints', async () => {
@@ -284,26 +286,67 @@ describe('TS-U Fleetbase identity boundary', () => {
     );
   });
 
-  it('filters the protected Fleetbase driver projection by exact user_uuid itself', async () => {
+  it('uses the Navigator session-scoped driver route with the server-derived user UUID', async () => {
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
     globalThis.fetch = (async (input: string | URL | Request) => {
       requested.push(String(input));
       return new Response(JSON.stringify({
-        data: [
-          { public_id: 'driver_other', user_uuid: 'user-other' },
-          { public_id: 'driver_exact', user_uuid: 'user-exact' },
-        ],
+        data: [{ id: 'driver_exact', user: 'user_public_reference' }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     try {
       const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
-      await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual([
-        { public_id: 'driver_exact', user_uuid: 'user-exact' },
+      await expect(gateway.driversForUser('token', 'user-exact')).resolves.toEqual(
+        [{ id: 'driver_exact', user: 'user_public_reference' }],
+      );
+      expect(requested).toEqual([
+        'https://fleetbase.test/v1/drivers?user_uuid=user-exact&limit=-1',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('uses Navigator\'s driver_assigned query contract for the current driver orders', async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    const requestedHeaders: HeadersInit[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      requested.push(String(input));
+      requestedHeaders.push(init?.headers ?? {});
+      return new Response(JSON.stringify({ data: [{ id: 'order_1' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      await expect(gateway.assignedOrders('token', 'driver/exact', '2099-05-12')).resolves.toEqual([
+        { id: 'order_1' },
       ]);
       expect(requested).toEqual([
-        'https://fleetbase.test/int/v1/drivers?limit=-1&with%5B%5D=vehicle',
+        'https://fleetbase.test/v1/orders?driver_assigned=driver%2Fexact&scheduled_at=2099-05-12&limit=-1',
       ]);
+      expect(requestedHeaders).toEqual([
+        expect.objectContaining({ 'Accept-Encoding': 'identity' }),
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('reports only the safe Fleetbase operation when the upstream transport fails', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError('socket details must not escape');
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test');
+      await expect(gateway.assignedOrders('token', 'driver_exact', '2099-05-12')).rejects.toMatchObject({
+        code: 'upstream_unavailable',
+        detail: { reason: 'fleetbase_transport_failure', operation: 'orders' },
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
