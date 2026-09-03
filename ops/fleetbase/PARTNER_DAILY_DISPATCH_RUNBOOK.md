@@ -257,3 +257,26 @@ today's assignments. `nutreeze-partner-sameday.timer` (23:00 UTC = 02:00 Kuwait)
 `daily-sync.sh` with `NUTREEZE_DAILY_MODE=sameday`: guarded window 01:45–02:45 Kuwait, targets
 **today and +1 day**, same dry-run → count/digest → verified apply sequence. A started job still
 fails closed. Units: `nutreeze-partner-sameday.service` / `.timer`; tests: `test-daily-sync.sh`.
+
+## Evening hourly refresh + daytime cancel-only (A50, WP-OPS-07 part 2)
+
+Owner decision 2026-09-03: the mirror must be near-live, and after the ~03:00 collection only
+withdrawals may reach drivers.
+
+| Mode | Timer | Kuwait window | Target | What runs |
+|---|---|---|---|---|
+| `evening` | `nutreeze-partner-evening.timer` (`17..23:05 UTC`) | 20:00–02:45 hourly | tomorrow before midnight, today after it (single date) | the normal full sync (dry-run manifest → `--confirm-daily-sync`) so evening driver assignments, holds and label colours reach Fleet-Ops within the hour |
+| `daytime` | `nutreeze-partner-daytime.timer` (`00..16:15,45 UTC`) | 03:00–19:59 every 30 min | today | dry-run manifest → `--cancel-only=<date>`: **only** Partner cancellations (`is_cancelled` / status `cancel`) and on-hold deliveries (`is_on_hold`) are withdrawn from drivers (driver cleared, undispatched, `CANCELED` / `ON_HOLD` tracking, `held_*` state). New rows, driver changes, address/pin changes and rows missing from the feed are ignored until the next full sync. Started jobs are skipped and listed in `daily_withdraw_summary.verification.blocked_started_internal_ids` for the operator |
+
+`--cancel-only` is exclusive with `--confirm-daily-sync` / `--confirm-zero-day`, refuses address-call
+authorization, needs the same count+digest manifest, writes in one transaction with its own
+post-write verification, and never touches the Fleetbase activity log. A zero-row day is skipped
+(`daytime_zero_day_skipped`), never "confirmed".
+
+Manual daytime run (host):
+
+```bash
+NUTREEZE_DAILY_MODE=daytime /opt/fleetbase/integrations/nutreeze-orders/daily-sync.sh
+```
+
+Evidence: `docs/evidence/partner_driver_authority/06_wp_ops_07_part2_fleetbase_cadence.md`.

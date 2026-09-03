@@ -9,10 +9,18 @@ TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
 # rolling (default): 01:00 Kuwait, refresh +1/+2 days.
 # sameday (A46):     02:00 Kuwait, refresh today (drivers collect ~03:00) and +1 day,
 #                    so Partner driver assignments made after midnight still reach Navigator.
+# evening (A50):     hourly 20:00-02:45 Kuwait, full refresh of the next collection day
+#                    (tomorrow before midnight, today after it) so evening driver assignments
+#                    and label colours reach Fleet-Ops within the hour.
+# daytime (A50):     every 30 min 03:00-19:59 Kuwait, CANCEL-ONLY for today: Partner
+#                    cancellations and on-hold deliveries are withdrawn from drivers; nothing
+#                    else (driver, address, pin, new/missing rows) is touched.
 MODE="${NUTREEZE_DAILY_MODE:-rolling}"
 case "$MODE" in
-  rolling) WINDOW_START=45;  WINDOW_END=105; WINDOW_LABEL='00:45-01:45' ;;
-  sameday) WINDOW_START=105; WINDOW_END=165; WINDOW_LABEL='01:45-02:45' ;;
+  rolling) WINDOW_START=45;   WINDOW_END=105;  WINDOW_LABEL='00:45-01:45' ;;
+  sameday) WINDOW_START=105;  WINDOW_END=165;  WINDOW_LABEL='01:45-02:45' ;;
+  evening) WINDOW_START=1200; WINDOW_END=165;  WINDOW_LABEL='20:00-02:45' ;;
+  daytime) WINDOW_START=180;  WINDOW_END=1199; WINDOW_LABEL='03:00-19:59' ;;
   *)
     printf '%s\n' 'unsupported NUTREEZE_DAILY_MODE' >&2
     exit 26
@@ -31,24 +39,47 @@ MANIFEST_LOG="$(mktemp /var/tmp/nutreeze-partner-manifest.XXXXXX)"
 trap 'find /var/tmp -maxdepth 1 -type f -name "$(basename "$MANIFEST_LOG")" -delete' EXIT HUP INT TERM
 chmod 600 "$MANIFEST_LOG"
 
-if [ "$NOW_MINUTES" -lt "$WINDOW_START" ] || [ "$NOW_MINUTES" -gt "$WINDOW_END" ]; then
+if [ "$MODE" = evening ]; then
+  # window wraps midnight: 20:00-23:59 or 00:00-02:45
+  if [ "$NOW_MINUTES" -lt "$WINDOW_START" ] && [ "$NOW_MINUTES" -gt "$WINDOW_END" ]; then
+    printf '%s\n' "outside guarded $WINDOW_LABEL Kuwait sync window" >&2
+    exit 25
+  fi
+elif [ "$NOW_MINUTES" -lt "$WINDOW_START" ] || [ "$NOW_MINUTES" -gt "$WINDOW_END" ]; then
   printf '%s\n' "outside guarded $WINDOW_LABEL Kuwait sync window" >&2
   exit 25
 fi
 
 if [ -z "$TARGET_DATES" ]; then
-  if [ "$MODE" = sameday ]; then
-    TARGET_DATES="$TODAY $(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F)"
-  else
-    TARGET_DATES="$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F) $(TZ=Asia/Kuwait date -d "$TODAY +2 days" +%F)"
-  fi
+  case "$MODE" in
+    sameday) TARGET_DATES="$TODAY $(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F)" ;;
+    evening)
+      if [ "$NOW_MINUTES" -ge "$WINDOW_START" ]; then
+        TARGET_DATES="$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F)"
+      else
+        TARGET_DATES="$TODAY"
+      fi
+      ;;
+    daytime) TARGET_DATES="$TODAY" ;;
+    *) TARGET_DATES="$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F) $(TZ=Asia/Kuwait date -d "$TODAY +2 days" +%F)" ;;
+  esac
 fi
 
 set -- $TARGET_DATES
-if [ "$#" -ne 2 ] || [ "$1" = "$2" ]; then
-  printf '%s\n' 'invalid 48-hour target dates' >&2
-  exit 28
-fi
+case "$MODE" in
+  evening|daytime)
+    if [ "$#" -ne 1 ]; then
+      printf '%s\n' 'invalid single target date' >&2
+      exit 28
+    fi
+    ;;
+  *)
+    if [ "$#" -ne 2 ] || [ "$1" = "$2" ]; then
+      printf '%s\n' 'invalid 48-hour target dates' >&2
+      exit 28
+    fi
+    ;;
+esac
 
 FAILURES=0
 SUCCESSES=0
@@ -85,6 +116,24 @@ for DELIVERY_DATE in "$@"; do
       ;;
   esac
 
+  if [ "$MODE" = daytime ]; then
+    if [ "$COUNT" -eq 0 ]; then
+      # Nothing can be withdrawn from an empty day; never confirm-zero-day (that would
+      # demand that no Fleetbase orders exist).
+      printf '%s\n' "{\"event\":\"daytime_zero_day_skipped\",\"delivery_date\":\"$DELIVERY_DATE\"}"
+      SUCCESSES=$((SUCCESSES + 1))
+      continue
+    fi
+    set -- \
+      "--delivery-date=$DELIVERY_DATE" \
+      --limit=1000 \
+      "--expected-count=$COUNT" \
+      "--expected-digest=$DIGEST" \
+      "--cancel-only=$DELIVERY_DATE"
+    if [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
+      set -- "$@" "--driver-orders-manifest=$CONTAINER_MEMBERSHIP"
+    fi
+  else
   set -- \
     "--delivery-date=$DELIVERY_DATE" \
     --limit=1000 \
@@ -97,6 +146,7 @@ for DELIVERY_DATE in "$@"; do
   fi
   if [ "$COUNT" -eq 0 ]; then
     set -- "$@" "--confirm-zero-day=$DELIVERY_DATE"
+  fi
   fi
   if "$RUNNER" "$@"; then
     SUCCESSES=$((SUCCESSES + 1))

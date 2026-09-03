@@ -43,7 +43,7 @@ fi
 DAILY=0
 for ARG in "$@"; do
   case "$ARG" in
-    --limit=*|--verify|--dry-run|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*|--confirm-address-call-dispatch=*|--driver-orders-manifest=*) ;;
+    --limit=*|--verify|--dry-run|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*|--confirm-address-call-dispatch=*|--driver-orders-manifest=*|--cancel-only=*) ;;
     --confirm-location-recovery=*) LOCATION_RECOVERY_DATE=${ARG#*=} ;;
     --delivery-date=*) DAILY=1 ;;
     *)

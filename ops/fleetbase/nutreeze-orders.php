@@ -48,6 +48,8 @@ const PARTNER_DRIVER_MAP_SCHEMA_VERSION = 1;
 const DAILY_SOURCE_SELECTOR = 'partner_daily_deliveries_v1';
 const INTEGRATION_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config';
 const DAILY_DISPATCHABLE_MEAL_STATUSES = ['ordered', 'driver_assigned'];
+/** WP-OPS-07 (A50): daytime cancel-only reconciliation withdraws exactly these source states. */
+const DAILY_WITHDRAWAL_HOLD_REASONS = ['source_order_canceled', 'unapproved_meal_status'];
 const DAILY_DISPATCHABLE_ORDER_STATUSES = ['success'];
 // Sponsor amendment A19 authorizes address/area fallback dispatch for this
 // delivery date only. A matching runtime confirmation is still mandatory, and
@@ -533,6 +535,24 @@ function dailyStatusHoldReason(array $row): ?string
         return 'unapproved_order_status';
     }
     if (!in_array((string) ($row['meal_status'] ?? ''), DAILY_DISPATCHABLE_MEAL_STATUSES, true)) {
+        return 'unapproved_meal_status';
+    }
+    return null;
+}
+
+/**
+ * WP-OPS-07 (A50) — daytime rule (after the ~03:00 collection, same delivery date): only a
+ * Partner cancellation or an on-hold delivery may change a dispatched order, and only by
+ * withdrawing it from the driver. Owner decision 2026-09-03: on-hold counts as a withdrawal
+ * because the customer may eat elsewhere that day. Any other daytime change (driver, address,
+ * pin, new order, missing row) is ignored until the next full sync.
+ */
+function dailyWithdrawalReason(array $row): ?string
+{
+    if (($row['source_order_status'] ?? null) === 'cancel') {
+        return 'source_order_canceled';
+    }
+    if (($row['meal_status'] ?? null) === 'on_hold') {
         return 'unapproved_meal_status';
     }
     return null;
@@ -3361,6 +3381,13 @@ final class DailyDispatchWriter
         'tracking_cancel_statuses_created' => 0,
         'tracking_cancel_statuses_unchanged' => 0,
         'address_call_artifacts_cleared' => 0,
+        'orders_withdrawn_canceled' => 0,
+        'orders_withdrawn_on_hold' => 0,
+        'orders_withdraw_blocked_started' => 0,
+        'orders_withdraw_unchanged' => 0,
+        'orders_deliverable_untouched' => 0,
+        'orders_source_missing_ignored' => 0,
+        'orders_other_change_ignored' => 0,
     ];
 
     public function __construct(
@@ -3519,6 +3546,202 @@ final class DailyDispatchWriter
      * Unstarted jobs are canceled, unscheduled, and unassigned in this same
      * transaction; an advanced job fails closed for operator intervention.
      */
+    /**
+     * WP-OPS-07 (A50) daytime cancel-only reconciliation. Never creates, reassigns, re-pins or
+     * tombstones; it only withdraws orders whose Partner row is now cancelled or on hold, and
+     * leaves started jobs untouched (reported for the operator). Everything else in the day is
+     * left exactly as the last full sync wrote it.
+     */
+    public function withdrawOnly(array $dailyRows): array
+    {
+        if ($dailyRows === []) {
+            throw new RuntimeException('daily_source_empty');
+        }
+        $byInternalId = [];
+        foreach ($dailyRows as $row) {
+            $byInternalId[$this->prefix . '-ORDER-' . $row['order_id']] = $row;
+        }
+        $activityIdBefore = (int) (DB::table('activity')->max('id') ?? 0);
+        $withdrawn = [];
+        $blockedStarted = [];
+
+        DB::transaction(function () use ($byInternalId, &$withdrawn, &$blockedStarted, $activityIdBefore): void {
+            $orders = Order::withoutGlobalScopes()
+                ->where('company_uuid', $this->companyUuid)
+                ->where('internal_id', 'like', $this->prefix . '-ORDER-%')
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->get();
+            foreach ($orders as $order) {
+                $meta = metaArray($order->meta);
+                if (($meta['integration_owner'] ?? null) !== 'nutreeze_partner_orders'
+                    || ($meta['integration_prefix'] ?? null) !== $this->prefix) {
+                    throw new RuntimeException('daily_foreign_order');
+                }
+                if (($meta['daily_source_selector'] ?? null) !== DAILY_SOURCE_SELECTOR) {
+                    throw new RuntimeException('daily_source_selector_mismatch');
+                }
+                $row = $byInternalId[(string) $order->internal_id] ?? null;
+                if ($row === null) {
+                    // A row that vanished during the day is NOT treated as a cancellation here:
+                    // a partial or glitched feed must never withdraw live jobs. The next full
+                    // sync tombstones it under its own guards.
+                    $this->stats['orders_source_missing_ignored']++;
+                    continue;
+                }
+                $holdReason = dailyWithdrawalReason($row);
+                if ($holdReason === null) {
+                    $this->stats[dailyStatusHoldReason($row) === null
+                        ? 'orders_deliverable_untouched'
+                        : 'orders_other_change_ignored']++;
+                    continue;
+                }
+                $started = (bool) $order->started || $order->started_at !== null;
+                if ($started) {
+                    $blockedStarted[] = (string) $order->internal_id;
+                    $this->stats['orders_withdraw_blocked_started']++;
+                    continue;
+                }
+                $targetStatus = dailyHeldOrderStatus($holdReason);
+                if ((string) $order->status === $targetStatus
+                    && !(bool) $order->dispatched
+                    && $order->driver_assigned_uuid === null
+                    && ($meta['hold_reason'] ?? null) === $holdReason) {
+                    $this->ensureHeldTracking($order, $holdReason);
+                    $this->stats['orders_withdraw_unchanged']++;
+                    continue;
+                }
+                if (!in_array((string) $order->status, ['created', 'dispatched', 'canceled'], true)) {
+                    throw new RuntimeException('daily_operational_state_guard');
+                }
+                $wasCallRequired = ($meta['call_customer_required'] ?? false) === true;
+                $order->fill([
+                    'driver_assigned_uuid' => null,
+                    'scheduled_at' => null,
+                    'status' => $targetStatus,
+                    'dispatched' => false,
+                    'dispatched_at' => null,
+                    'notes' => str_replace(' | ' . ADDRESS_CALL_INSTRUCTION, '', (string) $order->notes),
+                ]);
+                applyMetaUpdates($order, [
+                    'assignment_mode' => 'none',
+                    'dispatch_state' => 'held_' . $holdReason,
+                    'hold_reason' => $holdReason,
+                    'partner_driver_public_id' => null,
+                    'meal_status' => $row['meal_status'],
+                    'meal_updated_at' => $row['meal_updated_at'],
+                    'source_order_status' => $row['source_order_status'],
+                    'daily_source_hash' => $row['_source_hash'],
+                    'daily_meal_hash' => dailyMealHash($row),
+                    'source_location_exception' => null,
+                    'call_customer_required' => false,
+                    'navigation_mode' => 'held',
+                    'location_accuracy' => 'not_routable',
+                    'address_call_authorization' => null,
+                    'daytime_withdrawn_at' => kuwaitNow(),
+                    'daytime_withdrawal_mode' => 'cancel_only_v1',
+                ]);
+                saveWithoutActivity($order);
+                $this->touchedSubjectIds['order'][] = $order->getKey();
+
+                $payload = Payload::withoutGlobalScopes()
+                    ->where('company_uuid', $this->companyUuid)
+                    ->where('uuid', $order->payload_uuid)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$payload) {
+                    throw new RuntimeException('daily_payload_resolution');
+                }
+                $payloadMeta = metaArray($payload->meta);
+                if (($payloadMeta['integration_owner'] ?? null) !== 'nutreeze_partner_orders'
+                    || ($payloadMeta['integration_prefix'] ?? null) !== $this->prefix) {
+                    throw new RuntimeException('daily_foreign_payload');
+                }
+                applyMetaUpdates($payload, [
+                    'meal_status' => $row['meal_status'],
+                    'source_order_status' => $row['source_order_status'],
+                    'daily_source_hash' => $row['_source_hash'],
+                    'source_location_exception' => null,
+                    'call_customer_required' => false,
+                    'navigation_mode' => 'held',
+                    'location_accuracy' => 'not_routable',
+                    'address_call_authorization' => null,
+                ]);
+                saveWithoutActivity($payload);
+                $this->touchedSubjectIds['payload'][] = $payload->getKey();
+
+                if ($wasCallRequired) {
+                    $place = Place::withoutGlobalScopes()
+                        ->where('company_uuid', $this->companyUuid)
+                        ->where('uuid', $payload->dropoff_uuid)
+                        ->lockForUpdate()
+                        ->first();
+                    if (!$place) {
+                        throw new RuntimeException('daily_verify_dropoff');
+                    }
+                    $placeName = (string) $place->name;
+                    if (str_starts_with($placeName, ADDRESS_CALL_PLACE_PREFIX)) {
+                        $placeName = substr($placeName, strlen(ADDRESS_CALL_PLACE_PREFIX));
+                    }
+                    $place->fill(['name' => $placeName, 'street2' => null]);
+                    saveWithoutActivity($place);
+                    $this->touchedSubjectIds['place'][] = $place->getKey();
+                    $this->stats['address_call_artifacts_cleared']++;
+                }
+                $this->ensureHeldTracking($order, $holdReason);
+                $this->stats[$holdReason === 'source_order_canceled'
+                    ? 'orders_withdrawn_canceled'
+                    : 'orders_withdrawn_on_hold']++;
+                $withdrawn[] = ['internal_id' => (string) $order->internal_id, 'hold_reason' => $holdReason];
+            }
+
+            // Post-write verification inside the transaction: every withdrawn order must be
+            // driverless, undispatched and in its held/canceled state.
+            foreach ($withdrawn as $item) {
+                $check = Order::withoutGlobalScopes()
+                    ->where('company_uuid', $this->companyUuid)
+                    ->where('internal_id', $item['internal_id'])
+                    ->first(['status', 'dispatched', 'driver_assigned_uuid', 'meta']);
+                $checkMeta = metaArray($check->meta ?? null);
+                if (!$check
+                    || (string) $check->status !== dailyHeldOrderStatus($item['hold_reason'])
+                    || (bool) $check->dispatched
+                    || $check->driver_assigned_uuid !== null
+                    || ($checkMeta['navigation_mode'] ?? null) !== 'held'
+                    || ($checkMeta['dispatch_state'] ?? null) !== 'held_' . $item['hold_reason']) {
+                    throw new RuntimeException('daily_withdraw_verification');
+                }
+            }
+            $newTouchedActivity = DB::table('activity')
+                ->where('id', '>', $activityIdBefore)
+                ->where(function ($query) {
+                    $query->where(function ($orderQuery) {
+                        $orderQuery->where('subject_type', Order::class)
+                            ->whereIn('subject_id', array_values(array_unique($this->touchedSubjectIds['order'])));
+                    })->orWhere(function ($payloadQuery) {
+                        $payloadQuery->where('subject_type', Payload::class)
+                            ->whereIn('subject_id', array_values(array_unique($this->touchedSubjectIds['payload'])));
+                    });
+                })
+                ->count();
+            $this->stats['activity_rows_created'] = $newTouchedActivity;
+            if ($newTouchedActivity !== 0) {
+                throw new RuntimeException('fleetbase_activity_log_write');
+            }
+        }, 1);
+
+        $this->verificationResult = [
+            'passed' => true,
+            'mode' => 'cancel_only_v1',
+            'withdrawn' => count($withdrawn),
+            'blocked_started_internal_ids' => $blockedStarted,
+        ];
+        if ($withdrawn !== []) {
+            invalidateDailyCaches($this->prefix, $this->companyUuid);
+        }
+        return $this->stats;
+    }
+
     private function neutralizeMissingSourceOrders(array $dailyRows): void
     {
         $sourceIds = array_fill_keys(array_map(
@@ -4914,7 +5137,33 @@ function runSelfTest(): array
             }
         }
     }
-    return ['passed' => 38, 'total' => 38];
+    // WP-OPS-07 (A50): daytime withdrawal decision is pure and covers exactly cancel + on-hold.
+    $withdrawCancel = buildDailyRows([$mealBase], [['status' => 'cancel'] + $dailyOrders[0]], '2026-07-19');
+    $withdrawOnHold = buildDailyRows([['status' => 'on_hold'] + $mealBase], [$dailyOrders[0]], '2026-07-19');
+    $withdrawNormal = buildDailyRows([$mealBase], [$dailyOrders[0]], '2026-07-19');
+    $withdrawPending = buildDailyRows([$mealBase], [['status' => 'pending'] + $dailyOrders[0]], '2026-07-19');
+    if (dailyWithdrawalReason($withdrawCancel[0]) !== 'source_order_canceled'
+        || dailyHeldOrderStatus(dailyWithdrawalReason($withdrawCancel[0])) !== 'canceled') {
+        throw new RuntimeException('self_test_daily_withdrawal_cancel');
+    }
+    if (dailyWithdrawalReason($withdrawOnHold[0]) !== 'unapproved_meal_status'
+        || dailyHeldOrderStatus(dailyWithdrawalReason($withdrawOnHold[0])) !== 'created'
+        || dailyHeldTrackingCode(dailyWithdrawalReason($withdrawOnHold[0])) !== 'ON_HOLD') {
+        throw new RuntimeException('self_test_daily_withdrawal_on_hold');
+    }
+    if (dailyWithdrawalReason($withdrawNormal[0]) !== null) {
+        throw new RuntimeException('self_test_daily_withdrawal_deliverable');
+    }
+    if (dailyWithdrawalReason($withdrawPending[0]) !== null
+        || dailyStatusHoldReason($withdrawPending[0]) !== 'unapproved_order_status') {
+        throw new RuntimeException('self_test_daily_withdrawal_other_status_ignored');
+    }
+    foreach (DAILY_WITHDRAWAL_HOLD_REASONS as $reason) {
+        if (!in_array($reason, ['source_order_canceled', 'unapproved_meal_status'], true)) {
+            throw new RuntimeException('self_test_daily_withdrawal_reasons');
+        }
+    }
+    return ['passed' => 43, 'total' => 43];
 }
 
 $stage = 'startup';
@@ -4929,7 +5178,7 @@ try {
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
-        'driver-orders-manifest:', 'partner-driver-map:',
+        'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -5267,6 +5516,53 @@ try {
                 'delivery_date' => $deliveryDate,
                 'source_orders' => count($dailyRows),
                 'fleetbase_written' => false,
+            ]);
+            releaseLock($lockName);
+            exit(0);
+        }
+        if (isset($options['cancel-only'])) {
+            // WP-OPS-07 (A50): daytime cancel-only reconciliation. Same manifest gate as a full
+            // sync (dry-run count + digest), its own narrow writer, no operational-state preflight
+            // because started jobs are skipped rather than rejected.
+            $stage = 'daily_cancel_only';
+            if (!hash_equals($deliveryDate, (string) $options['cancel-only'])) {
+                throw new RuntimeException('daily_cancel_only_confirmation_guard');
+            }
+            if (isset($options['confirm-daily-sync']) || isset($options['confirm-zero-day'])) {
+                throw new RuntimeException('daily_cancel_only_exclusive');
+            }
+            if ($expectedCount === null || $expectedDigest === null) {
+                throw new RuntimeException('daily_source_manifest_required');
+            }
+            if ($allowAddressCall) {
+                throw new RuntimeException('daily_cancel_only_no_address_call');
+            }
+            $withdrawalCandidates = count(array_filter(
+                $dailyRows,
+                fn (array $row): bool => dailyWithdrawalReason($row) !== null,
+            ));
+            $pickup = loadPickupConfig($pickupConfigPath);
+            $withdrawWriter = new DailyDispatchWriter($prefix, $pickup, $drivers, false);
+            $withdrawStats = $withdrawWriter->withdrawOnly($dailyRows);
+            $withdrawVerification = $withdrawWriter->verificationResult() ?? ['passed' => false];
+            safeLog('daily_withdraw_summary', [
+                'delivery_date' => $deliveryDate,
+                'mode' => 'cancel_only_v1',
+                'source_orders' => count($dailyRows),
+                'withdrawal_candidates' => $withdrawalCandidates,
+            ] + $withdrawStats + ['verification' => $withdrawVerification]);
+            if (($withdrawVerification['passed'] ?? false) !== true) {
+                throw new RuntimeException('daily_withdraw_verification');
+            }
+            safeLog('complete', [
+                'dry_run' => false,
+                'delivery_date' => $deliveryDate,
+                'mode' => 'cancel_only_v1',
+                'source_orders' => count($dailyRows),
+                'withdrawn_orders' => $withdrawStats['orders_withdrawn_canceled'] + $withdrawStats['orders_withdrawn_on_hold'],
+                'blocked_started' => $withdrawStats['orders_withdraw_blocked_started'],
+                'verified' => true,
+                'watermark_committed' => false,
             ]);
             releaseLock($lockName);
             exit(0);

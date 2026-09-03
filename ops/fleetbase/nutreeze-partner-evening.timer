@@ -1,0 +1,12 @@
+[Unit]
+Description=Evening Fleetbase dispatch refresh, hourly 20:00-02:00 Kuwait (17:05-23:05 UTC) — WP-OPS-07 A50
+
+[Timer]
+# :05 keeps clear of the 00:00 snapshot, 01:00 rolling and 02:00 same-day timers on the hour.
+OnCalendar=*-*-* 17..23:05:00 UTC
+Persistent=false
+RandomizedDelaySec=60
+Unit=nutreeze-partner-evening.service
+
+[Install]
+WantedBy=timers.target
