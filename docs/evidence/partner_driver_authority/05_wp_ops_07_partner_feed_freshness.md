@@ -20,3 +20,18 @@ A full day-pair poll is one page (~700 rows) per date and completes in seconds; 
 
 TS-I partner-daily: freshness before/after dry-run/apply, unchanged re-run moves "checked" but not "last change"
 (4 batches). TS-U extension/console strings. Full Vitest green; typecheck/lint/build/scans green.
+
+## Staging deploy (Verified 2026-09-03)
+
+PR #62 CI 29/29 → merged `a4acc65`. Source `releases/a50-src-061dfc6.tgz` (sha256 `a0689383…`), snapshot
+`backups/pre-a50-20260903T120447Z.dump`.
+
+| Step | Result |
+|---|---|
+| API | `nutrezee-api:a50-061dfc6`; migration **0032** applied (`import_batch.source_meta` present); `--no-deps` (Postgres untouched); admin nginx restarted; `/health` 200; `GET /fleet-ops/labels/freshness` answers 401 unauthenticated (route live) |
+| Runner + timer | new `partner-daily-feed.mjs` / wrapper / units installed; `daemon-reload` + timer restarted: enabled, active, next elapse :20/:50 every hour (14:20 CEST first) |
+| First run | 2026-09-03 (today): 795 rows → 146 created / 628 matched / 626 days created / 0 errors (**applied**); 2026-09-04: 0 rows → `partner_daily_unchanged` (apply skipped). `source_meta` recorded with `source_max_updated_at 2026-09-03T07:21:25+03:00` |
+| Console | `fleetbase-console:a48.3-candidate` gate: production 10 / development 0, `/extensions.json` 10 incl. Nutrezee **v0.3.8**, theme `?v=a48.3` 200, gzip, immutable, no `Clear-Site-Data`, engine bundle carries the freshness call; swapped, other containers unchanged, restarts 0; live `/`, `/extensions.json`, `/nz/health` 200. Rollback `fleetbase-console:a48.2-rollback-20260903` |
+
+Note: the first 30-minute run also mirrored **today's** Partner deliveries (795 rows), so labels can now print for
+today's orders too; the same apply-on-change guard keeps the batch trail small.
