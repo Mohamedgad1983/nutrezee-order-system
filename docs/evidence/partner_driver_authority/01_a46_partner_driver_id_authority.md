@@ -1,6 +1,6 @@
 # 01 — A46: Partner `driver.id` becomes the Fleetbase assignment authority
 
-Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: BUILT, NOT DEPLOYED
+Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: BUILT, PR #56 open (base `fix/a45-console-performance`), NOT DEPLOYED
 
 ## Problem (Verified, read-only VPS trace 2026-09-03)
 
