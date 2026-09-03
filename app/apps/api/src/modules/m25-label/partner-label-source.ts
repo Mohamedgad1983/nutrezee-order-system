@@ -249,10 +249,19 @@ function buildSnapshot(deliveryDate: string, catalogRows: unknown[], itemRows: u
         break;
       }
       const nutrition = isRecord(meal.nutrition) ? meal.nutrition : null;
-      const protein = authoritativeNumber(nutrition?.protein_g);
-      const carbs = authoritativeNumber(nutrition?.carbs_g);
-      const fat = authoritativeNumber(nutrition?.fat_g);
-      const calories = authoritativeNumber(nutrition?.calories);
+      // A51 (owner, 2026-09-03): Partner's admin stores a typed 0 as an empty field and its API
+      // emits null for it (no meal in the 1,411-item catalog ever carries a 0), so an absent value
+      // is authoritative zero. A meal whose four values are ALL absent still has no nutrition on
+      // record and stays blocked; a non-numeric value stays blocked.
+      const rawValues = [nutrition?.protein_g, nutrition?.carbs_g, nutrition?.fat_g, nutrition?.calories];
+      if (rawValues.every(isAbsentValue)) {
+        failure = 'nutrition_incomplete';
+        break;
+      }
+      const protein = zeroWhenAbsent(nutrition?.protein_g);
+      const carbs = zeroWhenAbsent(nutrition?.carbs_g);
+      const fat = zeroWhenAbsent(nutrition?.fat_g);
+      const calories = zeroWhenAbsent(nutrition?.calories);
       if ([protein, carbs, fat, calories].some((value) => value === null)) {
         failure = 'nutrition_incomplete';
         break;
@@ -310,6 +319,15 @@ function sourceId(value: unknown): string | null {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (typeof value === 'number' && Number.isInteger(value)) return String(value);
   return null;
+}
+
+function isAbsentValue(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
+/** A51: Partner cannot represent 0 (it arrives as null/blank); absent therefore means zero. */
+function zeroWhenAbsent(value: unknown): number | null {
+  return isAbsentValue(value) ? 0 : authoritativeNumber(value);
 }
 
 function authoritativeNumber(value: unknown): number | null {

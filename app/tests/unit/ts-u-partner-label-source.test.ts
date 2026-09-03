@@ -101,18 +101,25 @@ describe('TS-U Partner Kitchen & Labels v2 source (A29)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it('blocks only the affected order when authoritative nutrition is incomplete', async () => {
+  it('reads an absent Partner value as zero (A51) and still blocks meals with no nutrition at all or garbage', async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith('/meal-catalog-v2')) {
         return envelope([
           catalog('complete'),
-          catalog('partial', { protein_g: 10, carbs_g: 20, fat_g: null, calories: 200 }),
+          // Partner stores a typed 0 as empty and emits null: pineapple has fat 0 / protein 0.
+          catalog('pineapple', { protein_g: null, carbs_g: 11, fat_g: null, calories: 44 }),
+          catalog('blank-string', { protein_g: '', carbs_g: 11, fat_g: undefined, calories: 44 }),
+          catalog('unknown', { protein_g: null, carbs_g: null, fat_g: null, calories: null }),
+          catalog('garbage', { protein_g: 'n/a', carbs_g: 20, fat_g: 5, calories: 200 }),
         ]);
       }
       return envelope([
         item('COMPLETE-ORDER', 'complete', 'complete-item'),
-        item('PARTIAL-ORDER', 'partial', 'partial-item'),
+        item('ZERO-ORDER', 'pineapple', 'pineapple-item'),
+        item('BLANK-ORDER', 'blank-string', 'blank-item'),
+        item('UNKNOWN-ORDER', 'unknown', 'unknown-item'),
+        item('GARBAGE-ORDER', 'garbage', 'garbage-item'),
       ]);
     });
     const source = new PartnerLabelSource({
@@ -120,9 +127,14 @@ describe('TS-U Partner Kitchen & Labels v2 source (A29)', () => {
     });
 
     await expect(source.mealsForOrder('COMPLETE-ORDER', DATE)).resolves.toHaveLength(1);
-    await expect(source.mealsForOrder('PARTIAL-ORDER', DATE)).rejects.toMatchObject({
-      code: 'nutrition_incomplete',
-    });
+    await expect(source.mealsForOrder('ZERO-ORDER', DATE)).resolves.toEqual([
+      expect.objectContaining({ protein: 0, carbs: 11, fat: 0, calories: 44 }),
+    ]);
+    await expect(source.mealsForOrder('BLANK-ORDER', DATE)).resolves.toEqual([
+      expect.objectContaining({ protein: 0, fat: 0, carbs: 11, calories: 44 }),
+    ]);
+    await expect(source.mealsForOrder('UNKNOWN-ORDER', DATE)).rejects.toMatchObject({ code: 'nutrition_incomplete' });
+    await expect(source.mealsForOrder('GARBAGE-ORDER', DATE)).rejects.toMatchObject({ code: 'nutrition_incomplete' });
   });
 
   it('fails closed on missing order items, missing catalog ids and malformed envelopes', async () => {
