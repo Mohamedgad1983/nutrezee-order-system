@@ -172,3 +172,14 @@ and +1 day; rolling mode unchanged). Tests 14/14 on the VPS (the new default-dat
 backed up to `backups/a46-20260903T0814Z/daily-sync.sh`. `list-timers`: next same-day run
 Fri 2026-09-04 01:01 CEST = 02:01 Kuwait; rolling and snapshot timers untouched and enabled.
 Owner authorization for this systemd persistence is Mohamed's explicit instruction in chat.
+
+## A6 duplicate resolved as a unit alias (2026-09-03)
+
+Mohamed clarified that the app identity is the **unit** (vehicle plate + company phone), not the
+person. Post-apply MySQL showed Partner's API sends the numeric user id (e.g. `9286`), not the
+`A6` code, so RAMZI AL QADRI's account (`users/addUser/2/201`, read from the owner's screen) was
+added as alias `201` → `driver_l58j0Bwpyo` (Area-6, plate 23-21231, phone 57550243). Map now
+19 aliases → 9 drivers; installed on staging (previous map kept as `…map.v1.json` in the backup
+dir). Ramzi's edit form showed Chrome-autofilled admin credentials in the Unique-id field; the
+owner was told to leave without saving. Ramzi's Partner service areas (Abdullah Al Mubarak, Doha,
+Farwaniya, Ghornata, Omariya, Rabiya, NW Sulaibikhat) only partly overlap Ibrahim's [NC].
