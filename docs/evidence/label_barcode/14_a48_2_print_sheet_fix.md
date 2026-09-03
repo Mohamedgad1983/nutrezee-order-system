@@ -17,3 +17,13 @@ to the panel, not the sheet; the label landed offset inside the 100 × 70 mm pag
 - `.nz-driver-band strong`: `direction: ltr; unicode-bidi: isolate` so the bilingual line no longer renders
   the plate as "40149-24" or moves the phone's "+".
 - Tests: TS-U extension (print path + CSS), console release string.
+
+## Staging deploy (Verified 2026-09-03)
+
+PR #61 CI 29/29 → merged `a855407`. Candidate `fleetbase-console:a48.2-candidate` built from
+`releases/a48p-src-5b001a7.tgz` (sha256 `c9a4006d…`); gate: production metadata 10 / development 0,
+`/extensions.json` 10 incl. Nutrezee **v0.3.7**, theme alias `?v=a48.2` 200, vendor JS gzip, fingerprinted assets
+immutable, no `Clear-Site-Data`, engine bundle contains `nz-print-root`, engine CSS contains `unicode-bidi`.
+Swapped via `docker compose up -d --no-build console`; other containers unchanged; restarts 0; `ops.nutreeze.com`
+`/`, `/extensions.json`, `/nz/health`, theme alias all 200. Rollback image `fleetbase-console:a48.1-rollback-20260903`.
+Live PDF proof = owner re-prints NUT0687289758KW after a hard reload.
