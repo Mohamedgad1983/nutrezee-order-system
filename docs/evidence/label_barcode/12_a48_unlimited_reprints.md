@@ -19,3 +19,18 @@ append-only trail (tamper trigger), same-transaction audit, current-day-only bat
 
 TS-I `ts-i-label-barcode` (reprint without reason accepted, stored NULL, history 3 rows, barcode stable;
 batch with prior prints accepted without reason), TS-U extension/console tests updated; TS-M 12/12.
+
+## Staging deploy (Verified 2026-09-03, owner: "ادمج … وابدأ التركيب")
+
+PR #59 CI 29/29 → merged `bac7a81` into `fix/a45-console-performance`. Source `releases/a48-src-40923eb.tgz`
+(sha256 `c3b238bc…`), snapshot `backups/pre-a48-20260903T104323Z.dump` (91 TABLE DATA).
+
+| Step | Result |
+|---|---|
+| API | `nutrezee-api:a48-40923eb` built; `run --rm --no-deps migrate` applied **0031** only (postgres container untouched this time); `label_print_event_check` gone; API up, admin nginx restarted, `/health` 200 public |
+| Console | Dockerfile/nginx.conf/extension copied to `/opt/fleetbase/console` (previous copies in `/opt/fleetbase/backups/a48-pre/`); rollback image `fleetbase-console:a48-rollback-20260903`; candidate `fleetbase-console:a48.1-candidate` built with production args |
+| Candidate gate | production metadata 10 / development 0; `/extensions.json` 10 extensions incl. Nutrezee **v0.3.6**; theme alias `?v=a48.1` 200; `vendor-*.js` gzip 200; fingerprinted assets `immutable`; no `Clear-Site-Data`; engine bundle contains no reprint-reason gate |
+| Swap | tagged latest → `docker compose up -d --no-build console`; every other container unchanged; running image = candidate; `ops.nutreeze.com` `/`, `/extensions.json`, `/nz/health`, `fleet.…sslip.io` all 200; restarts 0 |
+
+Rollback: `docker tag fleetbase-console:a48-rollback-20260903 fleetbase-console:latest && docker compose up -d --no-build console`;
+API: `nutrezee-api:a47-f94ac7b` (0031 is a dropped CHECK; leaving it dropped is harmless).
