@@ -6,6 +6,24 @@ const DRIVER_COLORS = new Set([
     'brown', 'cyan', 'olive', 'amber', 'magenta', 'slate', 'lime', 'coral',
 ]);
 
+/** "Partner data: checked 14:50 · last change 02:21 (Kuwait)" from the freshness read. */
+export function describeFreshness(freshness) {
+    if (!freshness || !freshness.last_checked_at) {
+        return 'Partner data: not synced yet for this date / لم تتم مزامنة هذا التاريخ بعد';
+    }
+    const fmt = (iso) => {
+        if (!iso) return '—';
+        try {
+            return new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Kuwait', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short',
+            }).format(new Date(iso));
+        } catch (e) {
+            return iso;
+        }
+    };
+    return `Partner data: checked ${fmt(freshness.last_checked_at)} · last change ${fmt(freshness.last_change_at)} (Kuwait) / آخر فحص ${fmt(freshness.last_checked_at)}`;
+}
+
 export default function normalizeLabel(document) {
     const value = (input) =>
         input === null || input === undefined || input === '' ? DASH : String(input);

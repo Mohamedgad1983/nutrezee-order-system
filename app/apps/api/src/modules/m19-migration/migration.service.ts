@@ -47,7 +47,16 @@ export class MigrationService {
     const date = validateDeliveryDate(deliveryDate);
     const fetched = await this.partnerFeed.fetchDate(date);
     const rows = canonicalizeDailyDeliveries(fetched.rows);
-    const report = await this.runner.run(actor, 'partner_daily', rows, await this.importer('partner_daily'), { apply });
+    const sourceMeta = {
+      delivery_date: date,
+      delivery_rows: fetched.rows.length,
+      distinct_orders: rows.length,
+      source_max_updated_at: rows.reduce<string | null>((max, row) => (
+        max === null || row.updated_at > max ? row.updated_at : max
+      ), null),
+      fetched_at: new Date().toISOString(),
+    };
+    const report = await this.runner.run(actor, 'partner_daily', rows, await this.importer('partner_daily'), { apply, sourceMeta });
     return {
       ...report,
       source: {
@@ -65,6 +74,29 @@ export class MigrationService {
 
   async report(batchId: string): Promise<BatchReport> {
     return this.runner.report(batchId);
+  }
+
+  /**
+   * WP-OPS-07: how fresh Nutrezee's mirror of one Partner delivery date is. Read from M19's own
+   * `import_batch` rows (`partner_daily` batches carry `source_meta`). `last_checked_at` = newest
+   * batch of any state; `last_applied_at` = newest applied batch; `last_change_at` = newest applied
+   * batch that created rows or created/updated a fulfillment day.
+   */
+  async partnerDailyFreshness(deliveryDate: string): Promise<PartnerDailyFreshness> {
+    const date = validateDeliveryDate(deliveryDate);
+    const rows = await this.runner.sourceFreshness('partner_daily', date);
+    const row = (rows[0] ?? {}) as Record<string, unknown>;
+    const meta = (row.latest_meta ?? {}) as Record<string, unknown>;
+    const iso = (v: unknown): string | null => (v instanceof Date ? v.toISOString() : typeof v === 'string' ? v : null);
+    return {
+      delivery_date: date,
+      last_checked_at: iso(row.last_checked_at),
+      last_applied_at: iso(row.last_applied_at),
+      last_change_at: iso(row.last_change_at),
+      source_max_updated_at: typeof meta.source_max_updated_at === 'string' ? meta.source_max_updated_at : null,
+      delivery_rows: typeof meta.delivery_rows === 'number' ? meta.delivery_rows : null,
+      batches: typeof row.batches === 'number' ? row.batches : 0,
+    };
   }
 
   async rollback(actor: StaffContext, batchId: string): Promise<void> {
@@ -89,6 +121,16 @@ export class MigrationService {
         throw new Error(`unsupported import type: ${type}`);
     }
   }
+}
+
+export interface PartnerDailyFreshness {
+  delivery_date: string;
+  last_checked_at: string | null;
+  last_applied_at: string | null;
+  last_change_at: string | null;
+  source_max_updated_at: string | null;
+  delivery_rows: number | null;
+  batches: number;
 }
 
 export interface PartnerDailyReport extends BatchReport {

@@ -1,5 +1,5 @@
 [Unit]
-Description=Nutrezee Partner daily-deliveries → order feed (WP-OPS-06): dry-run + apply for today and tomorrow
+Description=Nutrezee Partner daily-deliveries → order feed (WP-OPS-06/07): dry-run + apply-if-changed for today and tomorrow, every 30 min
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 StartLimitIntervalSec=30min

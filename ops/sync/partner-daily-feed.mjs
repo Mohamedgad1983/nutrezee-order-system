@@ -70,7 +70,11 @@ const summarize = (report) => ({
   batch_id: report.batchId, dry_run: report.dryRun, counts: report.counts, source: report.source,
   errors: report.rows.filter((x) => x.action === 'error').map((x) => ({ row: x.rowNo, messages: x.messages })).slice(0, 20),
   locked_days: report.rows.filter((x) => x.messages.includes('day_locked')).length,
+  days_created: report.rows.filter((x) => x.messages.includes('day_created')).length,
+  days_updated: report.rows.filter((x) => x.messages.includes('day_updated')).length,
 });
+// WP-OPS-07: the timer now runs every 30 minutes; only apply when the dry-run shows a change.
+const hasChanges = (s) => (s.counts?.created ?? 0) > 0 || s.days_created > 0 || s.days_updated > 0;
 
 await client.connect();
 let failures = 0;
@@ -79,8 +83,13 @@ try {
   for (const date of DATES) {
     const dry = await call('dry-run', date);
     if (!dry.ok) { failures += 1; log({ event: 'partner_daily_failed', date, stage: 'dry_run', status: dry.status, error: dry.error }); continue; }
-    log({ event: 'partner_daily_dry_run', date, ...summarize(dry.report) });
+    const dryRun = summarize(dry.report);
+    log({ event: 'partner_daily_dry_run', date, ...dryRun });
     if (MODE !== 'apply') continue;
+    if (!hasChanges(dryRun) && (process.env.FEED_FORCE_APPLY || '').toLowerCase() !== 'yes') {
+      log({ event: 'partner_daily_unchanged', date, batch_id: dryRun.batch_id });
+      continue;
+    }
     const applied = await call('apply', date);
     if (!applied.ok) { failures += 1; log({ event: 'partner_daily_failed', date, stage: 'apply', status: applied.status, error: applied.error }); continue; }
     log({ event: 'partner_daily_applied', date, ...summarize(applied.report) });
