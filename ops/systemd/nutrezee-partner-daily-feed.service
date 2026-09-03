@@ -10,14 +10,11 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
-# Provides DATABASE_URL (staging) and nothing else; API is the local nutrezee-api container port.
-EnvironmentFile=/opt/nutrezee/import.env
-Environment=SYNC_TARGET=staging
+# The wrapper runs the .mjs inside nutrezee-api-1 (container env supplies DATABASE_URL and the API).
 Environment=FEED_MODE=apply
 Environment=ALLOW_APPLY=yes
-Environment=API=http://127.0.0.1:3000
 WorkingDirectory=/opt/nutrezee/sync
-ExecStart=/usr/bin/node /opt/nutrezee/sync/partner-daily-feed.mjs
+ExecStart=/opt/nutrezee/sync/run-partner-daily-feed.sh
 TimeoutStartSec=20min
 NoNewPrivileges=true
 PrivateDevices=true

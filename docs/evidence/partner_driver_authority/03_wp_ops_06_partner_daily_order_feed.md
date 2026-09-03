@@ -59,7 +59,7 @@ orders_without_partner_driver / cancelled / on_hold`, per-row messages
 
 1. Merge PR; deploy API image with migration `0030` (gated migrate step).
 2. Set `NUTREEZE_PARTNER_DAILY_API_KEY` (or rely on the label key) in the API env.
-3. Copy `partner-daily-feed.mjs` to `/opt/nutrezee/sync/`, install the two units, **do not enable yet**.
+3. Copy `partner-daily-feed.mjs` + `run-partner-daily-feed.sh` to `/opt/nutrezee/sync/` (the wrapper runs the script inside `nutrezee-api-1`, like the legacy sync), install the two units, **do not enable yet**.
 4. Manual `FEED_MODE=dry-run` for tomorrow; review `errors`, `orders_without_partner_driver`,
    `locked_days`; then `FEED_MODE=apply ALLOW_APPLY=yes` once; verify a Fleet-Ops batch label
    preview and one driver scan on the emulator.
