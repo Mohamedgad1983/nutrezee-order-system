@@ -19,7 +19,7 @@ export interface OwnerPorts {
   payments?: PaymentService;
 }
 
-export type BatchType = 'customer' | 'catalog' | 'active_plans';
+export type BatchType = 'customer' | 'catalog' | 'active_plans' | 'partner_daily';
 export type RowAction = 'created' | 'matched' | 'merge_review' | 'skipped' | 'error';
 
 export interface RowResult {
@@ -56,6 +56,7 @@ const GATES: Record<string, { maxMergeReviewRate: number; maxErrorRate: number }
   customer: { maxMergeReviewRate: 0.10, maxErrorRate: 0.02 },
   catalog: { maxMergeReviewRate: 1, maxErrorRate: 0.02 },
   active_plans: { maxMergeReviewRate: 1, maxErrorRate: 0 }, // WP-13 — importer not built here
+  partner_daily: { maxMergeReviewRate: 1, maxErrorRate: 0.02 }, // WP-OPS-06 — Partner daily mirror
 };
 
 // M19 batch runner (migration_execution_plan §1): dry-run by default; apply requires

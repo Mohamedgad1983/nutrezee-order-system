@@ -67,6 +67,9 @@ export interface OrderForPayment {
   expectedPaymentMethod: string | null;
 }
 
+export type ImportedDayStatus = 'scheduled' | 'skipped' | 'cancelled_day';
+const IMPORTED_DAY_STATUSES: ImportedDayStatus[] = ['scheduled', 'skipped', 'cancelled_day'];
+
 export interface ImportedActivePlanInput {
   orderNumber: string;
   customerId: string;
@@ -511,6 +514,58 @@ export class OrderService {
       [orderId, method, time, area, actorId],
     );
     return (rowCount ?? 0) > 0;
+  }
+
+  /**
+   * WP-OPS-06 (A47): mirror one Partner delivery day onto an existing imported order.
+   * Creates the (order, date) day if missing; otherwise only moves it between the three
+   * mirror states (scheduled / skipped / cancelled_day). A day that has entered kitchen or
+   * delivery progress is never touched (Partner is not the authority for operational progress).
+   * The order's start/end range is widened to cover the date. Every status change leaves an
+   * order_status_history row; the transition engine is bypassed on purpose, exactly like the
+   * rest of the M19 import path, because these rows mirror an external system's state.
+   */
+  async ensureImportedDayInTx(
+    client: PoolClient,
+    actorId: string,
+    orderId: string,
+    input: { date: string; status: ImportedDayStatus; addressFrozen?: Record<string, unknown>; slotId?: string },
+  ): Promise<'created' | 'updated' | 'unchanged' | 'locked'> {
+    if (!IMPORTED_DAY_STATUSES.includes(input.status)) throw new OrderError('validation_failed', { field: 'status' });
+    await client.query(
+      `UPDATE customer_order
+          SET start_date = LEAST(start_date, $2::date), end_date = GREATEST(end_date, $2::date),
+              updated_at = now(), updated_by = $3
+        WHERE id = $1 AND (start_date > $2::date OR end_date < $2::date)`,
+      [orderId, input.date, actorId],
+    );
+    const { rows } = await client.query(
+      `SELECT id, status FROM fulfillment_day WHERE order_id = $1 AND date = $2 FOR UPDATE`,
+      [orderId, input.date],
+    );
+    if (rows.length === 0) {
+      const dayId = newId();
+      const addressFrozen = input.addressFrozen ?? { legacy_import: true, address_unverified: true };
+      await client.query(
+        `INSERT INTO fulfillment_day (id, order_id, date, status, slot_id, address_frozen, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [dayId, orderId, input.date, input.status, input.slotId ?? null, JSON.stringify(addressFrozen), actorId],
+      );
+      if (input.status !== 'scheduled') {
+        await this.historyInTx(client, 'fulfillment_day', dayId, 'scheduled', input.status, actorId, null);
+      }
+      return 'created';
+    }
+    const current = rows[0] as { id: string; status: string };
+    if (current.status === input.status) return 'unchanged';
+    if (!IMPORTED_DAY_STATUSES.includes(current.status as ImportedDayStatus)) return 'locked';
+    await client.query(
+      `UPDATE fulfillment_day SET status = $2, version = version + 1, updated_at = now(), updated_by = $3
+        WHERE id = $1`,
+      [current.id, input.status, actorId],
+    );
+    await this.historyInTx(client, 'fulfillment_day', current.id, current.status, input.status, actorId, null);
+    return 'updated';
   }
 
   async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {

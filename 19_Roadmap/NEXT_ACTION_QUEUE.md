@@ -28,6 +28,15 @@
 
 ## Engineering Queue (take the top unblocked item)
 
+### ▶ WP-OPS-06 — Partner daily-deliveries → Nutrezee order feed · **IN PROGRESS · size M · blocked_by: none (deploy needs owner key + migration 0030)**
+- A47: Fleet-Ops barcode labels and the Navigator collection scan need current orders in Nutrezee Postgres; the legacy scrape is frozen at order 24675. The API now imports Partner `/integration/daily-deliveries` per date through the governed M19 runner (`partner_daily`).
+- Idempotent by `order_number` + `(order, date)`; customers by normalized `+965` phone; Partner cancel/on-hold mirror to `cancelled_day`/`skipped`; progressed days are never touched.
+- DoD: TS-U + TS-I (incl. end-to-end scan) green, typecheck/lint/build/scans, CI; owner deploys migration `0030`, sets the Partner key, runs dry-run → apply once, then enables the 02:20 Kuwait timer.
+- Branch `build/wp-ops-06-partner-daily-order-feed`; evidence `docs/evidence/partner_driver_authority/03_*.md`.
+
+### ✅ WP-OPS-05 — Partner driver.id assignment authority · **DONE + LIVE ON STAGING 2026-09-03**
+- A46 replaced the routing-area rendezvous hash with Partner `driver.id` (numeric user id + unit code aliases); 9-unit map/roster installed; first apply 2026-09-05 verified; same-day 02:00 Kuwait sync enabled. PR #56 merge `ccdd9aa`. Evidence `docs/evidence/partner_driver_authority/01_*.md`, `02_*.md`.
+
 ### ✅ WP-OPS-04 — Nutreeze Fleet-Ops visual system · **DONE + LIVE 2026-08-22**
 - A43 applies the official Nutreeze PDF mark and `#956132` bronze; A44 makes the approved warm-light
   presentation authoritative even when Fleetbase/browser state retained a dark preference.

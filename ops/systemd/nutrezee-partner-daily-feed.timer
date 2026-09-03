@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Partner daily order feed at 02:20 Kuwait (after the 02:00 Fleetbase same-day sync, before 03:00 driver collection)
+
+[Timer]
+OnCalendar=*-*-* 23:20:00 UTC
+Persistent=false
+RandomizedDelaySec=60
+Unit=nutrezee-partner-daily-feed.service
+
+[Install]
+WantedBy=timers.target

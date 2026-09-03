@@ -5,7 +5,7 @@ import { SyncRecordService } from '../m18-bridge/sync-record.service';
 import { normalizePhone } from '../m04-customers/phone';
 import type { StaffContext } from '../../platform/auth/session.service';
 import type { RowImporter, RowResult } from './batch-runner';
-import { OrderService, type OrderStatus } from '../m03-orders/order.service';
+import { OrderService, type OrderStatus, type ImportedDayStatus } from '../m03-orders/order.service';
 import { PaymentService } from '../m07-payments/payment.service';
 
 // Importers per migration_mapping.md (screen-evidenced legacy fields only [V]).
@@ -307,4 +307,105 @@ function numberField(value: unknown): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   const out = Number(value);
   return Number.isFinite(out) ? out : undefined;
+}
+
+/**
+ * WP-OPS-06 (A47) — Partner daily-deliveries mirror. One row = one order on one delivery date.
+ * Idempotent by order_number (sync_record + UNIQUE order_number) and by (order, date)
+ * (fulfillment_day UNIQUE). Customers are keyed by normalized phone (the identifier rule).
+ * Statuses mirror Partner: cancelled -> cancelled_day, on hold -> skipped, otherwise scheduled.
+ * Never touches a day that has entered kitchen/delivery progress.
+ */
+export function partnerDailyImporter(
+  customers: CustomerService,
+  orders: OrderService,
+  sync: SyncRecordService,
+  defaultCountryCode: string,
+): RowImporter {
+  return async (client: PoolClient, row, rowNo, batchId): Promise<RowResult> => {
+    const messages: string[] = [];
+    const orderNumber = stringField(row['order_number']);
+    if (!orderNumber) return { rowNo, action: 'error', messages: ['missing order_number'] };
+    const date = stringField(row['delivery_date']);
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { rowNo, action: 'error', messages: ['missing delivery_date'] };
+
+    const dayStatus: ImportedDayStatus = row['is_cancelled'] === true || stringField(row['order_status']) === 'cancel'
+      ? 'cancelled_day'
+      : (row['is_on_hold'] === true ? 'skipped' : 'scheduled');
+    const areaEn = stringField(row['area_en']);
+    const areaAr = stringField(row['area_ar']);
+    const addressFrozen = {
+      partner_import: true,
+      address_unverified: true,
+      address_text: stringField(row['address_text']) ?? null,
+      area_en: areaEn ?? null,
+      area_ar: areaAr ?? null,
+      location_pin: stringField(row['location_pin']) ?? null,
+      partner_customer_ref: stringField(row['customer_ref']) ?? null,
+    };
+    const delivery = {
+      deliveryMethodFrozen: stringField(row['delivery_method']) ?? undefined,
+      deliveryTimeFrozen: stringField(row['delivery_time']) ?? undefined,
+      deliveryAreaFrozen: areaEn ?? areaAr ?? undefined,
+    };
+
+    let orderId = await sync.lookup(client, 'order', orderNumber);
+    if (!orderId) {
+      orderId = await orders.findByOrderNumberInTx(client, orderNumber);
+      if (orderId) await sync.record(client, 'order', orderNumber, orderId);
+    }
+    if (orderId) {
+      const day = await orders.ensureImportedDayInTx(client, IMPORT_ACTOR.staffId, orderId, {
+        date, status: dayStatus, addressFrozen,
+      });
+      const filled = await orders.setFrozenDeliveryInTx(client, IMPORT_ACTOR.staffId, orderId, delivery);
+      messages.push(`day_${day}`);
+      if (filled) messages.push('delivery_backfilled');
+      return { rowNo, action: 'matched', targetRef: orderId, messages };
+    }
+
+    const phoneRaw = stringField(row['customer_phone']);
+    if (!phoneRaw) return { rowNo, action: 'error', messages: ['missing customer_phone'] };
+    let phoneNormalized: string;
+    try {
+      phoneNormalized = normalizePhone(phoneRaw, defaultCountryCode);
+    } catch {
+      return { rowNo, action: 'error', messages: ['unparseable customer_phone'] };
+    }
+    const name = stringField(row['customer_name']);
+    if (!name) return { rowNo, action: 'error', messages: ['missing customer_name'] };
+
+    let customerId = await customers.findActiveByPhone(client, phoneNormalized);
+    if (customerId) {
+      messages.push('customer: exact phone match');
+    } else {
+      customerId = await customers.createImported(client, {
+        fullNameEn: name, phoneNormalized, phoneRaw,
+      }, batchId);
+      await sync.record(client, 'customer', phoneNormalized, customerId);
+      messages.push('customer: created');
+    }
+
+    const created = await orders.createImportedActivePlanInTx(client, IMPORT_ACTOR.staffId, {
+      orderNumber,
+      customerId,
+      status: 'active',
+      startDate: date,
+      endDate: date,
+      channel: 'partner',
+      total: 0,
+      currency: 'KWD',
+      importBatchId: batchId,
+      addressFrozen,
+      ...delivery,
+    });
+    await sync.record(client, 'order', orderNumber, created.id);
+    if (dayStatus !== 'scheduled') {
+      const day = await orders.ensureImportedDayInTx(client, IMPORT_ACTOR.staffId, created.id, {
+        date, status: dayStatus, addressFrozen,
+      });
+      messages.push(`day_${day}`);
+    }
+    return { rowNo, action: 'created', targetRef: created.id, messages };
+  };
 }
