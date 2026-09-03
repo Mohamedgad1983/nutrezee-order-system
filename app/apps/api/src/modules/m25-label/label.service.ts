@@ -240,8 +240,8 @@ export class LabelService {
 
   /**
    * Resolve the current Fleetbase assignment into the operational box identity. Names are
-   * deliberately excluded: the immutable driver public id owns the color, while the visible
-   * label carries the current phone and assigned vehicle plate. An assigned row with incomplete
+   * deliberately excluded: the driver unit owns the color (A49: stable by Fleetbase creation
+   * order among plated drivers), while the visible label carries the current phone and plate. An assigned row with incomplete
    * identity fails closed instead of printing a misleading box.
    */
   fleetbaseDriverSource(order: FleetbaseOrderProjection): FleetbaseDriverLabelSource {

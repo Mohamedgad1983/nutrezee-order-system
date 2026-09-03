@@ -73,6 +73,7 @@ export interface FleetbaseDriverProjection {
   phone?: string | null;
   vehicle_uuid?: string | null;
   vehicle?: { plate_number?: string | null } | null;
+  created_at?: string | null;
 }
 
 export interface FleetbaseIdentityGateway {
@@ -244,9 +245,12 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
   }
 
   async drivers(token: string): Promise<FleetbaseDriverProjection[]> {
-    const response = await this.request<unknown>(
-      'GET', '/int/v1/drivers?limit=-1&with%5B%5D=vehicle', token,
-    );
+    // A49: the company directory comes from the public driver resource. Fleetbase 0.7.48's
+    // internal index (`/int/v1/drivers`) wraps the collection as `{ drivers: [...] }`, serves the
+    // slim Index resource (no `vehicle`, numeric `id`) and ignores `with[]=vehicle`, so every
+    // assigned driver failed the directory match. The public resource returns a plain list with
+    // `id` = public id, `phone`, `vehicle.plate_number` and `created_at`.
+    const response = await this.request<unknown>('GET', '/v1/drivers?limit=-1', token);
     return arrayPayload<FleetbaseDriverProjection>(response);
   }
 
@@ -378,6 +382,10 @@ function arrayPayload<T>(value: unknown): T[] {
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
     if (Array.isArray(record.data)) return record.data as T[];
+    // Fleetbase internal collections are wrapped under the plural resource name.
+    for (const key of ['drivers', 'orders', 'vehicles']) {
+      if (Array.isArray(record[key])) return record[key] as T[];
+    }
   }
   return [];
 }
@@ -436,15 +444,24 @@ function enrichDriverAssignments(
     }
     directory.set(id, driver);
   }
-  if (directory.size > DRIVER_LABEL_COLORS.length) {
+  // A49: colours are a box-loading aid, so they must stay stable for the real fleet. Only
+  // drivers that can print a label (a vehicle plate is assigned) take a colour, in Fleetbase
+  // creation order: adding a driver appends a new colour and never recolours existing units.
+  // Ties (missing/equal created_at) fall back to the immutable public id.
+  const colourPool = [...directory.entries()]
+    .filter(([, driver]) => cleanString(driver.vehicle?.plate_number) !== undefined)
+    .sort(([idA, a], [idB, b]) => {
+      const byCreated = (cleanString(a.created_at) ?? '').localeCompare(cleanString(b.created_at) ?? '');
+      return byCreated !== 0 ? byCreated : idA.localeCompare(idB);
+    })
+    .map(([id]) => id);
+  if (colourPool.length > DRIVER_LABEL_COLORS.length) {
     throw new FleetbaseIdentityError('upstream_unavailable', {
       reason: 'driver_label_color_capacity_exceeded',
       capacity: DRIVER_LABEL_COLORS.length,
     });
   }
-  const colors = new Map(
-    [...directory.keys()].sort().map((id, index) => [id, DRIVER_LABEL_COLORS[index]!] as const),
-  );
+  const colors = new Map(colourPool.map((id, index) => [id, DRIVER_LABEL_COLORS[index]!] as const));
 
   return orders.map((order) => {
     const assigned = order.driver_assigned;
