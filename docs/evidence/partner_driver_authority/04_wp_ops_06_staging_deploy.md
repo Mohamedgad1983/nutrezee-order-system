@@ -37,3 +37,12 @@ Temp admin removed after the run (0 rows). Log: `/opt/nutrezee/sync/logs/partner
 
 Note: the legacy nightly sync's in-container scripts (`/srv/apply-*.mjs`, `incremental-sync.mjs`) were already absent
 before this deploy (container recreated 2026-08-24); that pipeline is frozen and its timers are not installed.
+
+## Apply 2026-09-05 (Verified, owner said "طبّق" 2026-09-03)
+
+Batch `01M1KB5V5MA4G555T07PSEEJWY`: 678 created / 14 matched / 0 errors (same-snapshot dry-run `01M1KB5J6F…`).
+Postgres after: `fulfillment_day` 2026-09-05 = 694 scheduled + 1 skipped (691 Partner scheduled + 1 on-hold + 3
+pre-existing legacy-plan days Partner no longer lists; those are not label candidates because the batch set comes from
+Fleetbase). Max `order_number` 24675 → **28906**; 678 orders + 676 customers created today; temp admin removed.
+Sample for the owner's single-label check: Fleetbase `order_gb3TV5SHHe` (NUTREEZE-PARTNER-DAY-20260905-ORDER-18526, RAVI).
+Timer still disabled.
