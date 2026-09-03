@@ -908,6 +908,15 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     white-space: nowrap;
 }
 
+.nz-label-freshness {
+    margin: 0 0 0.6rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 0.5rem;
+    background: var(--nz-surface-soft, #f3f4f6);
+    color: var(--nz-muted, #6b7280);
+    font-size: 0.78rem;
+}
+
 .nz-driver-band strong {
     font-size: 2.45mm;
     letter-spacing: 0.08mm;

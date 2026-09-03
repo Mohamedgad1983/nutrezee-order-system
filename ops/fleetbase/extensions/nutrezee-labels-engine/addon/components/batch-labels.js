@@ -2,7 +2,7 @@ import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { inject as service } from '@ember/service';
-import normalizeLabel from '../utils/normalize-label';
+import normalizeLabel, { describeFreshness } from '../utils/normalize-label';
 import { printDetached } from './order-label';
 
 export default class BatchLabelsComponent extends Component {
@@ -17,6 +17,7 @@ export default class BatchLabelsComponent extends Component {
     @tracked selectionIds = [];
     @tracked preview = null;
     @tracked reprintReason = '';
+    @tracked freshness = null;
     @tracked awaitingConfirmation = false;
     @tracked error = null;
     @tracked notice = null;
@@ -64,6 +65,10 @@ export default class BatchLabelsComponent extends Component {
 
     get hasAreaOptions() {
         return (this.options?.areas?.length ?? 0) > 0;
+    }
+
+    get freshnessText() {
+        return describeFreshness(this.freshness);
     }
 
     get hasReprints() {
@@ -115,6 +120,7 @@ export default class BatchLabelsComponent extends Component {
         this.awaitingConfirmation = false;
         try {
             this.options = await this.request('/nz/fleet-ops/labels/batch/options');
+            this.freshness = await this.request('/nz/fleet-ops/labels/freshness').catch(() => null);
             if (this.isReady && this.hasAreaOptions) {
                 this.filterType = 'area';
                 this.filterValue = this.options.areas[0].id;

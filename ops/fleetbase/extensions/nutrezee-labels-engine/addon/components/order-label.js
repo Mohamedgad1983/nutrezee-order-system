@@ -2,7 +2,7 @@ import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { inject as service } from '@ember/service';
-import normalizeLabel from '../utils/normalize-label';
+import normalizeLabel, { describeFreshness } from '../utils/normalize-label';
 
 export default class OrderLabelComponent extends Component {
     @service session;
@@ -14,6 +14,7 @@ export default class OrderLabelComponent extends Component {
     @tracked error = null;
     @tracked notice = null;
     @tracked reprintReason = '';
+    @tracked freshness = null;
 
     constructor() {
         super(...arguments);
@@ -84,12 +85,27 @@ export default class OrderLabelComponent extends Component {
             ]);
             this.label = normalizeLabel(document);
             this.history = Array.isArray(history?.items) ? history.items : [];
+            this.freshness = await this.loadFreshness(document?.delivery_date);
         } catch (error) {
             this.label = null;
             this.history = [];
             this.error = messageOf(error);
         } finally {
             this.loading = false;
+        }
+    }
+
+    get freshnessText() {
+        return describeFreshness(this.freshness);
+    }
+
+    /** WP-OPS-07: pure read; a failure here never blocks the label itself. */
+    async loadFreshness(deliveryDate) {
+        try {
+            const query = deliveryDate ? `?delivery_date=${encodeURIComponent(deliveryDate)}` : '';
+            return await this.request(`/nz/fleet-ops/labels/freshness${query}`);
+        } catch (error) {
+            return null;
         }
     }
 

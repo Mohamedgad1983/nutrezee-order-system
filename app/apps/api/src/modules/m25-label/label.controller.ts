@@ -14,6 +14,7 @@ import {
   FleetbaseIdentityError, FleetbaseIdentityService,
 } from './fleetbase-identity.service';
 import { DriverLocationError, DriverLocationService } from './driver-location.service';
+import { MigrationService } from '../m19-migration/migration.service';
 
 // m25-label — exact legacy label, permanent customer barcode, daily box collection (A27/A28).
 //
@@ -33,7 +34,21 @@ export class LabelController {
     private readonly collection: CollectionService,
     private readonly fleetbaseIdentity: FleetbaseIdentityService,
     private readonly driverLocations: DriverLocationService,
+    private readonly migrations: MigrationService,
   ) {}
+
+  /**
+   * WP-OPS-07: how fresh Nutrezee's mirror of a Partner delivery date is (pure read from M19's
+   * batch trail through its service API). Any verified Fleetbase operator may ask.
+   */
+  @Get('fleet-ops/labels/freshness')
+  async fleetOpsFeedFreshness(@Req() req: Request, @Query('delivery_date') deliveryDate?: string) {
+    return this.wrap(async () => {
+      await this.fleetbaseIdentity.operatorContext(this.bearer(req));
+      const date = deliveryDate?.trim() || await this.collection.currentDay();
+      return this.migrations.partnerDailyFreshness(date);
+    });
+  }
 
   // ---- labels ----
 

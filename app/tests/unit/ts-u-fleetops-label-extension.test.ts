@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.7');
+    expect(packageJson.version).toBe('0.3.8');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -137,6 +137,11 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('.nz-print-root');
     expect(styles).toMatch(/body\.nutrezee-label-print-mode > :not\(\.nz-print-root\)/);
     expect(styles).toMatch(/\.nz-driver-band strong \{[^}]*unicode-bidi: isolate/);
+    // WP-OPS-07: Partner freshness is a pure same-origin read shown in both panels.
+    expect(component).toContain('/nz/fleet-ops/labels/freshness');
+    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/freshness')");
+    expect(template).toContain('data-test-partner-freshness');
+    expect(batchTemplate).toContain('data-test-partner-freshness');
     expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 

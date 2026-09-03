@@ -210,6 +210,29 @@ describe('TS-I Partner daily feed → Nutrezee orders (WP-OPS-06)', () => {
     expect((await collection.scan(driver, { barcode: sharedBarcode.barcode_value })).outcome).toBe('ambiguous_delivery');
   });
 
+  it('reports Partner freshness from its own batch trail (WP-OPS-07)', async () => {
+    const before = await migrations.partnerDailyFreshness('2099-09-09');
+    expect(before).toMatchObject({ delivery_date: '2099-09-09', last_checked_at: null, last_applied_at: null, last_change_at: null, batches: 0 });
+    feedRows['2099-09-09'] = [delivery({ delivery_id: 901, delivery_date: '2099-09-09', updated_at: '2099-09-08T20:00:00+03:00' })];
+    await migrations.runPartnerDaily(sa, '2099-09-09', false);
+    const checked = await migrations.partnerDailyFreshness('2099-09-09');
+    expect(checked.last_checked_at).not.toBeNull();
+    expect(checked.last_applied_at).toBeNull();
+    expect(checked.source_max_updated_at).toBe('2099-09-08T20:00:00+03:00');
+    expect(checked.delivery_rows).toBe(1);
+    await migrations.runPartnerDaily(sa, '2099-09-09', true);
+    const applied = await migrations.partnerDailyFreshness('2099-09-09');
+    expect(applied.last_applied_at).not.toBeNull();
+    expect(applied.last_change_at).toBe(applied.last_applied_at);
+    // An unchanged re-run moves "checked" but not "last change".
+    await migrations.runPartnerDaily(sa, '2099-09-09', false);
+    await migrations.runPartnerDaily(sa, '2099-09-09', true);
+    const again = await migrations.partnerDailyFreshness('2099-09-09');
+    expect(again.batches).toBe(4);
+    expect(again.last_change_at).toBe(applied.last_change_at);
+    expect(again.last_checked_at! > applied.last_checked_at!).toBe(true);
+  });
+
   it('rejects a feed that contradicts itself and refuses apply without a same-snapshot dry-run', async () => {
     feedRows['2099-09-07'] = [delivery({ delivery_id: 701, delivery_date: '2099-09-07' }), delivery({ delivery_id: 702, delivery_date: '2099-09-07', customer: { name: 'X', phone: '11111111' } })];
     await expect(migrations.runPartnerDaily(sa, '2099-09-07', false)).rejects.toMatchObject({ code: 'contract_violation' });
