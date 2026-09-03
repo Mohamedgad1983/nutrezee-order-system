@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "expected_count": 18,
+  "expected_count": 19,
   "drivers": [
     {
       "partner_driver_id": "122",
@@ -91,6 +91,11 @@
       "partner_driver_id": "A9",
       "driver_public_id": "driver_ioPJGOyvvu",
       "unit": "Area-9"
+    },
+    {
+      "partner_driver_id": "201",
+      "driver_public_id": "driver_l58j0Bwpyo",
+      "unit": "Area-6"
     }
   ]
 }
