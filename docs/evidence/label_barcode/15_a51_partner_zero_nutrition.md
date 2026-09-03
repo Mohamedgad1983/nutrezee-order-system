@@ -16,3 +16,10 @@ Date: 2026-09-03 · Owner: "خليه يقبل الحفظ صفر … حل الم�
 a meal whose four values are all absent, or any non-numeric value (e.g. `"n/a"`), still fails `nutrition_incomplete`.
 Totals therefore print `Fat 0` for fruit/juice rows. TS-U `ts-u-partner-label-source` updated (zero / blank /
 all-absent / garbage cases).
+
+## Staging deploy (Verified 2026-09-03)
+
+PR #64 CI 29/29 → merged `b7e82e7`; `nutrezee-api:a51-01ede1e` built and running (no migration), admin nginx
+restarted, `/health` 200 public, `/nz/health` 200. Deployed-code check for 2026-09-05: orders 28906 and 19486
+now resolve (Chopped Pineapple p0 f0 c11 k44, pomegranate p1 f0 c14 k60); **695 / 695 Saturday orders with items
+are label-ready, 0 blocked** (was 176 blocked). Rollback image `nutrezee-api:a50-061dfc6`.
