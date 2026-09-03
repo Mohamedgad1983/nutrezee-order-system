@@ -32,13 +32,17 @@ write to the Partner API or the legacy application.
   reassignment, hold, cancellation, or disappearance may update that unstarted
   job. Once started, source and driver hashes are immutable and any changed
   snapshot fails before it can alter the live job.
-- Daily mapping v3 stores `partner_daily_deliveries_v1` on every order and
-  payload. A date prefix created by the retired meal-history selector is rejected
+- Daily mapping v4 stores `partner_daily_deliveries_v1`, `partner_driver_id`,
+  `partner_driver_public_id` and `assignment_mode = partner_driver_id_v1` on every
+  order and payload. A date prefix created by the retired meal-history selector is rejected
   before reconciliation, preventing a selector change from canceling old jobs.
 - Only canonical source orders in `success` with meal status `ordered` or
   `driver_assigned` and a nonzero, in-Kuwait Partner `location_pin` are scheduled,
-  assigned across the fixed 11-driver roster by stable routing-area rendezvous
-  hashing, and dispatched by the bridge so they are active in Navigator.
+  assigned to the Fleetbase driver mapped from Partner's own `driver.id` (A46;
+  the earlier routing-area rendezvous hash is retired), and dispatched by the
+  bridge so they are active in Navigator. A row whose Partner driver is missing
+  (`no_partner_driver`) or absent from the protected map (`unmapped_partner_driver`)
+  stays `created`, unassigned and held; the bridge never picks a driver itself.
   `dispatch_time` is the displayed operational schedule; dispatch does not wait
   for Fleetbase's native scheduler because its queued lifecycle listener is
   blocked by the separately recorded Redis-prefix issue.
@@ -95,6 +99,10 @@ The core files must be root-owned regular files with mode `0600`:
 
 - `/root/nutreeze-vendor.key`
 - `/opt/fleetbase/api/storage/app/integrations/config/nutreeze-driver-roster.json`
+- `/opt/fleetbase/api/storage/app/integrations/config/nutreeze-partner-driver-map.json`
+  (`schema_version` 1, one entry per dispatchable driver: Partner `driver.id` →
+  Fleetbase `driver_public_id`, optional `unit` label; must list exactly the roster's
+  public ids — template `nutreeze-partner-driver-map.example.json`)
 - `/opt/fleetbase/api/storage/app/integrations/config/nutreeze-pickup.json`
 
 When exact Driver Orders membership is needed, an optional date-scoped

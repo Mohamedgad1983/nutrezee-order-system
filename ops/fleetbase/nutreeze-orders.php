@@ -38,7 +38,13 @@ const DEFAULT_PREFIX = 'NUTREEZE-PARTNER';
 const DEFAULT_DAILY_PREFIX = 'NUTREEZE-PARTNER-DAY';
 const DEFAULT_LIMIT = 200;
 const MAPPING_VERSION = 2;
-const DAILY_MAPPING_VERSION = 3;
+const DAILY_MAPPING_VERSION = 4;
+// Fleetbase driver assignment is a mirror of Partner's own driver.id. The bridge
+// never invents an assignment: a routable order without a mapped Partner driver
+// is held, never hashed onto a roster driver.
+const PARTNER_DRIVER_ASSIGNMENT_MODE = 'partner_driver_id_v1';
+const PARTNER_DRIVER_ASSIGNMENT_MODE_CALL_REQUIRED = 'partner_driver_id_call_required_v1';
+const PARTNER_DRIVER_MAP_SCHEMA_VERSION = 1;
 const DAILY_SOURCE_SELECTOR = 'partner_daily_deliveries_v1';
 const INTEGRATION_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config';
 const DAILY_DISPATCHABLE_MEAL_STATUSES = ['ordered', 'driver_assigned'];
@@ -495,7 +501,26 @@ function sourcePinHoldReason(array $row): ?string
 function dailyHoldReason(array $row): ?string
 {
     $statusHold = dailyStatusHoldReason($row);
-    return $statusHold ?? pinHoldReason($row);
+    if ($statusHold !== null) {
+        return $statusHold;
+    }
+    return dailyDriverHoldReason($row) ?? pinHoldReason($row);
+}
+
+/**
+ * Partner's driver.id is the only assignment authority. A source row without a
+ * driver, or with a driver that is not in the protected Partner-to-Fleetbase
+ * map, is held before any pin evaluation so it can never be call-dispatched.
+ */
+function dailyDriverHoldReason(array $row): ?string
+{
+    if (($row['partner_driver_id'] ?? null) === null) {
+        return 'no_partner_driver';
+    }
+    if (($row['partner_driver_uuid'] ?? null) === null) {
+        return 'unmapped_partner_driver';
+    }
+    return null;
 }
 
 /** Status eligibility is independent of location recovery; held rows never become anchors. */
@@ -933,13 +958,15 @@ function validateDailyDeliveryRow(array $row, string $deliveryDate): array
     $address = requiredObject($row, 'address');
     $timeSlot = requiredObject($row, 'time_slot');
     $driver = requiredObject($row, 'driver');
-    // These fields are not used as Fleetbase assignment authority, but their
-    // types are guarded so a source contract change cannot pass silently.
+    // Partner's driver.id IS the Fleetbase assignment authority (A46). It is
+    // normalized to a string identifier; a null id means Partner has not
+    // assigned a driver and the order is held rather than guessed.
     if (!array_key_exists('id', $driver)
         || ($driver['id'] !== null && !is_int($driver['id']) && !is_string($driver['id']))) {
         throw new RuntimeException('contract_driver_id');
     }
-    optionalString($driver, 'name', 255);
+    $partnerDriverId = normalizePartnerDriverId($driver['id']);
+    $partnerDriverName = optionalString($driver, 'name', 255);
     optionalString($row, 'delivery_method', 255);
     optionalString($row, 'driver_instructions', 2000);
     requiredString($row, 'hold_state', 64);
@@ -986,6 +1013,7 @@ function validateDailyDeliveryRow(array $row, string $deliveryDate): array
         'location_pin' => $base['location_pin'],
         'delivery_method' => optionalString($row, 'delivery_method', 255),
         'driver_instructions' => optionalString($row, 'driver_instructions', 2000),
+        'partner_driver_id' => $partnerDriverId,
         'time_slot' => [
             'id' => $timeSlot['id'] ?? null,
             'title' => $timeSlotTitle,
@@ -1002,9 +1030,36 @@ function validateDailyDeliveryRow(array $row, string $deliveryDate): array
         'meal_qty' => null,
         'meal_updated_at' => $updatedAt,
         'source_selector' => DAILY_SOURCE_SELECTOR,
+        'partner_driver_id' => $partnerDriverId,
+        'partner_driver_name' => $partnerDriverName,
         '_updated_time' => $updatedTime,
         '_identity_hash' => hash('sha256', json_encode($identity, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),
     ];
+}
+
+/** Partner driver ids are opaque identifiers (integer or string); names never take part. */
+function normalizePartnerDriverId(mixed $value): ?string
+{
+    if ($value === null) {
+        return null;
+    }
+    if (is_int($value)) {
+        if ($value <= 0) {
+            throw new RuntimeException('contract_driver_id');
+        }
+        return (string) $value;
+    }
+    if (!is_string($value)) {
+        throw new RuntimeException('contract_driver_id');
+    }
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+    if (mb_strlen($value) > 64 || !preg_match('/^[A-Za-z0-9._-]+$/', $value)) {
+        throw new RuntimeException('contract_driver_id');
+    }
+    return $value;
 }
 
 /**
@@ -1089,7 +1144,7 @@ function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate): arr
                 'order_id', 'order_number', 'status', 'area_en', 'area_ar', 'routing_area',
                 'location_pin', 'pin_quality', 'customer_ref', 'customer_name',
                 'customer_phone', 'address_text', 'created_at', 'updated_at',
-                'delivery_date', 'source_order_status',
+                'delivery_date', 'source_order_status', 'partner_driver_id',
             ])),
             'delivery_states' => $deliveryStates,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
@@ -1238,7 +1293,7 @@ function loadDriverRoster(string $path, string $companyUuid): array
     $expected = $config['expected_count'] ?? null;
     if (!is_array($publicIds)
         || !is_int($expected)
-        || $expected !== 11
+        || $expected < 1
         || count($publicIds) !== $expected
         || count(array_unique($publicIds)) !== $expected) {
         throw new RuntimeException('driver_roster_shape');
@@ -1248,7 +1303,18 @@ function loadDriverRoster(string $path, string $companyUuid): array
             throw new RuntimeException('driver_roster_public_id');
         }
     }
-    $rows = DB::table('drivers as d')
+    $rows = resolveActiveDrivers($publicIds, $companyUuid);
+    if (count($rows) !== $expected) {
+        throw new RuntimeException('driver_roster_resolution');
+    }
+    usort($rows, fn (array $a, array $b): int => strcmp($a['public_id'], $b['public_id']));
+    return $rows;
+}
+
+/** Fleetbase drivers that are live, verified, and able to sign in to Navigator. */
+function resolveActiveDrivers(array $publicIds, string $companyUuid): array
+{
+    return DB::table('drivers as d')
         ->join('users as u', 'u.uuid', '=', 'd.user_uuid')
         ->join('company_users as cu', function ($join) {
             $join->on('cu.user_uuid', '=', 'u.uuid')
@@ -1272,11 +1338,143 @@ function loadDriverRoster(string $path, string $companyUuid): array
         ->get(['d.uuid', 'd.public_id'])
         ->map(fn ($row): array => ['uuid' => (string) $row->uuid, 'public_id' => (string) $row->public_id])
         ->all();
-    if (count($rows) !== $expected) {
-        throw new RuntimeException('driver_roster_resolution');
+}
+
+/**
+ * Pure shape validation of the Partner-to-Fleetbase driver map. Each Partner
+ * driver.id maps to exactly one Fleetbase driver public id and vice versa. The
+ * optional `unit` is an operational label (e.g. "Area-3"), never a person.
+ */
+function validatePartnerDriverMap(array $config): array
+{
+    $entries = $config['drivers'] ?? null;
+    $expected = $config['expected_count'] ?? null;
+    if (($config['schema_version'] ?? null) !== PARTNER_DRIVER_MAP_SCHEMA_VERSION
+        || !is_array($entries)
+        || !is_int($expected)
+        || $expected < 1
+        || count($entries) !== $expected) {
+        throw new RuntimeException('partner_driver_map_shape');
     }
-    usort($rows, fn (array $a, array $b): int => strcmp($a['public_id'], $b['public_id']));
-    return $rows;
+    // Partner ids are kept as strings everywhere: PHP would silently turn a
+    // numeric-string array key such as "42" into int 42.
+    $seenPartnerIds = [];
+    $seenPublicIds = [];
+    $drivers = [];
+    foreach ($entries as $entry) {
+        if (!is_array($entry)) {
+            throw new RuntimeException('partner_driver_map_entry');
+        }
+        $partnerId = $entry['partner_driver_id'] ?? null;
+        if (is_int($partnerId)) {
+            $partnerId = (string) $partnerId;
+        }
+        if (!is_string($partnerId)
+            || $partnerId === ''
+            || mb_strlen($partnerId) > 64
+            || !preg_match('/^[A-Za-z0-9._-]+$/', $partnerId)
+            || isset($seenPartnerIds[$partnerId])) {
+            throw new RuntimeException('partner_driver_map_partner_id');
+        }
+        $publicId = $entry['driver_public_id'] ?? null;
+        if (!is_string($publicId)
+            || !preg_match('/^driver_[A-Za-z0-9]{6,40}$/', $publicId)
+            || isset($seenPublicIds[$publicId])) {
+            throw new RuntimeException('partner_driver_map_public_id');
+        }
+        $unit = $entry['unit'] ?? null;
+        if ($unit !== null
+            && (!is_string($unit) || trim($unit) === '' || mb_strlen($unit) > 64
+                || preg_match('/[\x00-\x1F\x7F]/u', $unit))) {
+            throw new RuntimeException('partner_driver_map_unit');
+        }
+        $drivers[] = [
+            'partner_driver_id' => $partnerId,
+            'public_id' => $publicId,
+            'unit' => $unit === null ? null : trim($unit),
+        ];
+        $seenPartnerIds[$partnerId] = true;
+        $seenPublicIds[$publicId] = true;
+    }
+    usort($drivers, fn (array $a, array $b): int => strcmp($a['partner_driver_id'], $b['partner_driver_id']));
+    return $drivers;
+}
+
+/**
+ * Load the protected Partner driver map and resolve every Fleetbase driver in it.
+ * The roster (who may be dispatched) and the map (which Partner driver each one
+ * is) must name exactly the same Fleetbase drivers, so a stale or partial file
+ * can never silently drop or add a dispatchable driver.
+ */
+function loadPartnerDriverMap(string $path, string $companyUuid, array $rosterDrivers): array
+{
+    $map = validatePartnerDriverMap(loadLockedJson($path, 'partner_driver_map'));
+    $publicIds = array_values(array_map(fn (array $entry): string => $entry['public_id'], $map));
+    $rosterPublicIds = array_values(array_map(fn (array $driver): string => $driver['public_id'], $rosterDrivers));
+    sort($publicIds, SORT_STRING);
+    sort($rosterPublicIds, SORT_STRING);
+    if ($publicIds !== $rosterPublicIds) {
+        throw new RuntimeException('partner_driver_map_roster_mismatch');
+    }
+    $resolved = resolveActiveDrivers($publicIds, $companyUuid);
+    if (count($resolved) !== count($map)) {
+        throw new RuntimeException('partner_driver_map_resolution');
+    }
+    $uuidByPublicId = [];
+    foreach ($resolved as $driver) {
+        $uuidByPublicId[$driver['public_id']] = $driver['uuid'];
+    }
+    $drivers = [];
+    foreach ($map as $entry) {
+        $drivers[] = [
+            'uuid' => $uuidByPublicId[$entry['public_id']],
+            'public_id' => $entry['public_id'],
+            'partner_driver_id' => $entry['partner_driver_id'],
+            'unit' => $entry['unit'],
+        ];
+    }
+    usort($drivers, fn (array $a, array $b): int => strcmp($a['public_id'], $b['public_id']));
+    return $drivers;
+}
+
+/**
+ * Attach the mapped Fleetbase driver to every source row. Rows keep their
+ * Partner driver id even when unmapped so the hold is explainable; only ids
+ * (never names) are reported back for the operational log.
+ */
+function applyPartnerDriverAssignments(array $dailyRows, array $drivers): array
+{
+    $byPartnerId = [];
+    foreach ($drivers as $driver) {
+        if (!is_string($driver['partner_driver_id'] ?? null)) {
+            throw new RuntimeException('partner_driver_map_required');
+        }
+        $byPartnerId[$driver['partner_driver_id']] = $driver;
+    }
+    $rows = [];
+    $unmapped = [];
+    $withoutDriver = 0;
+    foreach ($dailyRows as $row) {
+        $partnerId = $row['partner_driver_id'] ?? null;
+        $row['partner_driver_uuid'] = null;
+        $row['partner_driver_public_id'] = null;
+        if ($partnerId === null) {
+            $withoutDriver++;
+        } elseif (isset($byPartnerId[$partnerId])) {
+            $row['partner_driver_uuid'] = $byPartnerId[$partnerId]['uuid'];
+            $row['partner_driver_public_id'] = $byPartnerId[$partnerId]['public_id'];
+        } else {
+            $unmapped[$partnerId] = true;
+        }
+        $rows[] = $row;
+    }
+    $unmappedIds = array_map('strval', array_keys($unmapped));
+    sort($unmappedIds, SORT_STRING);
+    return [
+        'rows' => $rows,
+        'orders_without_partner_driver' => $withoutDriver,
+        'unmapped_partner_driver_ids' => $unmappedIds,
+    ];
 }
 
 function loadPickupConfig(string $path): array
@@ -1337,55 +1535,39 @@ function loadPickupConfig(string $path): array
 }
 
 /**
- * Keep each routing area together using rendezvous hashing over the fixed driver
- * roster. Unlike snapshot-global greedy balancing, an unrelated cancellation or
- * missing row cannot reshuffle another area's already-dispatched driver. This is
- * a staging handover default until operations supplies a signed area-to-driver map.
+ * Mirror Partner's driver assignment. Every routable row must already carry the
+ * Fleetbase driver resolved from its Partner driver.id; the bridge never picks a
+ * driver itself. Routing areas play no part in assignment (A46 replaced the
+ * former routing-area rendezvous hash, which contradicted Partner's driver-owned
+ * area model).
  */
 function allocateDailyDrivers(array $dailyRows, array $drivers, bool $allowAddressCall = false): array
 {
     if ($drivers === []) {
         throw new RuntimeException('driver_roster_empty');
     }
-    $areas = [];
+    $publicIdByUuid = [];
+    $loads = [];
+    foreach ($drivers as $driver) {
+        $publicIdByUuid[$driver['uuid']] = $driver['public_id'];
+        $loads[$driver['public_id']] = 0;
+    }
+    ksort($loads, SORT_STRING);
+    $assignments = [];
     foreach ($dailyRows as $row) {
         if (!rowIsDailyRoutable($row, $allowAddressCall)) {
             continue;
         }
-        $area = mb_strtolower(trim((string) $row['routing_area']));
-        if ($area === '') {
-            throw new RuntimeException('daily_allocation_area');
-        }
-        $areas[$area] ??= [];
-        $areas[$area][] = $row['order_id'];
-    }
-    ksort($areas);
-    usort($drivers, fn (array $a, array $b): int => strcmp($a['public_id'], $b['public_id']));
-    $loads = [];
-    foreach ($drivers as $driver) {
-        $loads[$driver['public_id']] = 0;
-    }
-    $assignments = [];
-    foreach ($areas as $area => $orderIds) {
-        $driver = null;
-        $bestScore = null;
-        foreach ($drivers as $candidate) {
-            $score = hash('sha256', $area . "\0" . $candidate['public_id']);
-            if ($bestScore === null || strcmp($score, $bestScore) > 0) {
-                $driver = $candidate;
-                $bestScore = $score;
-            }
-        }
-        if ($driver === null) {
+        $uuid = $row['partner_driver_uuid'] ?? null;
+        if (!is_string($uuid) || !isset($publicIdByUuid[$uuid])) {
             throw new RuntimeException('daily_allocation_driver');
         }
-        foreach ($orderIds as $orderId) {
-            if (isset($assignments[(string) $orderId])) {
-                throw new RuntimeException('daily_allocation_duplicate_order');
-            }
-            $assignments[(string) $orderId] = $driver['uuid'];
+        $orderId = (string) $row['order_id'];
+        if (isset($assignments[$orderId])) {
+            throw new RuntimeException('daily_allocation_duplicate_order');
         }
-        $loads[$driver['public_id']] += count($orderIds);
+        $assignments[$orderId] = $uuid;
+        $loads[$publicIdByUuid[$uuid]]++;
     }
     return ['assignments' => $assignments, 'loads' => $loads];
 }
@@ -3169,6 +3351,8 @@ final class DailyDispatchWriter
         'orders_held_unapproved_status' => 0,
         'orders_held_source_canceled' => 0,
         'orders_held_source_missing' => 0,
+        'orders_held_no_partner_driver' => 0,
+        'orders_held_unmapped_partner_driver' => 0,
         'orders_unchanged' => 0,
         'payloads_updated' => 0,
         'payloads_unchanged' => 0,
@@ -3578,8 +3762,11 @@ final class DailyDispatchWriter
             'daily_source_hash' => $row['_source_hash'],
             'daily_meal_hash' => dailyMealHash($row),
             'assignment_mode' => $callCustomerRequired
-                ? 'routing_area_rendezvous_call_required_v1'
-                : ($routable ? 'routing_area_rendezvous_v1' : 'none'),
+                ? PARTNER_DRIVER_ASSIGNMENT_MODE_CALL_REQUIRED
+                : ($routable ? PARTNER_DRIVER_ASSIGNMENT_MODE : 'none'),
+            'partner_driver_id' => $row['partner_driver_id'] ?? null,
+            'partner_driver_name' => $row['partner_driver_name'] ?? null,
+            'partner_driver_public_id' => $routable ? ($row['partner_driver_public_id'] ?? null) : null,
             'dispatch_state' => $dispatchState,
             'hold_reason' => $holdReason,
             'source_location_exception' => $callCustomerRequired ? $sourceHoldReason : null,
@@ -3612,6 +3799,8 @@ final class DailyDispatchWriter
                 'invalid_source_location_pin' => 'orders_held_invalid_pin',
                 'source_order_canceled' => 'orders_held_source_canceled',
                 'unapproved_order_status' => 'orders_held_unapproved_order_status',
+                'no_partner_driver' => 'orders_held_no_partner_driver',
+                'unmapped_partner_driver' => 'orders_held_unmapped_partner_driver',
                 default => 'orders_held_unapproved_status',
             };
             $this->stats[$holdStat]++;
@@ -3911,9 +4100,11 @@ final class DailyDispatchWriter
                     || ($meta['hold_reason'] ?? null) !== null
                     || ($meta['assignment_mode'] ?? null) !== (
                         $expectedCallRequired
-                            ? 'routing_area_rendezvous_call_required_v1'
-                            : 'routing_area_rendezvous_v1'
+                            ? PARTNER_DRIVER_ASSIGNMENT_MODE_CALL_REQUIRED
+                            : PARTNER_DRIVER_ASSIGNMENT_MODE
                     )
+                    || ($meta['partner_driver_id'] ?? null) !== ($row['partner_driver_id'] ?? null)
+                    || ($meta['partner_driver_public_id'] ?? null) !== ($row['partner_driver_public_id'] ?? null)
                     || $scheduledRaw !== $this->scheduledAtUtc($row['delivery_date'])) {
                     throw new RuntimeException('daily_verify_dispatch');
                 }
@@ -4152,20 +4343,121 @@ function runSelfTest(): array
         throw new RuntimeException('self_test_daily_join');
     }
     $syntheticDrivers = [
-        ['uuid' => 'driver-uuid-a', 'public_id' => 'driver_AAAAAA'],
-        ['uuid' => 'driver-uuid-b', 'public_id' => 'driver_BBBBBB'],
+        ['uuid' => 'driver-uuid-a', 'public_id' => 'driver_AAAAAA', 'partner_driver_id' => '7', 'unit' => 'Area-1'],
+        ['uuid' => 'driver-uuid-b', 'public_id' => 'driver_BBBBBB', 'partner_driver_id' => '9', 'unit' => 'Area-2'],
     ];
-    $allocation = allocateDailyDrivers($daily, $syntheticDrivers);
-    $assignedDriver = $allocation['assignments']['11'] ?? null;
-    $unrelatedArea = $daily[0];
-    $unrelatedArea['order_id'] = 99;
-    $unrelatedArea['routing_area'] = 'Unrelated Area';
-    $expandedAllocation = allocateDailyDrivers([...$daily, $unrelatedArea], $syntheticDrivers);
-    if (count($allocation['assignments']) !== 1
-        || !in_array($assignedDriver, ['driver-uuid-a', 'driver-uuid-b'], true)
-        || array_sum($allocation['loads']) !== 1
-        || ($expandedAllocation['assignments']['11'] ?? null) !== $assignedDriver) {
+    // Partner driver.id is the only assignment authority (A46).
+    if (normalizePartnerDriverId(7) !== '7'
+        || normalizePartnerDriverId(' 7 ') !== '7'
+        || normalizePartnerDriverId(null) !== null
+        || normalizePartnerDriverId('') !== null) {
+        throw new RuntimeException('self_test_partner_driver_id_normalization');
+    }
+    foreach ([0, -3, 'bad id', str_repeat('9', 65), 1.5] as $badDriverId) {
+        try {
+            normalizePartnerDriverId($badDriverId);
+            throw new RuntimeException('self_test_partner_driver_id_not_rejected');
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== 'contract_driver_id') {
+                throw $exception;
+            }
+        }
+    }
+    $driverless = applyPartnerDriverAssignments($daily, $syntheticDrivers);
+    if ($driverless['orders_without_partner_driver'] !== 2
+        || $driverless['unmapped_partner_driver_ids'] !== []
+        || dailyHoldReason($driverless['rows'][0]) !== 'no_partner_driver'
+        || rowIsDailyRoutable($driverless['rows'][0])
+        || rowIsDailyRoutable($driverless['rows'][1], true)
+        || rowRequiresCustomerCall($driverless['rows'][1], true)
+        || allocateDailyDrivers($driverless['rows'], $syntheticDrivers)['assignments'] !== []) {
+        throw new RuntimeException('self_test_daily_no_partner_driver_hold');
+    }
+    $unmappedRows = array_map(fn (array $row): array => ['partner_driver_id' => '42'] + $row, $daily);
+    $unmapped = applyPartnerDriverAssignments($unmappedRows, $syntheticDrivers);
+    if ($unmapped['orders_without_partner_driver'] !== 0
+        || $unmapped['unmapped_partner_driver_ids'] !== ['42']
+        || dailyHoldReason($unmapped['rows'][0]) !== 'unmapped_partner_driver'
+        || rowIsDailyRoutable($unmapped['rows'][0])
+        || allocateDailyDrivers($unmapped['rows'], $syntheticDrivers)['assignments'] !== []) {
+        throw new RuntimeException('self_test_daily_unmapped_partner_driver_hold');
+    }
+    // Same routing area, different Partner drivers: the area never couples orders.
+    $daily = applyPartnerDriverAssignments([
+        ['partner_driver_id' => '9'] + $daily[0],
+        ['partner_driver_id' => '7'] + $daily[1],
+    ], $syntheticDrivers)['rows'];
+    $sameAreaOther = ['order_id' => 99, 'partner_driver_id' => '7'] + $daily[0];
+    unset($sameAreaOther['partner_driver_uuid'], $sameAreaOther['partner_driver_public_id']);
+    $sameAreaOther = applyPartnerDriverAssignments([$sameAreaOther], $syntheticDrivers)['rows'][0];
+    $allocation = allocateDailyDrivers([...$daily, $sameAreaOther], $syntheticDrivers);
+    if (($allocation['assignments']['11'] ?? null) !== 'driver-uuid-b'
+        || ($allocation['assignments']['99'] ?? null) !== 'driver-uuid-a'
+        || isset($allocation['assignments']['12'])
+        || $allocation['loads'] !== ['driver_AAAAAA' => 1, 'driver_BBBBBB' => 1]) {
         throw new RuntimeException('self_test_daily_allocation');
+    }
+    $foreignUuidRow = $daily[0];
+    $foreignUuidRow['partner_driver_uuid'] = 'driver-uuid-zzz';
+    try {
+        allocateDailyDrivers([$foreignUuidRow], $syntheticDrivers);
+        throw new RuntimeException('self_test_daily_allocation_foreign_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'daily_allocation_driver') {
+            throw $exception;
+        }
+    }
+    try {
+        allocateDailyDrivers([$daily[0], $daily[0]], $syntheticDrivers);
+        throw new RuntimeException('self_test_daily_allocation_duplicate_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'daily_allocation_duplicate_order') {
+            throw $exception;
+        }
+    }
+    $validMap = [
+        'schema_version' => PARTNER_DRIVER_MAP_SCHEMA_VERSION,
+        'expected_count' => 2,
+        'drivers' => [
+            ['partner_driver_id' => 9, 'driver_public_id' => 'driver_BBBBBB', 'unit' => 'Area-2'],
+            ['partner_driver_id' => '7', 'driver_public_id' => 'driver_AAAAAA'],
+        ],
+    ];
+    $validated = validatePartnerDriverMap($validMap);
+    if (array_column($validated, 'partner_driver_id') !== ['7', '9']
+        || $validated[1]['public_id'] !== 'driver_BBBBBB'
+        || $validated[1]['unit'] !== 'Area-2'
+        || $validated[0]['unit'] !== null) {
+        throw new RuntimeException('self_test_partner_driver_map_valid');
+    }
+    foreach ([
+        [array_replace($validMap, ['schema_version' => 2]), 'partner_driver_map_shape'],
+        [array_replace($validMap, ['expected_count' => 1]), 'partner_driver_map_shape'],
+        [array_replace($validMap, ['drivers' => [
+            $validMap['drivers'][0],
+            ['partner_driver_id' => '9', 'driver_public_id' => 'driver_AAAAAA'],
+        ]]), 'partner_driver_map_partner_id'],
+        [array_replace($validMap, ['drivers' => [
+            $validMap['drivers'][0],
+            ['partner_driver_id' => '7', 'driver_public_id' => 'driver_BBBBBB'],
+        ]]), 'partner_driver_map_public_id'],
+        [array_replace($validMap, ['drivers' => [
+            $validMap['drivers'][0],
+            ['partner_driver_id' => '7', 'driver_public_id' => 'not-a-driver'],
+        ]]), 'partner_driver_map_public_id'],
+        [array_replace($validMap, ['drivers' => [
+            $validMap['drivers'][0],
+            ['partner_driver_id' => '7', 'driver_public_id' => 'driver_AAAAAA', 'unit' => "bad\x01"],
+        ]]), 'partner_driver_map_unit'],
+    ] as [$badMap, $expectedError]) {
+        try {
+            validatePartnerDriverMap($badMap);
+            throw new RuntimeException('self_test_partner_driver_map_not_rejected');
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== $expectedError) {
+                throw $exception;
+            }
+        }
     }
     $canceledDaily = buildDailyRows(
         [$mealBase],
@@ -4456,6 +4748,37 @@ function runSelfTest(): array
     if (dailySourceDigest($singleDeliveryRows) === dailySourceDigest($changedDeliveryIdRows)) {
         throw new RuntimeException('self_test_daily_delivery_digest');
     }
+    $driverDeliveryRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['driver' => ['id' => 9, 'name' => 'Unit Nine']]),
+    ], '2026-08-12');
+    if ($driverDeliveryRows[0]['partner_driver_id'] !== '9'
+        || $driverDeliveryRows[0]['partner_driver_name'] !== 'Unit Nine'
+        || $dailyDeliveryRows[0]['partner_driver_id'] !== null
+        || dailyHoldReason($dailyDeliveryRows[0]) !== 'no_partner_driver'
+        || $driverDeliveryRows[0]['_source_hash'] === buildDailyDeliveryRows([
+            array_replace($deliveryBase, ['driver' => ['id' => 7, 'name' => 'Unit Nine']]),
+        ], '2026-08-12')[0]['_source_hash']
+        || $driverDeliveryRows[0]['_source_hash'] !== buildDailyDeliveryRows([
+            array_replace($deliveryBase, ['driver' => ['id' => '9', 'name' => 'Renamed']]),
+        ], '2026-08-12')[0]['_source_hash']) {
+        throw new RuntimeException('self_test_daily_delivery_partner_driver');
+    }
+    try {
+        buildDailyDeliveryRows([
+            array_replace($deliveryBase, ['driver' => ['id' => 9, 'name' => null]]),
+            array_replace($deliveryBase, [
+                'delivery_id' => 502,
+                'meal_item_count' => 1,
+                'updated_at' => '2026-08-11T11:00:00+03:00',
+                'driver' => ['id' => 7, 'name' => null],
+            ]),
+        ], '2026-08-12');
+        throw new RuntimeException('self_test_daily_delivery_driver_conflict_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'contract_daily_delivery_group_conflict') {
+            throw $exception;
+        }
+    }
     $emptyTimeSlotRows = buildDailyDeliveryRows([
         array_replace($deliveryBase, [
             'time_slot' => ['id' => null, 'title' => null, 'start' => null, 'end' => null],
@@ -4594,7 +4917,7 @@ try {
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
-        'driver-orders-manifest:',
+        'driver-orders-manifest:', 'partner-driver-map:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -4620,6 +4943,9 @@ try {
     }
     if (isset($options['driver-orders-manifest']) && $deliveryDate === null) {
         throw new RuntimeException('driver_orders_manifest_daily_only');
+    }
+    if (isset($options['partner-driver-map']) && $deliveryDate === null) {
+        throw new RuntimeException('partner_driver_map_daily_only');
     }
     $dailyPrefix = $deliveryDate === null
         ? null
@@ -4721,6 +5047,19 @@ try {
             }
         }
 
+        $driverRosterPath = (string) ($options['driver-roster'] ?? '');
+        $pickupConfigPath = (string) ($options['pickup-config'] ?? '');
+        $partnerDriverMapPath = (string) ($options['partner-driver-map'] ?? '');
+        if ($driverRosterPath === '' || $pickupConfigPath === '' || $partnerDriverMapPath === '') {
+            throw new RuntimeException('daily_config_paths_required');
+        }
+        $stage = 'daily_driver_map';
+        $drivers = loadPartnerDriverMap(
+            $partnerDriverMapPath,
+            $companyUuid,
+            loadDriverRoster($driverRosterPath, $companyUuid),
+        );
+
         $stage = 'daily_vendor_fetch';
         $fetched = (new VendorClient($token))->fetchDailySource($deliveryDate, $limit);
         $token = null;
@@ -4751,6 +5090,9 @@ try {
         // The manifest digest remains Partner-only. A capture or anchor change must never be
         // misrepresented as a changed Partner snapshot.
         $sourceDigest = dailySourceDigest($dailyRows);
+        $stage = 'daily_driver_assignment';
+        $partnerDriverAssignment = applyPartnerDriverAssignments($dailyRows, $drivers);
+        $dailyRows = $partnerDriverAssignment['rows'];
         $locationCaptures = [];
         if ($allowLocationRecovery) {
             $locationCaptures = loadLocationCaptures((string) $options['location-captures']);
@@ -4778,6 +5120,15 @@ try {
             $dailyRows,
             fn (array $row): bool => rowRequiresCustomerCall($row, $allowAddressCall),
         ));
+        $heldNoPartnerDriverCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => dailyHoldReason($row) === 'no_partner_driver',
+        ));
+        $heldUnmappedPartnerDriverCount = count(array_filter(
+            $dailyRows,
+            fn (array $row): bool => dailyHoldReason($row) === 'unmapped_partner_driver',
+        ));
+        $partnerDriverLoads = allocateDailyDrivers($dailyRows, $drivers, $allowAddressCall)['loads'];
         $locationAreaFallbackCount = count(array_filter(
             $dailyRows,
             fn (array $row): bool => in_array(
@@ -4870,6 +5221,13 @@ try {
             'orders_held_unapproved_meal_status' => $unapprovedStatusCount,
             'orders_held_unapproved_order_status' => $unapprovedOrderStatusCount,
             'orders_held_source_canceled' => $sourceCanceledCount,
+            'orders_held_no_partner_driver' => $heldNoPartnerDriverCount,
+            'orders_held_unmapped_partner_driver' => $heldUnmappedPartnerDriverCount,
+            // Driver identifiers only; never driver names or customer data.
+            'partner_driver_map_count' => count($drivers),
+            'partner_driver_ids_unmapped' => $partnerDriverAssignment['unmapped_partner_driver_ids'],
+            'partner_driver_loads' => $partnerDriverLoads,
+            'assignment_mode' => PARTNER_DRIVER_ASSIGNMENT_MODE,
             'address_call_override' => $allowAddressCall,
             'address_call_authorization' => $allowLocationRecovery
                 ? LOCATION_RECOVERY_AUTHORIZATION
@@ -4943,12 +5301,6 @@ try {
             releaseLock($lockName);
             exit(0);
         }
-        $driverRosterPath = (string) ($options['driver-roster'] ?? '');
-        $pickupConfigPath = (string) ($options['pickup-config'] ?? '');
-        if ($driverRosterPath === '' || $pickupConfigPath === '') {
-            throw new RuntimeException('daily_config_paths_required');
-        }
-        $drivers = loadDriverRoster($driverRosterPath, $companyUuid);
         $pickup = loadPickupConfig($pickupConfigPath);
         guardDailyOperationalRows($prefix, $dailyRows, $drivers, $companyUuid, $allowAddressCall);
         $baseRows = dailyRowsForBaseWriter($dailyRows);
