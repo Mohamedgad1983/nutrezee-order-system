@@ -3,6 +3,7 @@ import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { inject as service } from '@ember/service';
 import normalizeLabel from '../utils/normalize-label';
+import { printDetached } from './order-label';
 
 export default class BatchLabelsComponent extends Component {
     @service session;
@@ -208,9 +209,12 @@ export default class BatchLabelsComponent extends Component {
         // A48: reprints are unlimited; the reason is optional free text kept on the trail.
         this.error = null;
         this.notice = null;
-        document.body.classList.add('nutrezee-batch-print-mode');
-        window.print();
-        document.body.classList.remove('nutrezee-batch-print-mode');
+        try {
+            printDetached('.nz-batch-panel .nz-batch-labels', 'nutrezee-batch-print-mode');
+        } catch (error) {
+            this.error = messageOf(error);
+            return;
+        }
         this.awaitingConfirmation = true;
         this.notice =
             'If the printer completed the batch, confirm below. If you cancelled, do not confirm.';

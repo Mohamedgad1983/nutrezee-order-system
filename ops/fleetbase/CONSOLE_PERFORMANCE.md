@@ -10,7 +10,7 @@ not edited.
 - `DISABLE_RUNTIME_CONFIG=false`
 - `EXTENSIONS=@nutrezee/fleetops-labels-engine`
 - `DISABLE_FLEETBASE_ATTRIBUTION=false`
-- `CONSOLE_RELEASE=0.7.48-a48.1` (a45.1 → a48.1 with extension v0.3.6, unlimited reprints)
+- `CONSOLE_RELEASE=0.7.48-a48.2` (a48.1 → a48.2 with extension v0.3.7: detached print root, bidi-safe plate/phone)
 
 The image build fails unless the emitted metadata says `production`, runtime config is explicitly
 enabled, and the extension theme has a non-empty stable alias. Never substitute a development build.
@@ -28,7 +28,7 @@ enabled, and the extension theme has a non-empty stable alias. Never substitute 
 Before swapping the Console container, verify inside the candidate image:
 
 1. HTML contains production metadata and no development metadata.
-2. `/extensions.json` lists ten extensions including Nutrezee v0.3.6 (v0.3.5 before A48).
+2. `/extensions.json` lists ten extensions including Nutrezee v0.3.7 (v0.3.6 = a48.1).
 3. The stable theme alias and every HTML/engine-manifest asset return 200.
 4. The initial HTML asset set is materially smaller than the a44.3 baseline of about 40 MB.
 5. Requests with `Accept-Encoding: gzip` return `Content-Encoding: gzip` for large JS/CSS.
