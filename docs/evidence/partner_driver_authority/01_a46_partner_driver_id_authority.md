@@ -1,6 +1,6 @@
 # 01 — A46: Partner `driver.id` becomes the Fleetbase assignment authority
 
-Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: BUILT, PR #56 open (base `fix/a45-console-performance`), NOT DEPLOYED
+Date: 2026-09-03 · Branch: `build/wp-ops-05-partner-driver-authority` · Status: PR #56 open (base `fix/a45-console-performance`); **installed on staging VPS 2026-09-03 10:15Z, dry-run only, no apply yet**
 
 ## Problem (Verified, read-only VPS trace 2026-09-03)
 
@@ -105,3 +105,32 @@ retired hash.
   keys (`"42"` → `42`) in the map/unmapped list, and `validateRow` pre-setting a null driver
   that the `$base + [...]` merge kept over the parsed id.
 - Live importer untouched (md5 `9f0e3c06c0bdd0b9f3ed5dd3cf7707b5` before and after).
+
+## Staging install + dry-run (2026-09-03, owner-directed)
+
+Backups: `/opt/fleetbase/backups/a46-20260903T0814Z/` (importer, run.sh, 11-entry roster) plus
+`nutreeze-orders.php.rollback-a46-20260903T0814Z` beside the live file. Live `run.sh` matched the
+repo's previous version byte-for-byte before overwrite.
+
+Installed (root, 0600/0700): importer `d1799f4a…`, `run.sh`, `config/nutreeze-partner-driver-map.json`
+(18 aliases → 9 drivers), `config/nutreeze-driver-roster.json` (9 public ids). Container `php -l`
+clean, `--self-test` 38/38. Timers untouched (next run 00:00 Kuwait targets +1/+2 days).
+
+Dry-run results (`run.sh --delivery-date=… --limit=1000 --dry-run`, `fleetbase_written:false`):
+
+| date | Partner orders | dispatchable | held: no Partner driver | unmapped ids | held: missing/invalid pin |
+|---|---|---|---|---|---|
+| 2026-09-03 (today) | 777 | 585 | 1 | none | 189 / 2 |
+| 2026-09-04 (Fri) | 0 | – | – | – | – |
+| 2026-09-05 (Sat) | 694 | 363 | **226** | none | 102 / 2 |
+
+Per-driver loads today (Partner authority): Nicholas 83, Amandeep 75, Salato 68, Arsad 67,
+Ibrahim 66, Vineesh 65, Shaik Feroz 59, Naseer 55, Ravi 47. Ravi's 47 equals the 47 of his
+Partner export that exist in Fleetbase, confirming the mapping end to end. All nine mapped ids
+were seen in the feed; `partner_driver_ids_unmapped = []`.
+
+Observation: for Saturday, Partner has not yet assigned a driver on 226 orders. Under A46 those
+stay held until Partner assigns one; the nightly run picks them up the following night. Under the
+old hash they were already dispatched to invented drivers, so the first A46 apply for 2026-09-05
+will demote them to held/unassigned. Operations should assign Saturday drivers in Partner before
+the 00:00 run, or accept that those orders appear in Navigator only after the next sync.
