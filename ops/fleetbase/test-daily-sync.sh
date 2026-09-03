@@ -89,4 +89,42 @@ fi
 grep -q 'outside guarded 00:45-01:45 Kuwait sync window' "$ROOT/outside-window.log"
 [ ! -s "$CALL_LOG" ]
 
-printf '%s\n' 'daily sync tests: 9/9 passed'
+# sameday mode (A46): 02:00 Kuwait window, targets today and +1 day.
+: > "$CALL_LOG"
+MOCK_CALL_LOG="$CALL_LOG" \
+  NUTREEZE_DAILY_TEST_MODE=1 \
+  NUTREEZE_DAILY_MODE=sameday \
+  NUTREEZE_DAILY_TEST_NOW_MINUTES=120 \
+  NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
+  NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
+  NUTREEZE_DAILY_CONFIG_ROOT="$CONFIG_ROOT" \
+  NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT=/fleetbase/test-config \
+  "$(dirname "$0")/nutreeze-daily-sync.sh" > "$ROOT/sameday.log"
+[ "$(wc -l < "$CALL_LOG" | tr -d ' ')" = 4 ]
+grep -q '"days_succeeded":2,"days_failed":0' "$ROOT/sameday.log"
+
+: > "$CALL_LOG"
+if MOCK_CALL_LOG="$CALL_LOG" \
+  NUTREEZE_DAILY_TEST_MODE=1 \
+  NUTREEZE_DAILY_MODE=sameday \
+  NUTREEZE_DAILY_TEST_NOW_MINUTES=60 \
+  NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
+  NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
+  "$(dirname "$0")/nutreeze-daily-sync.sh" > "$ROOT/sameday-outside.log" 2>&1; then
+  printf '%s\n' 'expected 01:00 Kuwait to be rejected in sameday mode' >&2
+  exit 1
+fi
+grep -q 'outside guarded 01:45-02:45 Kuwait sync window' "$ROOT/sameday-outside.log"
+[ ! -s "$CALL_LOG" ]
+
+# default date computation without an override: sameday = today and +1, rolling = +1 and +2
+: > "$CALL_LOG"
+MOCK_CALL_LOG="$CALL_LOG" NUTREEZE_DAILY_TEST_MODE=1 NUTREEZE_DAILY_MODE=sameday \
+  NUTREEZE_DAILY_TEST_NOW_MINUTES=120 NUTREEZE_DAILY_TODAY=2026-09-05 \
+  NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" NUTREEZE_DAILY_CONFIG_ROOT="$CONFIG_ROOT" \
+  "$(dirname "$0")/nutreeze-daily-sync.sh" > /dev/null
+grep -q -- '--delivery-date=2026-09-05' "$CALL_LOG"
+grep -q -- '--delivery-date=2026-09-06' "$CALL_LOG"
+! grep -q -- '--delivery-date=2026-09-07' "$CALL_LOG"
+
+printf '%s\n' 'daily sync tests: 14/14 passed'

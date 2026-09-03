@@ -7,6 +7,7 @@ CONTAINER=fleetbase-application-1
 SCRIPT=/fleetbase/api/storage/app/integrations/nutreeze-orders.php
 DRIVER_ROSTER=/fleetbase/api/storage/app/integrations/config/nutreeze-driver-roster.json
 PICKUP_CONFIG=/fleetbase/api/storage/app/integrations/config/nutreeze-pickup.json
+PARTNER_DRIVER_MAP=/fleetbase/api/storage/app/integrations/config/nutreeze-partner-driver-map.json
 CAPTURE_CONFIG=''
 NUTREEZEE_DB_CONTAINER=nutrezee-postgres-1
 CAPTURE_HOST=''
@@ -56,7 +57,7 @@ if [ "$DAILY" -ne 1 ]; then
   printf '%s\n' 'daily delivery date is required' >&2
   exit 24
 fi
-set -- "$@" "--driver-roster=$DRIVER_ROSTER" "--pickup-config=$PICKUP_CONFIG"
+set -- "$@" "--driver-roster=$DRIVER_ROSTER" "--pickup-config=$PICKUP_CONFIG" "--partner-driver-map=$PARTNER_DRIVER_MAP"
 
 if [ -n "$LOCATION_RECOVERY_DATE" ]; then
   CAPTURE_HOST="$(mktemp /var/tmp/nutrezee-location-captures.XXXXXX)"
