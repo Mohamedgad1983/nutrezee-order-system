@@ -40,3 +40,19 @@ online. The widget now centres on Kuwait.
   is NOT NULL, so they cannot be blanked without inventing a point.
 - The 3 dummy drivers (`driver_vlN0wrDmSn`, `driver_fpQEqYNGVG` "Unit-01", `driver_tSx1jTOyTV` "Ahmed Al-Salem") remain;
   deletion is the owner's call (they have no vehicle, so they never enter the label colour pool).
+
+## Follow-up 2026-09-04 13:31 UTC — owner ordered the 3 dummy drivers deleted
+Pre-checks (Verified): none of the three is referenced in `nutreeze-partner-driver-map.json` or the roster; none had an
+order for 2026-09-04/05 or any non-completed order. They did carry **historic completed** orders from the pre-A46
+fallback era (Unit-01: 489, Ahmed Al-Salem: 2,411, 2026-07-19 → 2026-09-03); those rows keep their
+`driver_assigned_uuid` and now resolve to a soft-deleted driver in the console.
+
+```sql
+UPDATE drivers SET deleted_at = NOW()
+ WHERE deleted_at IS NULL
+   AND public_id IN ('driver_vlN0wrDmSn','driver_fpQEqYNGVG','driver_tSx1jTOyTV')
+   AND NOT EXISTS (<order for 20260904/20260905 or status not completed/cancelled>);   -- 3 rows
+```
+Soft delete only (Fleetbase `SoftDeletes`), reversible with `deleted_at = NULL`; backup
+`backups/drivers-rows-20260904-152422.sql` predates both changes. `GET /v1/drivers?limit=-1` now returns the 9 real
+plated drivers, so the label colour pool (A49) is unchanged in membership and order.
