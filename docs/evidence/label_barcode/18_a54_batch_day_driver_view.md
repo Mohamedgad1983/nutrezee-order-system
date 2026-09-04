@@ -72,3 +72,13 @@ day per token (SHA-256 fingerprint, never the token) for 60 s so options → pre
 the Batch Labels set (the page reads `scheduled_at = day`), so per-driver printing covers the dispatched 512 for Saturday
 only; 127 of the 169 held orders already carry a Partner driver. This is the standing importer hold rule, unchanged
 here — printing labels for held orders is an owner decision.
+
+## A54.3 — selects rendered blank (fixed, deployed)
+PR [#70](https://github.com/Mohamedgad1983/nutrezee-order-system/pull/70) · CI 29/29 · merged `3656390` · console `fleetbase-console:a54-3-d3b57cc` (release `0.7.48-a54.3`, extension `0.3.11`)
+
+With Saturday loaded (512 orders, 9 drivers, 90 areas) both controls showed no choice: Glimmer applies a `value`
+bound on a `<select>` when the element is created, before its `<option>`s exist, so Chrome leaves `selectedIndex = -1`
+(the old template only *looked* right because its first option happened to equal the default). Each option now carries
+`selected` (`eq this.filterType "driver"`, `eq option.id this.filterValue`) and the list is keyed by id. Gate 7/7 on a
+temp container (production metadata, extension 0.3.11, theme alias 200, gzip, immutable, no Clear-Site-Data, no
+`select value=` left in the bundle); live `extensions.json` reports 0.3.11.
