@@ -69,7 +69,7 @@
             {{/unless}}
         {{/if}}
 
-        {{! A54.4: plain buttons instead of <select> — the selects rendered blank on the real console
+        {{! A54.4: plain buttons instead of a select control — the selects rendered blank on the real console
             (Chrome kept selectedIndex -1 and the render stalled), and a visible driver list is what
             dispatch actually wants: one tap per driver, every label of that driver below. }}
         <div class="nz-batch-controls {{unless this.isReady "nz-batch-controls--disabled"}}">
