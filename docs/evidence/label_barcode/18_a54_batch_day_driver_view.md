@@ -45,3 +45,30 @@ separate "Prepare" click.
 ## Owner verification still open [NC]
 Open Fleet-Ops → Resources → Batch Labels, press **Tomorrow** (2026-09-05): expect 695 orders, driver list populated
 (469 assigned), and the first driver's labels rendered on screen without pressing anything else.
+
+## A54.2 — first live use failed: `upstream_unavailable: fleetbase_transport_failure` (fixed, deployed)
+PR [#69](https://github.com/Mohamedgad1983/nutrezee-order-system/pull/69) · CI 29/29 · merged `167b64b` · API `nutrezee-api:a54-2-8bd3814`
+
+**Cause (Verified on staging)** — Fleetbase serialises a full order document in ~0.2 s, so one 100-order page of
+Saturday's set took **18.3 s** (1.64 MB) against the gateway's 15 s timeout; today's empty day answered in 0.18 s, which
+is why every current-day run before A54 looked fine.
+
+**Fix** — `HttpFleetbaseIdentityGateway.orders`: `columns[]=uuid,public_id,internal_id,scheduled_at,status,meta,
+driver_assigned_uuid` (Fleetbase still attaches the assigned driver with vehicle/plate/phone to a column-limited row;
+customer/payload are not read by the batch projection) → ~4.3 s per 100-order page (Fleetbase caps `limit` at 100);
+timeout 45 s; pages after the first fetched in parallel waves of 4 until the first short page (duplicate/missing ids and
+a non-terminating paginator still fail closed). `FleetbaseIdentityService.ordersForOperatorDate` memoises one operator
+day per token (SHA-256 fingerprint, never the token) for 60 s so options → preview → printed reuse one fetch.
+
+**Measured after deploy (inside the API container, public key, same code path)**
+| date | Fleetbase orders returned | all with driver | wall time |
+|---|---|---|---|
+| 2026-09-05 | 512 | yes | 8.9 s |
+| 2026-09-04 | 0 | – | 0.2 s |
+
+**Observation, not part of this change [NC → owner]** — Fleetbase holds ~190 Partner orders per day
+(`meta.dispatch_state = held_no_real_location_pin`, no `scheduled_at`, no driver, status `created`): 2026-09-01 189,
+09-02 191, 09-03 191, 09-05 169 (+3 invalid pin, 1 no partner driver, 1 unapproved meal), 09-06 207. These never enter
+the Batch Labels set (the page reads `scheduled_at = day`), so per-driver printing covers the dispatched 512 for Saturday
+only; 127 of the 169 held orders already carry a Partner driver. This is the standing importer hold rule, unchanged
+here — printing labels for held orders is an owner decision.
