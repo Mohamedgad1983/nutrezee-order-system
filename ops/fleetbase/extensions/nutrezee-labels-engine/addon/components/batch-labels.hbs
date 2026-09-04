@@ -69,25 +69,52 @@
             {{/unless}}
         {{/if}}
 
+        {{! A54.4: plain buttons instead of a select control — the selects rendered blank on the real console
+            (Chrome kept selectedIndex -1 and the render stalled), and a visible driver list is what
+            dispatch actually wants: one tap per driver, every label of that driver below. }}
         <div class="nz-batch-controls {{unless this.isReady "nz-batch-controls--disabled"}}">
-            <label>
+            <div class="nz-batch-groupby" data-test-batch-groupby>
                 <span>Group by / الاختيار حسب</span>
-                {{! A54.3: `selected` on each option — a `value` set on the <select> before its options
-                    exist leaves the control blank in Chrome. }}
-                <select disabled={{not this.isReady}} {{on "change" this.updateFilterType}}>
-                    <option value="driver" selected={{eq this.filterType "driver"}} disabled={{not this.hasDriverOptions}}>Driver / السائق</option>
-                    <option value="area" selected={{eq this.filterType "area"}}>Area / المنطقة</option>
-                </select>
-            </label>
+                <button
+                    type="button"
+                    class="btn btn-sm {{if (eq this.filterType "driver") "btn-primary" "btn-default"}}"
+                    disabled={{or (not this.isReady) (not this.hasDriverOptions)}}
+                    {{on "click" (fn this.chooseFilterType "driver")}}
+                >
+                    Driver / السائق ({{this.options.drivers.length}})
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-sm {{if (eq this.filterType "area") "btn-primary" "btn-default"}}"
+                    disabled={{not this.isReady}}
+                    {{on "click" (fn this.chooseFilterType "area")}}
+                >
+                    Area / المنطقة ({{this.options.areas.length}})
+                </button>
+            </div>
 
-            <label>
-                <span>{{#if (eq this.filterType "driver")}}Driver / السائق{{else}}Area / المنطقة{{/if}}</span>
-                <select disabled={{or (not this.isReady) (not this.filterOptions.length)}} {{on "change" this.updateFilterValue}}>
-                    {{#each this.filterOptions key="id" as |option|}}
-                        <option value={{option.id}} selected={{eq option.id this.filterValue}}>{{option.label}} — {{option.count}} orders</option>
-                    {{/each}}
-                </select>
-            </label>
+            <div class="nz-batch-choices" data-test-batch-choices>
+                {{#each this.filterOptions as |option|}}
+                    <button
+                        type="button"
+                        class="nz-batch-choice {{if (eq option.id this.filterValue) "nz-batch-choice--active"}}"
+                        disabled={{not this.isReady}}
+                        {{on "click" (fn this.chooseFilterValue option.id)}}
+                    >
+                        <strong>{{option.label}}</strong>
+                        <span>{{option.count}} orders / طلب</span>
+                    </button>
+                {{else}}
+                    <div class="nz-label-state">No choices for this day. / لا توجد خيارات لهذا اليوم.</div>
+                {{/each}}
+            </div>
+
+            {{#if this.filterValue}}
+                <div class="nz-batch-current" data-test-batch-current>
+                    {{#if (eq this.filterType "driver")}}Driver / السائق{{else}}Area / المنطقة{{/if}}:
+                    <strong>{{this.currentFilterLabel}}</strong> · {{this.filteredOrders.length}} orders on {{this.selectedDate}}
+                </div>
+            {{/if}}
         </div>
 
         {{#if (and this.isReady this.filteredOrders.length)}}

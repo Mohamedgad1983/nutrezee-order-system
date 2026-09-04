@@ -805,6 +805,62 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     opacity: 0.8;
 }
 
+.nz-batch-groupby {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+}
+
+.nz-batch-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.5rem;
+    max-height: 22rem;
+    overflow-y: auto;
+    padding: 0.25rem;
+}
+
+.nz-batch-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.5rem;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+.nz-batch-choice strong {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+.nz-batch-choice span {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.nz-batch-choice:hover:not(:disabled) {
+    border-color: var(--nz-accent, #a16207);
+}
+
+.nz-batch-choice--active {
+    border-color: var(--nz-accent, #a16207);
+    background: var(--nz-accent-soft, #fdf3e3);
+    box-shadow: 0 0 0 2px var(--nz-accent-soft, #fdf3e3);
+}
+
+.nz-batch-current {
+    margin: 0.75rem 0 0;
+    font-size: 0.95rem;
+}
+
 .nz-batch-labels {
     display: grid;
     gap: 1rem;

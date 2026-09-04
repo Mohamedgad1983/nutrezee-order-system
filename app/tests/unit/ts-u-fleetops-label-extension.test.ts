@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.11');
+    expect(packageJson.version).toBe('0.3.12');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -158,6 +158,7 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     );
     expect(batchTemplate).toContain('Driver / السائق');
     expect(batchTemplate).toContain('Area / المنطقة');
+    expect(batchTemplate).toContain('nz-batch-choice--active');
     expect(batchTemplate).toContain('Select all');
     expect(batchTemplate).toContain('Nothing is recorded until you confirm');
     expect(batchTemplate).toContain('Cancel — do not record');
@@ -185,16 +186,20 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(batchComponent).toContain('?delivery_date=${encodeURIComponent(this.deliveryDate)}');
     // Drivers come first and are the default grouping; the labels load as soon as a driver is chosen.
     expect(batchComponent).toContain("@tracked filterType = 'driver';");
-    expect(batchTemplate.indexOf('<option value="driver"')).toBeLessThan(batchTemplate.indexOf('<option value="area"'));
+    expect(batchTemplate.indexOf('(fn this.chooseFilterType "driver")')).toBeLessThan(
+      batchTemplate.indexOf('(fn this.chooseFilterType "area")'),
+    );
     expect(batchComponent).toContain('async showSelection()');
     expect(batchComponent).toContain('void this.showSelection();');
     // Still nothing is recorded by viewing: the print confirmation flow is untouched.
     expect(batchComponent).toContain('this.awaitingConfirmation = true');
     expect(batchTemplate).not.toContain('Reload today');
-    // A54.3: option-level `selected` — a value set on the <select> before its options exist renders blank.
-    expect(batchTemplate).toContain('selected={{eq this.filterType "driver"}}');
-    expect(batchTemplate).toContain('selected={{eq option.id this.filterValue}}');
-    expect(batchTemplate).not.toContain('<select value=');
+    // A54.4: drivers and areas are plain buttons (the raw <select> rendered blank on the live console).
+    expect(batchTemplate).not.toContain('<select');
+    expect(batchTemplate).toContain('data-test-batch-choices');
+    expect(batchTemplate).toContain('(fn this.chooseFilterValue option.id)');
+    expect(batchTemplate).toContain('(fn this.chooseFilterType "driver")');
+    expect(batchComponent).toContain('chooseFilterValue(filterValue)');
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {

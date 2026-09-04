@@ -217,8 +217,10 @@ export default class BatchLabelsComponent extends Component {
     }
 
     @action
-    updateFilterType(event) {
-        this.filterType = event.target.value;
+    chooseFilterType(filterType) {
+        if (filterType !== 'driver' && filterType !== 'area') return;
+        if (filterType === 'driver' && !this.hasDriverOptions) return;
+        this.filterType = filterType;
         const first = this.filterOptions[0];
         this.filterValue = first?.id ?? '';
         this.resetPreview();
@@ -227,8 +229,11 @@ export default class BatchLabelsComponent extends Component {
     }
 
     @action
-    updateFilterValue(event) {
-        this.filterValue = event.target.value;
+    chooseFilterValue(filterValue) {
+        const value = String(filterValue ?? '');
+        if (!value || !this.filterOptions.some((option) => option.id === value)) return;
+        if (value === this.filterValue && this.preview) return;
+        this.filterValue = value;
         this.resetPreview();
         this.selectAllFiltered();
         void this.showSelection();
