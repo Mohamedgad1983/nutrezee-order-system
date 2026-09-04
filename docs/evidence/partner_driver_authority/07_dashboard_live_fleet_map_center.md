@@ -56,3 +56,22 @@ UPDATE drivers SET deleted_at = NOW()
 Soft delete only (Fleetbase `SoftDeletes`), reversible with `deleted_at = NULL`; backup
 `backups/drivers-rows-20260904-152422.sql` predates both changes. `GET /v1/drivers?limit=-1` now returns the 9 real
 plated drivers, so the label colour pool (A49) is unchanged in membership and order.
+
+## Follow-up 2026-09-04 — dashboard currency "$" → Kuwaiti dinar (owner order)
+Root cause (Verified): every money widget/metric resolves `company->currency ?? 'USD'`
+(`Support/Metrics/MoneyMetric.php`, `Analytics/AbstractAnalytics.php`); the Nutreeze company row had
+`currency`, `country` and `timezone` all NULL, so the console fell back to USD and "$".
+
+Fix = the Organization settings Fleetbase expects, written to the company row (backup
+`backups/companies-rows-20260904-153637.sql`):
+
+```sql
+UPDATE companies SET currency='KWD', country='KW', timezone=COALESCE(timezone,'Asia/Kuwait')
+ WHERE public_id='company_oPu7DV8lU5' AND currency IS NULL;   -- 1 row
+```
+Company cache keys cleared in Redis. Console renders KWD with Fleetbase's built-in definition: symbol **K.D.**,
+3 decimals, symbol before the amount.
+
+Side effect (Inferred): revenue/AOV metrics filter transactions by the company currency; the only 16 existing
+transactions are USD test rows, so money tiles now read 0 K.D. until real KWD transactions exist. Partner orders carry
+no transactions today.
