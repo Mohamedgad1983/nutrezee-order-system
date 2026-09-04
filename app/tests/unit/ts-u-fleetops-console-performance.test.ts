@@ -15,7 +15,7 @@ describe('TS-U A45 Fleet-Ops Console production performance', () => {
     expect(dockerfile).toContain('test "$ENVIRONMENT" = production');
     expect(dockerfile).toContain('test "$DISABLE_RUNTIME_CONFIG" = false');
     expect(dockerfile).toContain('pnpm build --environment "$ENVIRONMENT"');
-    expect(dockerfile).toContain('CONSOLE_RELEASE=0.7.48-a48.3');
+    expect(dockerfile).toContain('CONSOLE_RELEASE=0.7.48-a48.4');
     expect(dockerfile).toContain("'%22environment%22%3A%22production%22'");
     expect(dockerfile).toContain("! grep -q '%22environment%22%3A%22development%22'");
   });
