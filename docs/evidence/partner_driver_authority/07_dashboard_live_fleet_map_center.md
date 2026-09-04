@@ -1,0 +1,42 @@
+# 07 — Fleet-Ops Default Dashboard "Live Fleet Map" centred on California (data fix)
+
+Date: 2026-09-04 (Kuwait) · Environment: staging Fleetbase 0.7.48 (`ops.nutreeze.com`) · Owner request: "اظبطها تكون live وصحيحة زي ما بيقول الكتاب"
+
+## Symptom
+The Default Dashboard's **Live Fleet Map** widget (`@fleetbase/fleetops-engine` `widget/live-fleet`) opened on the USA
+instead of Kuwait.
+
+## Root cause — Verified
+- The widget centres on the **first driver returned** by `GET /int/v1/fleet-ops/analytics/live-fleet`
+  (`Support/Analytics/LiveFleet.php`): drivers with a non-null location that are **online OR have `current_job_uuid`**.
+- `driver_vlN0wrDmSn` ("Demo Driver - Salmiya", dummy, no vehicle) still carried `current_job_uuid =
+  796e0598-…` → order `order_l58zMwmpyo`, status `started`, **soft-deleted on 2026-07-12**. Its stored location is
+  `POINT(-122.084 37.4219983)` — the Android-emulator default GPS (Mountain View, CA) from app testing.
+- So the only "active" marker sat in California and the map centred there.
+- Tile layer is CARTO `basemaps.cartocdn.com` (no API key involved). Tiles fetched from the VPS with the console's
+  Referer are clean map tiles; no "API KEY REQUIRED" string exists anywhere in the built console bundle.
+  → the watermark the owner saw could not be reproduced server-side [NC — owner to re-check after the fix].
+
+## Fix applied (Fleetbase MySQL, staging)
+Backup first: `/opt/fleetbase/backups/drivers-rows-20260904-152422.sql` (mysqldump of `drivers` rows).
+
+```sql
+UPDATE drivers SET current_job_uuid = NULL
+ WHERE public_id = 'driver_vlN0wrDmSn'
+   AND current_job_uuid = '796e0598-6d1a-4af0-994c-d7b3520c5be0';   -- 1 row
+```
+
+Also ran `redis-cli FLUSHDB` on the Fleetbase `cache` container (Laravel cache + queue share it; `SESSION_DRIVER=file`).
+Keyspace was empty afterwards and the queue worker shows no pending/lost jobs (last job 01:00 UTC, DONE) — but this was
+a broader action than needed; note for the record.
+
+## Result — Verified via the same SQL predicate LiveFleet uses
+Remaining live markers: `Salato Din Miya` (48.0509, 29.2020) and `Arsad Ali` (48.0244, 29.3053) — both Kuwait, both
+online. The widget now centres on Kuwait.
+
+## Left as-is (owner decisions)
+- 10 non-deleted drivers still store garbage positions (Mountain View ×5, `0 0` ×6 incl. real drivers). They are hidden
+  from the Live Fleet map while offline and will be overwritten by the Navigator app on next GPS report. `drivers.location`
+  is NOT NULL, so they cannot be blanked without inventing a point.
+- The 3 dummy drivers (`driver_vlN0wrDmSn`, `driver_fpQEqYNGVG` "Unit-01", `driver_tSx1jTOyTV` "Ahmed Al-Salem") remain;
+  deletion is the owner's call (they have no vehicle, so they never enter the label colour pool).
