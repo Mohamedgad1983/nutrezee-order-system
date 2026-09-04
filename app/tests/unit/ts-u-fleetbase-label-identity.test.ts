@@ -415,21 +415,28 @@ describe('TS-U Fleetbase identity boundary', () => {
       const url = String(input);
       requested.push(url);
       const page = new URL(url).searchParams.get('page');
+      // Fleetbase's paginator: a full page 1, a short page 2, then empty pages past the end.
       return new Response(JSON.stringify({
         data: page === '1'
           ? [
               { id: 'order_today_1', meta: { delivery_date: '2099-05-12' } },
               { id: 'order_today_2', meta: { delivery_date: '2099-05-12' } },
             ]
-          : [{ id: 'order_today_3', meta: { delivery_date: '2099-05-12' } }],
+          : page === '2'
+            ? [{ id: 'order_today_3', meta: { delivery_date: '2099-05-12' } }]
+            : [],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     try {
-      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 2);
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 2, 100, 2);
       await expect(gateway.orders('token', '2099-05-12')).resolves.toHaveLength(3);
+      const columns = '&columns[]=uuid&columns[]=public_id&columns[]=internal_id&columns[]=scheduled_at'
+        + '&columns[]=status&columns[]=meta&columns[]=driver_assigned_uuid';
+      // page 1 alone, then one wave of two (page 3 is the harmless empty overshoot).
       expect(requested).toEqual([
-        'https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=1',
-        'https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=2',
+        `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=1${columns}`,
+        `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=2${columns}`,
+        `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=3${columns}`,
       ]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -453,5 +460,57 @@ describe('TS-U Fleetbase identity boundary', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('A54.2: fetches following pages in parallel waves and stops at the first short page', async () => {
+    const originalFetch = globalThis.fetch;
+    const pagesInFlight: number[] = [];
+    let peak = 0;
+    let active = 0;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const page = Number(new URL(String(input)).searchParams.get('page'));
+      pagesInFlight.push(page);
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      const full = page <= 6;
+      const rows = full ? [1, 2] : [1];
+      return new Response(JSON.stringify({
+        data: rows.map((n) => ({ id: `order_p${page}_${n}`, meta: { delivery_date: '2099-05-12' } })),
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 2, 100, 3);
+      await expect(gateway.orders('token', '2099-05-12')).resolves.toHaveLength(13);
+      // page 1 alone, then waves of 3: [2,3,4] [5,6,7] — 7 is short, so no page 8.
+      expect(pagesInFlight).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(peak).toBe(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('A54.2: memoizes one operator day per token for a short window, never across tokens or dates', async () => {
+    const gateway = new FakeGateway();
+    gateway.sessionResult = { user: 'user-ops', type: 'user', verified: true };
+    gateway.driverResults = [];
+    let calls = 0;
+    gateway.orders = async () => {
+      calls += 1;
+      return [{ id: `order_${calls}`, meta: { delivery_date: '2099-05-12' } }];
+    };
+    const identity = new FleetbaseIdentityService(gateway, 60_000);
+    const a = await identity.ordersForOperatorDate('token-a', '2099-05-12');
+    const b = await identity.ordersForOperatorDate('token-a', '2099-05-12');
+    expect(b.orders).toBe(a.orders);
+    expect(calls).toBe(1);
+    await identity.ordersForOperatorDate('token-b', '2099-05-12');
+    await identity.ordersForOperatorDate('token-a', '2099-05-13');
+    expect(calls).toBe(3);
+    const uncached = new FleetbaseIdentityService(gateway, 0);
+    await uncached.ordersForOperatorDate('token-a', '2099-05-12');
+    await uncached.ordersForOperatorDate('token-a', '2099-05-12');
+    expect(calls).toBe(5);
   });
 });
