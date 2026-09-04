@@ -12,8 +12,12 @@ export default class BatchLabelsComponent extends Component {
     @tracked preparing = false;
     @tracked confirming = false;
     @tracked options = null;
-    @tracked filterType = 'area';
+    @tracked filterType = 'driver';
     @tracked filterValue = '';
+    // A54: the operator picks the delivery day (Kuwait). '' means "server's today".
+    @tracked deliveryDate = '';
+    @tracked today = '';
+    @tracked dateWindow = null;
     @tracked selectionIds = [];
     @tracked preview = null;
     @tracked reprintReason = '';
@@ -57,6 +61,34 @@ export default class BatchLabelsComponent extends Component {
             this.filteredOrders.length > 0 &&
             this.selectionIds.length === this.filteredOrders.length
         );
+    }
+
+    get selectedDate() {
+        return this.options?.delivery_date ?? this.deliveryDate ?? '';
+    }
+
+    get tomorrow() {
+        return this.today ? shiftDate(this.today, 1) : '';
+    }
+
+    get isToday() {
+        return Boolean(this.today) && this.selectedDate === this.today;
+    }
+
+    get isTomorrow() {
+        return Boolean(this.tomorrow) && this.selectedDate === this.tomorrow;
+    }
+
+    get dayLabel() {
+        if (!this.selectedDate) return '';
+        if (this.isToday) return 'Today / اليوم';
+        if (this.isTomorrow) return 'Tomorrow / غدًا';
+        return weekdayOf(this.selectedDate);
+    }
+
+    get currentFilterLabel() {
+        const match = this.filterOptions.find((option) => option.id === this.filterValue);
+        return match?.label ?? '';
     }
 
     get hasDriverOptions() {
@@ -112,21 +144,31 @@ export default class BatchLabelsComponent extends Component {
         return body;
     }
 
-    async loadOptions() {
+    async loadOptions(requestedDate) {
         this.loading = true;
         this.error = null;
         this.notice = null;
         this.preview = null;
         this.awaitingConfirmation = false;
+        if (typeof requestedDate === 'string') {
+            this.deliveryDate = requestedDate;
+        }
         try {
-            this.options = await this.request('/nz/fleet-ops/labels/batch/options');
-            this.freshness = await this.request('/nz/fleet-ops/labels/freshness').catch(() => null);
-            if (this.isReady && this.hasAreaOptions) {
-                this.filterType = 'area';
-                this.filterValue = this.options.areas[0].id;
-            } else if (this.isReady && this.hasDriverOptions) {
+            const query = this.deliveryDate ? `?delivery_date=${encodeURIComponent(this.deliveryDate)}` : '';
+            this.options = await this.request(`/nz/fleet-ops/labels/batch/options${query}`);
+            this.today = this.options.today ?? '';
+            this.dateWindow = this.options.window ?? null;
+            this.deliveryDate = this.options.delivery_date ?? this.deliveryDate;
+            this.freshness = await this.request(
+                `/nz/fleet-ops/labels/freshness?delivery_date=${encodeURIComponent(this.selectedDate)}`
+            ).catch(() => null);
+            // Drivers first: the sticker run is per driver. Areas only when nobody is assigned yet.
+            if (this.isReady && this.hasDriverOptions) {
                 this.filterType = 'driver';
                 this.filterValue = this.options.drivers[0].id;
+            } else if (this.isReady && this.hasAreaOptions) {
+                this.filterType = 'area';
+                this.filterValue = this.options.areas[0].id;
             } else {
                 this.filterValue = '';
             }
@@ -137,6 +179,41 @@ export default class BatchLabelsComponent extends Component {
         } finally {
             this.loading = false;
         }
+        await this.showSelection();
+    }
+
+    /** A54: the chosen driver's (or area's) labels for the chosen day appear as a view at once. */
+    async showSelection() {
+        if (this.isReady && this.filterValue && this.selectedCount > 0) {
+            await this.prepareLabels();
+        }
+    }
+
+    @action
+    reload() {
+        void this.loadOptions();
+    }
+
+    @action
+    updateDate(event) {
+        const value = String(event.target.value ?? '').trim();
+        if (value && value !== this.selectedDate) {
+            void this.loadOptions(value);
+        }
+    }
+
+    @action
+    showToday() {
+        if (this.today && !this.isToday) {
+            void this.loadOptions(this.today);
+        }
+    }
+
+    @action
+    showTomorrow() {
+        if (this.tomorrow && !this.isTomorrow) {
+            void this.loadOptions(this.tomorrow);
+        }
     }
 
     @action
@@ -146,6 +223,7 @@ export default class BatchLabelsComponent extends Component {
         this.filterValue = first?.id ?? '';
         this.resetPreview();
         this.selectAllFiltered();
+        void this.showSelection();
     }
 
     @action
@@ -153,6 +231,7 @@ export default class BatchLabelsComponent extends Component {
         this.filterValue = event.target.value;
         this.resetPreview();
         this.selectAllFiltered();
+        void this.showSelection();
     }
 
     @action
@@ -198,7 +277,7 @@ export default class BatchLabelsComponent extends Component {
                     label: normalizeLabel(item.label),
                 })),
             };
-            this.notice = `${response.count} real current-day label(s) prepared. No print has been recorded yet.`;
+            this.notice = `${response.count} label(s) for ${this.selectedDate} shown below. No print has been recorded yet.`;
         } catch (error) {
             this.preview = null;
             this.error = messageOf(error);
@@ -260,6 +339,7 @@ export default class BatchLabelsComponent extends Component {
 
     batchPayload() {
         return {
+            delivery_date: this.selectedDate,
             filter_type: this.filterType,
             filter_value: this.filterValue,
             selection_ids: this.selectionIds,
@@ -280,4 +360,20 @@ export default class BatchLabelsComponent extends Component {
 
 function messageOf(error) {
     return error instanceof Error ? error.message : 'Unable to load batch labels.';
+}
+
+/** Calendar arithmetic on YYYY-MM-DD in UTC — no local-timezone drift. */
+function shiftDate(date, days) {
+    const [y, m, d] = String(date).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function weekdayOf(date) {
+    const [y, m, d] = String(date).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    const en = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday];
+    const ar = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][weekday];
+    return `${en} / ${ar}`;
 }

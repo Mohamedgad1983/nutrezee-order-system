@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.9');
+    expect(packageJson.version).toBe('0.3.10');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -139,14 +139,14 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toMatch(/\.nz-driver-band strong \{[^}]*unicode-bidi: isolate/);
     // WP-OPS-07: Partner freshness is a pure same-origin read shown in both panels.
     expect(component).toContain('/nz/fleet-ops/labels/freshness');
-    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/freshness')");
+    expect(batchComponent).toContain('/nz/fleet-ops/labels/freshness?delivery_date=');
     expect(template).toContain('data-test-partner-freshness');
     expect(batchTemplate).toContain('data-test-partner-freshness');
     expect(adminGateway).toMatch(/\|fleet-ops\)\(\/\|\$\)/);
   });
 
   it('supports one current-day batch by driver or area without false print recording', () => {
-    expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/options')");
+    expect(batchComponent).toContain('this.request(`/nz/fleet-ops/labels/batch/options${query}`)');
     expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/preview'");
     expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/printed'");
     expect(batchComponent).toContain("filter_type: this.filterType");
@@ -172,6 +172,25 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toMatch(/\.nz-batch-label \{[^}]*zoom: 1\.4286/);
     expect(styles).not.toContain('size: 100mm 70mm');
     expect(batchTemplate).toContain('One 150 × 100 mm sticker per printed page');
+  });
+
+  it('A54: prints a chosen delivery day per driver and shows every label as a view', () => {
+    // The operator picks the day (today by default, tomorrow for the night run) — the server window rules.
+    expect(batchTemplate).toContain('data-test-batch-date');
+    expect(batchTemplate).toContain('type="date"');
+    expect(batchTemplate).toContain('min={{this.dateWindow.from}}');
+    expect(batchTemplate).toContain('max={{this.dateWindow.to}}');
+    expect(batchTemplate).toContain('Tomorrow / غدًا');
+    expect(batchComponent).toContain('delivery_date: this.selectedDate');
+    expect(batchComponent).toContain('?delivery_date=${encodeURIComponent(this.deliveryDate)}');
+    // Drivers come first and are the default grouping; the labels load as soon as a driver is chosen.
+    expect(batchComponent).toContain("@tracked filterType = 'driver';");
+    expect(batchTemplate.indexOf('<option value="driver"')).toBeLessThan(batchTemplate.indexOf('<option value="area"'));
+    expect(batchComponent).toContain('async showSelection()');
+    expect(batchComponent).toContain('void this.showSelection();');
+    // Still nothing is recorded by viewing: the print confirmation flow is untouched.
+    expect(batchComponent).toContain('this.awaitingConfirmation = true');
+    expect(batchTemplate).not.toContain('Reload today');
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {

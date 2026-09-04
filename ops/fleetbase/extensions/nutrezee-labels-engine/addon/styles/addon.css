@@ -771,6 +771,40 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     gap: 0.5rem;
 }
 
+.nz-batch-date {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    margin: 0 0 1rem;
+}
+
+.nz-batch-date label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 600;
+}
+
+.nz-batch-date input[type='date'] {
+    min-width: 12rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--nz-border, #d1d5db);
+    border-radius: 0.35rem;
+    font-size: 1rem;
+}
+
+.nz-batch-date__quick {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nz-batch-date__label {
+    font-weight: 600;
+    opacity: 0.8;
+}
+
 .nz-batch-labels {
     display: grid;
     gap: 1rem;
