@@ -82,3 +82,17 @@ bound on a `<select>` when the element is created, before its `<option>`s exist,
 `selected` (`eq this.filterType "driver"`, `eq option.id this.filterValue`) and the list is keyed by id. Gate 7/7 on a
 temp container (production metadata, extension 0.3.11, theme alias 200, gzip, immutable, no Clear-Site-Data, no
 `select value=` left in the bundle); live `extensions.json` reports 0.3.11.
+
+## A54.4 — selects replaced by tappable driver/area lists (deployed)
+PR [#71](https://github.com/Mohamedgad1983/nutrezee-order-system/pull/71) · CI 29/29 · merged `2f09dca` · console `fleetbase-console:a54-4-e1ba29b` (release `0.7.48-a54.4`, extension `0.3.12`)
+
+A54.3 fixed the group-by control but the driver `<select>` still rendered empty on the live console and the render
+stalled below it (the empty-state line kept the previous day's date while the summary cards showed the new day) — the
+server side was re-verified correct in-container: 512 candidates, 9 driver ids, orders carry matching `driver_id`.
+Rather than keep chasing the raw `<select>` inside Fleetbase's Ember host, the controls are now plain buttons:
+a Driver/Area toggle with counts, a scrollable list of driver cards (plate · phone · order count) or area cards,
+a "current choice" line, and the same auto-load of the chosen selection's labels. No `<select>` remains in the template.
+Gate 7/7; live `extensions.json` = 0.3.12.
+
+Local note: the iCloud-synced working copy's git pack became unreadable during this pass ("far too short to be a
+packfile"); a fresh clone at `/Users/it/nutrezee-order-system-main` (outside iCloud) is used for main commits from here.
