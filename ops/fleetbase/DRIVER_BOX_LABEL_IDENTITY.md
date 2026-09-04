@@ -7,7 +7,7 @@
 - All drivers in the authenticated company's current Fleetbase directory receive different
   colors. The mapping is deterministic for that complete directory and independent of orders,
   customers, areas and driver names.
-- The 100 × 70 mm box label prints one prominent color band/border with the current Fleetbase
+- The box label (100 × 70 mm design, printed on 150 × 100 mm sticker stock at zoom 1.4286 since A52) prints one prominent color band/border with the current Fleetbase
   vehicle plate and driver phone. The customer Code 128 value and bars remain black and unchanged.
 - A reassigned order is resolved again from Fleetbase on preview and therefore receives the new
   driver's color, vehicle and phone.

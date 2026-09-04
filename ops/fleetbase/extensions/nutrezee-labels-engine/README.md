@@ -14,7 +14,7 @@ registry renders under the user-facing **Resources** section and routes through 
 non-conflicting virtual-page handler.
 
 Batch Labels uses the complete current-day Partner → Fleetbase dispatch set. It can group by
-Fleetbase driver or source routing area, select all or a subset, and prints one 100 × 70 mm
+Fleetbase driver or source routing area, select all or a subset, and prints one 150 × 100 mm
 sticker per page. It fails closed when today's Fleetbase set is absent or any Fleetbase order
 cannot be mapped to the label database; a partial local fulfillment count is never presented as
 the day's operational total.
@@ -42,7 +42,7 @@ workflow changes.
 The official source PDF supplied by operations defines the mark geometry and the single bronze
 brand color `#956132`. The theme keeps the Fleetbase version/legal attribution visible and supports
 both Console light and dark preferences. The printed legacy label remains isolated from the shell
-theme so its exact white 100 x 70 mm output is unchanged.
+theme so its exact white output (100 x 70 mm design, printed at 150 x 100 mm sheet with zoom 1.4286) is unchanged.
 
 Driver Locations uses the same Fleetbase operator bearer against
 `/nz/fleet-ops/driver-locations*`. It shows opaque customer references and exact coordinates, not
@@ -86,7 +86,7 @@ then normalizes the real Console components visually through extension-owned CSS
 a competing theme observer. Application/vendor source remains unchanged.
 
 For the A45 performance release, use Console application version `0.7.48-a45.1`, extension version
-`0.3.8`, and theme query `?v=a48.3`. Build with Ember `production` and
+`0.3.9`, and theme query `?v=a48.4`. Build with Ember `production` and
 `DISABLE_RUNTIME_CONFIG=false`; never use a development build as a runtime-config workaround. The
 tracked Console serve overlay keeps a stable theme alias if Ember fingerprints the engine stylesheet,
 enables gzip, revalidates HTML/runtime manifests, caches fingerprinted assets immutably, and never

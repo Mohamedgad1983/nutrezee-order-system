@@ -1124,14 +1124,18 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     white-space: nowrap;
 }
 
+/* A52 (owner, 2026-09-04): the sticker stock is 150 x 100 mm. The approved label is designed
+   at 100 x 70 mm (all internal sizes in mm); it is printed with a uniform zoom of 100/70 =
+   1.4286 → 142.86 x 100 mm, filling the sheet height, with 3.57 mm side margins. No reflow,
+   no distortion: the printed sticker is the preview scaled. */
 @page {
-    size: 100mm 70mm;
+    size: 150mm 100mm;
     margin: 0;
 }
 
 /* The print root is created by the components only for the duration of window.print(): the
-   label is cloned out of Fleetbase's transformed side panel so `position: fixed` and the 100 x 70 mm
-   page start at the sheet origin instead of inside the panel (which clipped the sheet). */
+   label is cloned out of Fleetbase's transformed side panel so `position: fixed` and the sheet
+   start at the sheet origin instead of inside the panel (which clipped the sheet). */
 .nz-print-root {
     display: none;
 }
@@ -1139,14 +1143,14 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 @media print {
     body.nutrezee-label-print-mode,
     body.nutrezee-batch-print-mode {
-        width: 100mm !important;
+        width: 150mm !important;
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
     }
 
     body.nutrezee-label-print-mode {
-        height: 70mm !important;
+        height: 100mm !important;
         overflow: hidden !important;
     }
 
@@ -1164,27 +1168,29 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
         display: block !important;
         position: absolute;
         inset: 0 auto auto 0;
-        width: 100mm;
+        width: 150mm;
         margin: 0;
         padding: 0;
         transform: none;
     }
 
     body.nutrezee-label-print-mode .nz-print-root {
-        height: 70mm;
+        height: 100mm;
         overflow: hidden;
     }
 
+    /* zoom scales the whole mm-based design; the 2.5 mm margin is pre-zoom (2.5 x 1.4286 = 3.57 mm). */
     body.nutrezee-label-print-mode .nz-print-root .nz-legacy-label {
         position: relative;
-        margin: 0;
+        zoom: 1.4286;
+        margin: 0 0 0 2.5mm;
         border: 0;
         box-shadow: none;
     }
 
     body.nutrezee-batch-print-mode .nz-print-root .nz-batch-labels {
         display: block !important;
-        width: 100mm !important;
+        width: 150mm !important;
         max-width: none !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -1193,9 +1199,10 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
     body.nutrezee-batch-print-mode .nz-batch-label {
         position: relative !important;
+        zoom: 1.4286;
         width: 100mm !important;
         height: 70mm !important;
-        margin: 0 !important;
+        margin: 0 0 0 2.5mm !important;
         border: 0 !important;
         box-shadow: none !important;
         break-after: page;

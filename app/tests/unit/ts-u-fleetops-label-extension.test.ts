@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.8');
+    expect(packageJson.version).toBe('0.3.9');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -166,6 +166,12 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('page-break-after: always');
     expect(styles).toContain('width: 100mm !important');
     expect(styles).toContain('height: 70mm !important');
+    // A52: sticker stock is 150 x 100 mm; the 100 x 70 design is printed at a uniform zoom of 1.4286.
+    expect(styles).toContain('size: 150mm 100mm');
+    expect(styles).toMatch(/\.nz-print-root \.nz-legacy-label \{[^}]*zoom: 1\.4286/);
+    expect(styles).toMatch(/\.nz-batch-label \{[^}]*zoom: 1\.4286/);
+    expect(styles).not.toContain('size: 100mm 70mm');
+    expect(batchTemplate).toContain('One 150 × 100 mm sticker per printed page');
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {
