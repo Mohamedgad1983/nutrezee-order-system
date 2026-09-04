@@ -1,0 +1,12 @@
+[Unit]
+Description=Partner daily order feed every 30 min (:20/:50 UTC, keeps the 02:20 Kuwait slot after the 02:00 Fleetbase sync) — WP-OPS-07
+
+[Timer]
+# WP-OPS-07: near-live mirror. Apply only happens when the dry-run shows a change (runner guard).
+OnCalendar=*-*-* *:20,50:00 UTC
+Persistent=false
+RandomizedDelaySec=60
+Unit=nutrezee-partner-daily-feed.service
+
+[Install]
+WantedBy=timers.target

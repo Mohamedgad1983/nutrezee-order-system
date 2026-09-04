@@ -1,0 +1,13 @@
+# Nightly legacy->staging sync at 02:30 Asia/Kuwait (low-traffic window for legacy + staging).
+# DISABLED by default — the owner enables after a supervised first run:
+#   systemctl enable --now nutrezee-nightly-legacy-sync.timer
+[Unit]
+Description=Nutrezee nightly legacy->staging sync at 02:30 Asia/Kuwait
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Kuwait
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,22 @@
+[Unit]
+Description=Nutrezee m23 dish-detail catalog scrape (STAGING, VPS-only, READ-ONLY) — built, DISABLED, manual-run
+Documentation=file:///opt/nutrezee/dish-per-day/run-dish-detail-scrape.sh
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# flock -n: a still-running scrape makes a new invocation exit immediately (no overlap, no hammering legacy)
+ExecStart=/usr/bin/flock -n /tmp/nutrezee-dish-detail-scrape.lock /opt/nutrezee/dish-per-day/run-dish-detail-scrape.sh
+Nice=15
+TimeoutStartSec=3600
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nutrezee/dish-per-day /run
+PrivateTmp=false
+
+# NO [Install] section and NO .timer — intentionally no scheduled enablement. Read-only catalog scrape,
+# manual `systemctl start` only, and it stays DISABLED until a deliberate, signed-off decision (and only
+# after the m22 last-year scrape has finished, to avoid compounding legacy load).

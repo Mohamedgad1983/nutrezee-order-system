@@ -1,0 +1,10 @@
+{
+  "name": "Nutrezee Central Kitchen",
+  "street1": "Building 428, Street 18, Block 1",
+  "city": "Qurain",
+  "country": "KW",
+  "lat": 29.2019269,
+  "lng": 48.0508731,
+  "dispatch_time": "09:00",
+  "coordinate_source": "operator_confirmed_public_hq"
+}

@@ -6,7 +6,7 @@
 
 The Kitchen Display is not a shared all-sections dashboard. Each kitchen-section user signs in separately and must receive only the meals and total quantities assigned to that user's section. A user may be assigned more than one section through protected server configuration, but no browser control or query parameter can expand that assignment.
 
-This correction supersedes the shared-display credential part of ASM-051. The standalone, totals-only, read-only Partner, no-PII, no-driver, and no-write boundaries remain unchanged.
+This correction supersedes the shared-display credential part of ASM-055. The standalone, totals-only, read-only Partner, no-PII, no-driver, and no-write boundaries remain unchanged.
 
 ## Authorization model
 

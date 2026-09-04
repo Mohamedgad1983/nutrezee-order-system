@@ -1,0 +1,11 @@
+[Unit]
+Description=Daytime cancel-only Fleetbase reconciliation, every 30 min 03:15-19:45 Kuwait (00:15-16:45 UTC) — WP-OPS-07 A50
+
+[Timer]
+OnCalendar=*-*-* 00..16:15,45:00 UTC
+Persistent=false
+RandomizedDelaySec=60
+Unit=nutreeze-partner-daytime.service
+
+[Install]
+WantedBy=timers.target

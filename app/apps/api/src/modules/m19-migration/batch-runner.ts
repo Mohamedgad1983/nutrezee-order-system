@@ -19,7 +19,7 @@ export interface OwnerPorts {
   payments?: PaymentService;
 }
 
-export type BatchType = 'customer' | 'catalog' | 'active_plans';
+export type BatchType = 'customer' | 'catalog' | 'active_plans' | 'partner_daily';
 export type RowAction = 'created' | 'matched' | 'merge_review' | 'skipped' | 'error';
 
 export interface RowResult {
@@ -56,6 +56,7 @@ const GATES: Record<string, { maxMergeReviewRate: number; maxErrorRate: number }
   customer: { maxMergeReviewRate: 0.10, maxErrorRate: 0.02 },
   catalog: { maxMergeReviewRate: 1, maxErrorRate: 0.02 },
   active_plans: { maxMergeReviewRate: 1, maxErrorRate: 0 }, // WP-13 — importer not built here
+  partner_daily: { maxMergeReviewRate: 1, maxErrorRate: 0.02 }, // WP-OPS-06 — Partner daily mirror
 };
 
 // M19 batch runner (migration_execution_plan §1): dry-run by default; apply requires
@@ -74,15 +75,46 @@ export class BatchRunner {
     return createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16);
   }
 
+  /**
+   * WP-OPS-07: freshness of one source date for a batch type whose `source_meta` carries
+   * `delivery_date` — newest batch (checked), newest applied, newest applied that changed data.
+   */
+  async sourceFreshness(type: BatchType, deliveryDate: string): Promise<Array<Record<string, unknown>>> {
+    const { rows } = await this.pool.query(
+      `WITH b AS (
+         SELECT id, state, created_at, counts, source_meta
+           FROM import_batch
+          WHERE type = $1 AND source_meta->>'delivery_date' = $2
+       ),
+       changed AS (
+         SELECT b.id FROM b
+          WHERE b.state = 'applied'
+            AND ( coalesce((b.counts->>'created')::int, 0) > 0
+               OR EXISTS (SELECT 1 FROM import_row_result r
+                           WHERE r.batch_id = b.id
+                             AND (r.messages ? 'day_created' OR r.messages ? 'day_updated')) )
+       )
+       SELECT
+         (SELECT max(created_at) FROM b)                                   AS last_checked_at,
+         (SELECT max(created_at) FROM b WHERE state = 'applied')           AS last_applied_at,
+         (SELECT max(b.created_at) FROM b JOIN changed c ON c.id = b.id)   AS last_change_at,
+         (SELECT source_meta FROM b ORDER BY created_at DESC LIMIT 1)      AS latest_meta,
+         (SELECT count(*)::int FROM b)                                     AS batches`,
+      [type, deliveryDate],
+    );
+    return rows as Array<Record<string, unknown>>;
+  }
+
   async run(
     actor: StaffContext,
     type: BatchType,
     rows: Array<Record<string, unknown>>,
     importer: RowImporter,
-    opts: { apply?: boolean } = {},
+    opts: { apply?: boolean; sourceMeta?: Record<string, unknown> } = {},
   ): Promise<BatchReport> {
     const dryRun = !opts.apply;
     const sourceHash = this.hashSource(rows);
+    const sourceMeta = opts.sourceMeta ? JSON.stringify(opts.sourceMeta) : null;
 
     if (!dryRun) {
       // apply gate 1: a dry-run of the same snapshot must exist (reviewed) —
@@ -101,9 +133,9 @@ export class BatchRunner {
       // batch row first so business rows can FK it; rolled back in dry-run and
       // re-written afterwards for the report
       await client.query(
-        `INSERT INTO import_batch (id, type, source_note, dry_run, state, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [batchId, type, sourceHash, dryRun, dryRun ? 'dry_run' : 'applied', actor.staffId],
+        `INSERT INTO import_batch (id, type, source_note, dry_run, state, created_by, source_meta)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [batchId, type, sourceHash, dryRun, dryRun ? 'dry_run' : 'applied', actor.staffId, sourceMeta],
       );
       for (let i = 0; i < rows.length; i += 1) {
         try {
@@ -151,9 +183,9 @@ export class BatchRunner {
       // pool.query('BEGIN') spans random pool connections and is not transactional
       await withTransaction(this.pool, async (client) => {
         await client.query(
-          `INSERT INTO import_batch (id, type, source_note, dry_run, state, counts, created_by)
-           VALUES ($1,$2,$3,true,'dry_run',$4,$5)`,
-          [batchId, type, sourceHash, JSON.stringify(counts), actor.staffId],
+          `INSERT INTO import_batch (id, type, source_note, dry_run, state, counts, created_by, source_meta)
+           VALUES ($1,$2,$3,true,'dry_run',$4,$5,$6)`,
+          [batchId, type, sourceHash, JSON.stringify(counts), actor.staffId, sourceMeta],
         );
         await this.writeRowResults(client, batchId, results);
         await this.audit.writeInTx(client, {

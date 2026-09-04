@@ -1,0 +1,24 @@
+[Unit]
+Description=Nutrezee Partner daily-deliveries → order feed (WP-OPS-06/07): dry-run + apply-if-changed for today and tomorrow, every 30 min
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+# The wrapper runs the .mjs inside nutrezee-api-1 (container env supplies DATABASE_URL and the API).
+Environment=FEED_MODE=apply
+Environment=ALLOW_APPLY=yes
+WorkingDirectory=/opt/nutrezee/sync
+ExecStart=/opt/nutrezee/sync/run-partner-daily-feed.sh
+TimeoutStartSec=20min
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

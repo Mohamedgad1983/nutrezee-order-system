@@ -1,0 +1,30 @@
+{
+  "name": "@nutrezee/fleetops-labels-engine",
+  "version": "0.3.9",
+  "description": "Nutrezee-branded Fleet-Ops shell, daily-meal labels, permanent customer barcodes, and driver locations",
+  "fleetbase": {
+    "route": "nutrezee-labels"
+  },
+  "keywords": [
+    "fleetbase-extension",
+    "fleet-ops",
+    "nutrezee",
+    "ember-addon",
+    "ember-engine"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "directories": {
+    "addon": "addon"
+  },
+  "dependencies": {
+    "@fleetbase/ember-core": "^0.3.23",
+    "ember-cli-babel": "^8.2.0",
+    "ember-cli-htmlbars": "^6.3.0"
+  },
+  "peerDependencies": {
+    "ember-engines": "^0.9.0"
+  },
+  "ember": {
+    "edition": "octane"
+  }
+}

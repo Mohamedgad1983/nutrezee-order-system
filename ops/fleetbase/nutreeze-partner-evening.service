@@ -1,0 +1,22 @@
+[Unit]
+Description=Nutrezee Partner API evening Fleetbase dispatch refresh for the next collection day (hourly 20:00-02:45 Kuwait) — WP-OPS-07 A50
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=NUTREEZE_DAILY_MODE=evening
+ExecStartPre=/opt/fleetbase/integrations/nutreeze-orders/healthcheck.sh
+ExecStart=/opt/fleetbase/integrations/nutreeze-orders/daily-sync.sh
+TimeoutStartSec=45min
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

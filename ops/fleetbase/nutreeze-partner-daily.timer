@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Nutrezee Fleetbase orders for the next 48 hours
+
+[Timer]
+OnCalendar=*-*-* 22:00:00 UTC
+Persistent=false
+RandomizedDelaySec=120
+Unit=nutreeze-partner-daily.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "expected_count": 19,
+  "drivers": [
+    {
+      "partner_driver_id": "122",
+      "driver_public_id": "driver_ks697fB5LP",
+      "unit": "Area-1"
+    },
+    {
+      "partner_driver_id": "A1",
+      "driver_public_id": "driver_ks697fB5LP",
+      "unit": "Area-1"
+    },
+    {
+      "partner_driver_id": "123",
+      "driver_public_id": "driver_aCmTB03tMY",
+      "unit": "Area-2"
+    },
+    {
+      "partner_driver_id": "A2",
+      "driver_public_id": "driver_aCmTB03tMY",
+      "unit": "Area-2"
+    },
+    {
+      "partner_driver_id": "124",
+      "driver_public_id": "driver_eVMKykp6nG",
+      "unit": "Area-3"
+    },
+    {
+      "partner_driver_id": "A3",
+      "driver_public_id": "driver_eVMKykp6nG",
+      "unit": "Area-3"
+    },
+    {
+      "partner_driver_id": "125",
+      "driver_public_id": "driver_1OyMcZZ71a",
+      "unit": "Area-4"
+    },
+    {
+      "partner_driver_id": "A4",
+      "driver_public_id": "driver_1OyMcZZ71a",
+      "unit": "Area-4"
+    },
+    {
+      "partner_driver_id": "126",
+      "driver_public_id": "driver_z31exReMHy",
+      "unit": "Area-5"
+    },
+    {
+      "partner_driver_id": "A5",
+      "driver_public_id": "driver_z31exReMHy",
+      "unit": "Area-5"
+    },
+    {
+      "partner_driver_id": "9286",
+      "driver_public_id": "driver_l58j0Bwpyo",
+      "unit": "Area-6"
+    },
+    {
+      "partner_driver_id": "A6",
+      "driver_public_id": "driver_l58j0Bwpyo",
+      "unit": "Area-6"
+    },
+    {
+      "partner_driver_id": "17214",
+      "driver_public_id": "driver_mW76oeHnja",
+      "unit": "Area-7"
+    },
+    {
+      "partner_driver_id": "A7",
+      "driver_public_id": "driver_mW76oeHnja",
+      "unit": "Area-7"
+    },
+    {
+      "partner_driver_id": "17770",
+      "driver_public_id": "driver_fpQEqYBGVG",
+      "unit": "Area-8"
+    },
+    {
+      "partner_driver_id": "A8",
+      "driver_public_id": "driver_fpQEqYBGVG",
+      "unit": "Area-8"
+    },
+    {
+      "partner_driver_id": "19033",
+      "driver_public_id": "driver_ioPJGOyvvu",
+      "unit": "Area-9"
+    },
+    {
+      "partner_driver_id": "A9",
+      "driver_public_id": "driver_ioPJGOyvvu",
+      "unit": "Area-9"
+    },
+    {
+      "partner_driver_id": "201",
+      "driver_public_id": "driver_l58j0Bwpyo",
+      "unit": "Area-6"
+    }
+  ]
+}

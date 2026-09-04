@@ -1,0 +1,136 @@
+<section class="nz-label-panel" data-test-nutrezee-label-extension>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Nutrezee Label &amp; Barcode</h2>
+            <p>Exact daily-meal label for this Fleetbase order.</p>
+        </div>
+        <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.load}}>
+            Reload
+        </button>
+    </header>
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Loading label…</div>
+    {{else}}
+        {{#if this.error}}
+            <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
+        {{/if}}
+    {{/if}}
+    {{#if this.label}}
+        {{#if this.label.nutritionMissing}}
+            <div class="nz-label-state nz-label-state--warning">
+                No authoritative dish detail is recorded for this delivery date. The printed table stays explicitly empty.
+            </div>
+        {{/if}}
+        {{#if this.notice}}
+            <div class="nz-label-state nz-label-state--success">{{this.notice}}</div>
+        {{/if}}
+
+        <div class="nz-label-freshness" data-test-partner-freshness>{{this.freshnessText}}</div>
+        <div class="nz-label-actions">
+            <div>
+                <strong>{{this.historyText}}</strong>
+                {{#if this.isReprint}}
+                    <label class="nz-label-reason">
+                        <span>Reprint reason (optional) / سبب إعادة الطباعة (اختياري)</span>
+                        <input
+                            type="text"
+                            value={{this.reprintReason}}
+                            placeholder="Optional / اختياري"
+                            {{on "input" this.updateReason}}
+                        />
+                    </label>
+                {{/if}}
+            </div>
+            <button type="button" class="btn btn-primary" disabled={{this.printing}} {{on "click" this.printLabel}}>
+                {{#if this.printing}}Preparing…{{else}}{{this.actionText}}{{/if}}
+            </button>
+        </div>
+
+        <div class="nz-label-preview">
+            <article class="nz-legacy-label {{this.label.driverColorClass}}" aria-label="Nutrezee label for order {{this.label.orderNumber}}">
+                <header class="nz-legacy-label__header">
+                    <svg class="nz-legacy-label__mark" viewBox="0 0 48 44" aria-hidden="true">
+                        <polygon points="24,2 42,12 42,32 24,42 6,32 6,12" fill="none" stroke="currentColor" stroke-width="1.4" />
+                        <polygon points="24,6 38,14 38,30 24,38 10,30 10,14" fill="none" stroke="currentColor" stroke-width="1.1" />
+                    </svg>
+                    <div class="nz-legacy-label__brand">Nutreeze</div>
+                    <div class="nz-legacy-label__tagline">Stay Healthy</div>
+                    <div class="nz-driver-band" data-test-driver-box-identity>
+                        <span>CAR / سيارة <strong>{{this.label.vehicleNumber}}</strong></span>
+                        <span>TEL / هاتف <strong>{{this.label.driverPhone}}</strong></span>
+                    </div>
+                </header>
+
+                <div class="nz-legacy-label__body">
+                    <section class="nz-legacy-label__info">
+                        <div class="nz-info-group">
+                            <div class="nz-info-row"><em>Full Name :</em><strong>{{this.label.fullName}}</strong></div>
+                            <div class="nz-info-row"><em>Subscription :</em><strong>{{this.label.subscription}}</strong></div>
+                            <div class="nz-info-row"><em>Delivery Time :</em><strong>{{this.label.deliveryTime}}</strong></div>
+                            <div class="nz-info-row"><em>Days Remaining :</em><strong>{{this.label.daysRemaining}}</strong></div>
+                            <div class="nz-info-row"><em>Delivery Method :</em><strong>{{this.label.deliveryMethod}}</strong></div>
+                        </div>
+
+                        <div class="nz-info-group nz-package-row">
+                            <strong><em>{{this.label.packageName}}</em> (Meal: {{this.label.mealsPerDay}})</strong>
+                            <strong>(Snacks: {{this.label.snacksPerDay}})</strong>
+                        </div>
+
+                        <div class="nz-info-group nz-id-row">
+                            <span>User ID <strong>{{this.label.legacyUserId}}</strong></span>
+                            <span class="nz-id-row__order">Order ID <strong>{{this.label.orderNumber}}</strong></span>
+                        </div>
+
+                        <div class="nz-info-group nz-address-block">
+                            <div><strong>Area:</strong> {{this.label.area}}, <strong>Block:</strong> {{this.label.block}}, <strong>Street:</strong> {{this.label.street}}</div>
+                            <div><strong>Building:</strong> {{this.label.building}}, <strong>Floor:</strong> {{this.label.floor}}, <strong>Flat:</strong> {{this.label.flat}}, <strong>Direction:</strong> {{this.label.direction}}</div>
+                            <div><strong>Phone:</strong> {{this.label.phone}}</div>
+                            <div><strong>Notes:</strong> {{this.label.notes}}</div>
+                        </div>
+                    </section>
+
+                    <section class="nz-legacy-label__meals">
+                        <table class="nz-meals-table">
+                            <colgroup>
+                                <col class="nz-meals-table__dish" />
+                                <col /><col /><col /><col /><col />
+                            </colgroup>
+                            <thead>
+                                <tr><th>Dish Name</th><th>Qty</th><th>Pro</th><th>Carb</th><th>Fat</th><th>Cal</th></tr>
+                            </thead>
+                            <tbody>
+                                {{#each this.label.meals as |meal|}}
+                                    <tr>
+                                        <td>{{meal.dishName}}</td><td>{{meal.qty}}</td><td>{{meal.protein}}</td>
+                                        <td>{{meal.carbs}}</td><td>{{meal.fat}}</td><td>{{meal.calories}}</td>
+                                    </tr>
+                                {{else}}
+                                    <tr><td class="nz-meals-table__empty" colspan="6">No dish detail recorded for this date</td></tr>
+                                {{/each}}
+                            </tbody>
+                        </table>
+
+                        <div class="nz-total-row">
+                            <span>Total Nutrition</span>
+                            <table>
+                                <thead><tr><th>Protein</th><th>Carb</th><th>Fat</th><th>Calories</th></tr></thead>
+                                <tbody>
+                                    <tr>
+                                        <td>{{this.label.totalProtein}}</td><td>{{this.label.totalCarbs}}</td>
+                                        <td>{{this.label.totalFat}}</td><td>{{this.label.totalCalories}}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <footer class="nz-legacy-label__barcode">
+                    <div class="nz-barcode-svg">{{this.label.barcodeSvg}}</div>
+                    <div class="nz-barcode-value">{{this.label.barcodeValue}}</div>
+                </footer>
+            </article>
+        </div>
+    {{/if}}
+</section>

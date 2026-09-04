@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "expected_count": 9,
+  "drivers": [
+    { "partner_driver_id": "REPLACE_PARTNER_ID_1", "driver_public_id": "driver_ks697fB5LP", "unit": "Area-1" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_2", "driver_public_id": "driver_aCmTB03tMY", "unit": "Area-2" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_3", "driver_public_id": "driver_eVMKykp6nG", "unit": "Area-3" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_4", "driver_public_id": "driver_1OyMcZZ71a", "unit": "Area-4" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_5", "driver_public_id": "driver_z31exReMHy", "unit": "Area-5" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_6", "driver_public_id": "driver_l58j0Bwpyo", "unit": "Area-6" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_7", "driver_public_id": "driver_mW76oeHnja", "unit": "Area-7" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_8", "driver_public_id": "driver_fpQEqYBGVG", "unit": "Area-8" },
+    { "partner_driver_id": "REPLACE_PARTNER_ID_9", "driver_public_id": "driver_ioPJGOyvvu", "unit": "Area-9" }
+  ]
+}

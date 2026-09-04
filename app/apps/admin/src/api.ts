@@ -19,6 +19,10 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 const FRIENDLY: Record<string, string> = {
   no_session: 'Your session has expired — please sign in again.',
   forbidden: 'You do not have permission for this action.',
+  role_denied: 'Only the Logistics Manager can perform this action. / مدير الخدمات اللوجستية فقط.',
+  validation_failed: 'Check the submitted values or selection. / تحقق من البيانات أو الاختيارات.',
+  integration_unavailable: 'Fleetbase is unavailable; check the recorded outcome before retrying. / Fleetbase غير متاح؛ تحقق من النتيجة المسجلة قبل المحاولة.',
+  upstream_rejected: 'Fleetbase rejected the operation. / رفض Fleetbase العملية.',
 };
 
 export function humanMessage(e: unknown): string {
@@ -65,7 +69,7 @@ export interface Me {
 
 export interface ListResponse<T> {
   items: T[];
-  page: { limit: number };
+  page: { limit: number; offset?: number; total?: number };
 }
 
 export interface CompletenessWarning {
@@ -115,5 +119,9 @@ export interface OrderListItem {
   end_date: string;
   source_draft_id: string | null;
   total: number | string;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  package_name?: string | null;
+  payment_status?: string | null;
   masked: boolean;
 }

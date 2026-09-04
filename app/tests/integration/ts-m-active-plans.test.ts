@@ -156,4 +156,54 @@ describe('TS-M migration — active-plan batch 3 (WP-13)', () => {
     const miss = await runner.run(sa, 'active_plans', unknownPhone, importActivePlans);
     expect(miss.counts).toMatchObject({ error: 1 });
   });
+
+  // Option B: frozen legacy delivery (method/time/area) stored on create + backfilled
+  // idempotently onto already-imported orders.
+  it('stores frozen legacy delivery on create and backfills it idempotently on re-import', async () => {
+    // the runner enforces dry-run-before-apply (same source hash)
+    const applyRows = async (rows: Array<Record<string, unknown>>) => {
+      await runner.run(sa, 'active_plans', rows, importActivePlans);
+      return runner.run(sa, 'active_plans', rows, importActivePlans, { apply: true });
+    };
+    const base = {
+      legacy_id: 'plan-deliv-1', order_number: 'LEG-DELIV-1',
+      customer_legacy_id: 'cust-ap-1', package_name: 'Legacy Active Plan',
+      start_date: '2099-09-01', end_date: '2099-09-02',
+    };
+    // 1) create WITHOUT delivery -> all three frozen columns null
+    await applyRows([base]);
+    let o = await pool.query(
+      `SELECT delivery_method_frozen, delivery_time_frozen, delivery_area_frozen FROM customer_order WHERE order_number='LEG-DELIV-1'`,
+    );
+    expect(o.rows[0]).toMatchObject({ delivery_method_frozen: null, delivery_time_frozen: null, delivery_area_frozen: null });
+
+    // 2) re-import (matched) WITH delivery -> backfilled, message present
+    const withDelivery = [{ ...base, delivery_method: 'اترك الصندوق عند الباب', delivery_time: '5am-4pm', area: 'Jabriya' }];
+    const back = await applyRows(withDelivery);
+    expect(back.counts).toMatchObject({ created: 0, matched: 1 });
+    expect(back.rows[0].messages).toContain('delivery_backfilled');
+    o = await pool.query(
+      `SELECT delivery_method_frozen, delivery_time_frozen, delivery_area_frozen FROM customer_order WHERE order_number='LEG-DELIV-1'`,
+    );
+    expect(o.rows[0]).toMatchObject({ delivery_method_frozen: 'اترك الصندوق عند الباب', delivery_time_frozen: '5am-4pm', delivery_area_frozen: 'Jabriya' });
+
+    // 3) idempotent: a later re-import with a DIFFERENT method does NOT overwrite the stored snapshot
+    const changed = [{ ...base, delivery_method: 'OTHER', delivery_time: 'OTHER', area: 'OTHER' }];
+    const again = await applyRows(changed);
+    expect(again.rows[0].messages ?? []).not.toContain('delivery_backfilled');
+    o = await pool.query(`SELECT delivery_method_frozen FROM customer_order WHERE order_number='LEG-DELIV-1'`);
+    expect(o.rows[0].delivery_method_frozen).toBe('اترك الصندوق عند الباب');
+
+    // 4) create path: a NEW order carrying delivery stores it directly
+    const newWithDelivery = [{
+      legacy_id: 'plan-deliv-2', order_number: 'LEG-DELIV-2', customer_legacy_id: 'cust-ap-1',
+      package_name: 'Legacy Active Plan', start_date: '2099-09-03', end_date: '2099-09-04',
+      delivery_method: 'رن الجرس عند الوصول', delivery_time: 'morning', area: 'Salwa',
+    }];
+    await applyRows(newWithDelivery);
+    const o2 = await pool.query(
+      `SELECT delivery_method_frozen, delivery_area_frozen FROM customer_order WHERE order_number='LEG-DELIV-2'`,
+    );
+    expect(o2.rows[0]).toMatchObject({ delivery_method_frozen: 'رن الجرس عند الوصول', delivery_area_frozen: 'Salwa' });
+  });
 });

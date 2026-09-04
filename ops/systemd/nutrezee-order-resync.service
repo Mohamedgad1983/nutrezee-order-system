@@ -1,0 +1,11 @@
+# Order-resync PLAN-ONLY monitor (enrich + governed dry-run). Driven by the .timer.
+# Read-only: never applies, never scrapes legacy, never touches production. The apply
+# and the legacy refresh are separate deliberate steps — see ops/sync/README-ongoing-resync.md.
+[Unit]
+Description=Nutrezee order-resync plan-only monitor (legacy -> staging, dry-run)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/sync/run-order-resync.sh

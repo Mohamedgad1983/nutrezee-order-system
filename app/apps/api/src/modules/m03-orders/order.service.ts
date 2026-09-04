@@ -67,6 +67,9 @@ export interface OrderForPayment {
   expectedPaymentMethod: string | null;
 }
 
+export type ImportedDayStatus = 'scheduled' | 'skipped' | 'cancelled_day';
+const IMPORTED_DAY_STATUSES: ImportedDayStatus[] = ['scheduled', 'skipped', 'cancelled_day'];
+
 export interface ImportedActivePlanInput {
   orderNumber: string;
   customerId: string;
@@ -84,6 +87,9 @@ export interface ImportedActivePlanInput {
   importBatchId: string;
   addressFrozen?: Record<string, unknown>;
   slotId?: string;
+  deliveryMethodFrozen?: string;
+  deliveryTimeFrozen?: string;
+  deliveryAreaFrozen?: string;
 }
 
 export interface ExceptionRow {
@@ -216,6 +222,54 @@ export class OrderService {
       params,
     );
     return rows.map((r) => this.toOrder(r));
+  }
+
+  /** Rich, searchable, paginated order list for the Orders screen — joins customer name/
+   *  phone, package name and latest payment status. PII/money masked at the controller. */
+  async listOrdersRich(filters: { status?: OrderStatus; q?: string; customerId?: string; limit: number; offset: number }): Promise<{
+    rows: Array<Record<string, unknown>>; total: number;
+  }> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (filters.status) { params.push(filters.status); where.push(`o.status = $${params.length}`); }
+    if (filters.customerId) { params.push(filters.customerId); where.push(`o.customer_id = $${params.length}`); }
+    if (filters.q && filters.q.trim()) {
+      params.push(`%${filters.q.trim()}%`);
+      const i = params.length;
+      where.push(`(o.order_number ILIKE $${i} OR c.full_name_en ILIKE $${i} OR c.full_name_ar ILIKE $${i}
+        OR EXISTS (SELECT 1 FROM customer_phone p WHERE p.customer_id = o.customer_id AND p.phone_normalized ILIKE $${i}))`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query(
+      `SELECT count(*)::int n FROM customer_order o LEFT JOIN customer c ON c.id = o.customer_id ${whereSql}`,
+      params,
+    );
+    const limitIdx = params.push(filters.limit);
+    const offsetIdx = params.push(filters.offset);
+    const { rows } = await this.pool.query(
+      `SELECT o.id, o.order_number, o.customer_id, o.status, o.start_date, o.end_date, o.total, o.currency,
+              c.full_name_en AS customer_name,
+              (SELECT p.phone_normalized FROM customer_phone p WHERE p.customer_id = o.customer_id ORDER BY p.is_primary DESC NULLS LAST LIMIT 1) AS customer_phone,
+              coalesce(pk.name_en, o.package_name_frozen_en) AS package_name,
+              (SELECT pr.status FROM payment_record pr WHERE pr.order_id = o.id ORDER BY pr.created_at DESC LIMIT 1) AS payment_status
+       FROM customer_order o
+       LEFT JOIN customer c ON c.id = o.customer_id
+       LEFT JOIN package pk ON pk.id = o.package_id
+       ${whereSql}
+       ORDER BY o.start_date DESC NULLS LAST, o.order_number DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params,
+    );
+    return {
+      rows: rows.map((r) => ({
+        id: r.id, order_number: r.order_number, customer_id: r.customer_id, status: r.status,
+        start_date: this.dateString(r.start_date), end_date: this.dateString(r.end_date),
+        total: r.total === null ? null : Number(r.total), currency: r.currency,
+        customer_name: r.customer_name, customer_phone: r.customer_phone,
+        package_name: r.package_name, payment_status: r.payment_status,
+      })),
+      total: Number(countRes.rows[0]?.n ?? 0),
+    };
   }
 
   async listDays(orderId: string): Promise<Array<{ id: string; date: string; status: FulfillmentStatus }>> {
@@ -396,21 +450,28 @@ export class OrderService {
       throw new OrderError('validation_failed', { field: 'status' });
     }
     const existing = await this.findByOrderNumberInTx(client, input.orderNumber);
-    if (existing) return { id: existing, dayCount: 0 };
+    if (existing) {
+      // Idempotent re-import: don't recreate, but backfill frozen legacy delivery onto
+      // the existing order if it carries delivery and none is stored yet.
+      await this.setFrozenDeliveryInTx(client, actorId, existing, input);
+      return { id: existing, dayCount: 0 };
+    }
     const id = newId();
     const addressFrozen = input.addressFrozen ?? { legacy_import: true, address_unverified: true };
     await client.query(
       `INSERT INTO customer_order
         (id, order_number, customer_id, package_id, package_name_frozen_en, package_name_frozen_ar,
          status, start_date, end_date, off_days, off_days_unverified, channel, package_amount,
-         discount, total, currency, origin, import_batch_id, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$13,$14,'legacy',$15,$16)`,
+         discount, total, currency, origin, import_batch_id, created_by,
+         delivery_method_frozen, delivery_time_frozen, delivery_area_frozen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$13,$14,'legacy',$15,$16,$17,$18,$19)`,
       [
         id, input.orderNumber, input.customerId, input.packageId ?? null,
         input.packageNameEn ?? null, input.packageNameAr ?? null, status,
         input.startDate, input.endDate, JSON.stringify(input.offDays ?? []),
         input.offDaysUnverified ?? false, input.channel ?? 'legacy',
         input.total ?? 0, input.currency ?? 'SAR', input.importBatchId, actorId,
+        input.deliveryMethodFrozen ?? null, input.deliveryTimeFrozen ?? null, input.deliveryAreaFrozen ?? null,
       ],
     );
     let dayCount = 0;
@@ -423,6 +484,88 @@ export class OrderService {
       dayCount += 1;
     }
     return { id, dayCount };
+  }
+
+  /**
+   * Backfill frozen legacy delivery (method/time/area) onto an existing imported order.
+   * Idempotent: only fills columns that are currently NULL, so re-runs are no-ops and a
+   * later better value never overwrites a stored one. Returns true if any column was set.
+   * M03 owns customer_order, so this stays inside the single write path.
+   */
+  async setFrozenDeliveryInTx(
+    client: PoolClient,
+    actorId: string,
+    orderId: string,
+    input: { deliveryMethodFrozen?: string; deliveryTimeFrozen?: string; deliveryAreaFrozen?: string },
+  ): Promise<boolean> {
+    const method = input.deliveryMethodFrozen ?? null;
+    const time = input.deliveryTimeFrozen ?? null;
+    const area = input.deliveryAreaFrozen ?? null;
+    if (method === null && time === null && area === null) return false;
+    const { rowCount } = await client.query(
+      `UPDATE customer_order
+          SET delivery_method_frozen = COALESCE(delivery_method_frozen, $2),
+              delivery_time_frozen   = COALESCE(delivery_time_frozen,   $3),
+              delivery_area_frozen   = COALESCE(delivery_area_frozen,   $4),
+              updated_at = now(), updated_by = $5
+        WHERE id = $1
+          AND (delivery_method_frozen IS NULL OR delivery_time_frozen IS NULL OR delivery_area_frozen IS NULL)
+          AND ($2::text IS NOT NULL OR $3::text IS NOT NULL OR $4::text IS NOT NULL)`,
+      [orderId, method, time, area, actorId],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  /**
+   * WP-OPS-06 (A47): mirror one Partner delivery day onto an existing imported order.
+   * Creates the (order, date) day if missing; otherwise only moves it between the three
+   * mirror states (scheduled / skipped / cancelled_day). A day that has entered kitchen or
+   * delivery progress is never touched (Partner is not the authority for operational progress).
+   * The order's start/end range is widened to cover the date. Every status change leaves an
+   * order_status_history row; the transition engine is bypassed on purpose, exactly like the
+   * rest of the M19 import path, because these rows mirror an external system's state.
+   */
+  async ensureImportedDayInTx(
+    client: PoolClient,
+    actorId: string,
+    orderId: string,
+    input: { date: string; status: ImportedDayStatus; addressFrozen?: Record<string, unknown>; slotId?: string },
+  ): Promise<'created' | 'updated' | 'unchanged' | 'locked'> {
+    if (!IMPORTED_DAY_STATUSES.includes(input.status)) throw new OrderError('validation_failed', { field: 'status' });
+    await client.query(
+      `UPDATE customer_order
+          SET start_date = LEAST(start_date, $2::date), end_date = GREATEST(end_date, $2::date),
+              updated_at = now(), updated_by = $3
+        WHERE id = $1 AND (start_date > $2::date OR end_date < $2::date)`,
+      [orderId, input.date, actorId],
+    );
+    const { rows } = await client.query(
+      `SELECT id, status FROM fulfillment_day WHERE order_id = $1 AND date = $2 FOR UPDATE`,
+      [orderId, input.date],
+    );
+    if (rows.length === 0) {
+      const dayId = newId();
+      const addressFrozen = input.addressFrozen ?? { legacy_import: true, address_unverified: true };
+      await client.query(
+        `INSERT INTO fulfillment_day (id, order_id, date, status, slot_id, address_frozen, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [dayId, orderId, input.date, input.status, input.slotId ?? null, JSON.stringify(addressFrozen), actorId],
+      );
+      if (input.status !== 'scheduled') {
+        await this.historyInTx(client, 'fulfillment_day', dayId, 'scheduled', input.status, actorId, null);
+      }
+      return 'created';
+    }
+    const current = rows[0] as { id: string; status: string };
+    if (current.status === input.status) return 'unchanged';
+    if (!IMPORTED_DAY_STATUSES.includes(current.status as ImportedDayStatus)) return 'locked';
+    await client.query(
+      `UPDATE fulfillment_day SET status = $2, version = version + 1, updated_at = now(), updated_by = $3
+        WHERE id = $1`,
+      [current.id, input.status, actorId],
+    );
+    await this.historyInTx(client, 'fulfillment_day', current.id, current.status, input.status, actorId, null);
+    return 'updated';
   }
 
   async rollbackImportedBatchInTx(client: PoolClient, batchId: string): Promise<string[]> {

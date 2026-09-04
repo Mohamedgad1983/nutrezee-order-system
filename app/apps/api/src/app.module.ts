@@ -45,10 +45,32 @@ import { SyncRecordService } from './modules/m18-bridge/sync-record.service';
 import { BatchRunner } from './modules/m19-migration/batch-runner';
 import { MigrationController } from './modules/m19-migration/migration.controller';
 import { MigrationService } from './modules/m19-migration/migration.service';
+import { PartnerDailyFeedClient, type PartnerDailyFeedGateway } from './modules/m19-migration/partner-daily-feed';
+import { FleetbaseController } from './modules/m24-fleetbase/fleetbase.controller';
+import { FleetbaseService } from './modules/m24-fleetbase/fleetbase.service';
+import { DriverCredentialController } from './modules/m24-fleetbase/driver-credential.controller';
+import { DriverCredentialService } from './modules/m24-fleetbase/driver-credential.service';
+import { DriverOrderReassignmentController } from './modules/m24-fleetbase/driver-order-reassignment.controller';
+import { DriverOrderReassignmentService } from './modules/m24-fleetbase/driver-order-reassignment.service';
+import { PackingController } from './modules/m20-packing/packing.controller';
+import { PackingService } from './modules/m20-packing/packing.service';
+import { DeliveryController } from './modules/m21-delivery/delivery.controller';
+import { DeliveryService } from './modules/m21-delivery/delivery.service';
+import { LabelController } from './modules/m25-label/label.controller';
+import { BarcodeService } from './modules/m25-label/barcode.service';
+import { LabelService } from './modules/m25-label/label.service';
+import { CollectionService } from './modules/m25-label/collection.service';
+import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
+import { DriverLocationService } from './modules/m25-label/driver-location.service';
+import {
+  PartnerLabelSource, type PartnerLabelMealSourceGateway,
+} from './modules/m25-label/partner-label-source';
 
 // WP-01 platform wiring. Business modules (m01-intake … m19-migration) attach from
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
+export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
+const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
 
 @Module({
   controllers: [
@@ -57,6 +79,8 @@ export const POOL = 'POOL';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
+    PackingController, DeliveryController, LabelController,
+    FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
     { provide: POOL, useFactory: (): Pool => getPool() },
@@ -126,6 +150,9 @@ export const POOL = 'POOL';
         const merges = new MergeService(pool, audit, outbox, settings);
         merges.registerRelinkStep(DraftService.customerRelinkStep());
         merges.registerRelinkStep(OrderService.customerRelinkStep());
+        // A27: the loser's barcode survives a merge as an alias on the winner, so labels
+        // already printed for the loser keep resolving to the surviving customer.
+        merges.registerRelinkStep(BarcodeService.customerRelinkStep());
         return merges;
       },
       inject: [POOL, AuditService, OutboxService, SettingsReader],
@@ -228,16 +255,93 @@ export const POOL = 'POOL';
       ],
     },
     {
+      // WP-OPS-06: server-held Partner key; absent key -> feature disabled (endpoints return not_configured).
+      provide: PARTNER_DAILY_FEED,
+      useFactory: (): PartnerDailyFeedGateway | null => PartnerDailyFeedClient.fromEnv(),
+    },
+    {
       provide: MigrationService,
       useFactory: (
         runner: BatchRunner, customers: CustomerService, catalog: CatalogService,
         sync: SyncRecordService, orders: OrderService, payments: PaymentService,
-        settings: SettingsReader,
-      ) => new MigrationService(runner, customers, catalog, sync, orders, payments, settings),
+        settings: SettingsReader, partnerFeed: PartnerDailyFeedGateway | null,
+      ) => new MigrationService(runner, customers, catalog, sync, orders, payments, settings, partnerFeed),
       inject: [
         BatchRunner, CustomerService, CatalogService, SyncRecordService,
-        OrderService, PaymentService, SettingsReader,
+        OrderService, PaymentService, SettingsReader, PARTNER_DAILY_FEED,
       ],
+    },
+    // Wave-6 operational foundation (migration track): packing + driver/area assignment.
+    // Each writes only its own tables, reads order/customer data, and audits in-transaction.
+    {
+      provide: PackingService,
+      useFactory: (pool: Pool, audit: AuditService) => new PackingService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      provide: DeliveryService,
+      useFactory: (pool: Pool, audit: AuditService) => new DeliveryService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    // Wave-7 m25-label (A27) — exact legacy label, permanent customer barcode, box collection.
+    // Writes only customer_barcode / label_print_event / box_collection; everything else is read.
+    {
+      provide: BarcodeService,
+      useFactory: (pool: Pool, audit: AuditService) => new BarcodeService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      provide: PARTNER_LABEL_SOURCE,
+      useFactory: (): PartnerLabelMealSourceGateway | null => PartnerLabelSource.fromEnv(),
+    },
+    {
+      provide: LabelService,
+      useFactory: (
+        pool: Pool, audit: AuditService, barcodes: BarcodeService,
+        partnerMeals: PartnerLabelMealSourceGateway | null,
+      ) => new LabelService(pool, audit, barcodes, partnerMeals),
+      inject: [POOL, AuditService, BarcodeService, PARTNER_LABEL_SOURCE],
+    },
+    {
+      provide: CollectionService,
+      useFactory: (pool: Pool, audit: AuditService, barcodes: BarcodeService, idem: IdempotencyService) =>
+        new CollectionService(pool, audit, barcodes, idem),
+      inject: [POOL, AuditService, BarcodeService, IdempotencyService],
+    },
+    {
+      // A28 — validates the existing Fleetbase bearer token and resolves the authenticated
+      // driver's assignments directly from Fleetbase. No second Nutrezee driver identity exists.
+      provide: FleetbaseIdentityService,
+      useFactory: () => new FleetbaseIdentityService(),
+    },
+    {
+      // A30 — append-only exact locations captured only by the currently assigned Fleetbase
+      // driver, with Fleet-Ops-only audited corrections.
+      provide: DriverLocationService,
+      useFactory: (pool: Pool, audit: AuditService, idem: IdempotencyService) =>
+        new DriverLocationService(pool, audit, idem),
+      inject: [POOL, AuditService, IdempotencyService],
+    },
+    {
+      // m24-fleetbase — nutrezee → Fleetbase order bridge (our code; Fleetbase config-only/AGPL).
+      provide: FleetbaseService,
+      useFactory: (pool: Pool, audit: AuditService, settings: SettingsReader) =>
+        new FleetbaseService(pool, audit, settings),
+      inject: [POOL, AuditService, SettingsReader],
+    },
+    {
+      // WP-OPS-02 / A21 — server-only driver credential rotation. The service token is
+      // loaded lazily from env so a missing secret fails closed without breaking startup.
+      provide: DriverCredentialService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverCredentialService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      // WP-OPS-03 / A22 — safely chunked, server-verified Fleetbase order reassignment.
+      // A missing order-manager token fails closed without breaking API startup.
+      provide: DriverOrderReassignmentService,
+      useFactory: (pool: Pool, audit: AuditService) => new DriverOrderReassignmentService(pool, audit),
+      inject: [POOL, AuditService],
     },
   ],
 })
