@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.10');
+    expect(packageJson.version).toBe('0.3.11');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -191,6 +191,10 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     // Still nothing is recorded by viewing: the print confirmation flow is untouched.
     expect(batchComponent).toContain('this.awaitingConfirmation = true');
     expect(batchTemplate).not.toContain('Reload today');
+    // A54.3: option-level `selected` — a value set on the <select> before its options exist renders blank.
+    expect(batchTemplate).toContain('selected={{eq this.filterType "driver"}}');
+    expect(batchTemplate).toContain('selected={{eq option.id this.filterValue}}');
+    expect(batchTemplate).not.toContain('<select value=');
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {

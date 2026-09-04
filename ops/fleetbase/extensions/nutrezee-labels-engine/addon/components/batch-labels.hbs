@@ -72,17 +72,19 @@
         <div class="nz-batch-controls {{unless this.isReady "nz-batch-controls--disabled"}}">
             <label>
                 <span>Group by / الاختيار حسب</span>
-                <select value={{this.filterType}} disabled={{not this.isReady}} {{on "change" this.updateFilterType}}>
-                    <option value="driver" disabled={{not this.hasDriverOptions}}>Driver / السائق</option>
-                    <option value="area">Area / المنطقة</option>
+                {{! A54.3: `selected` on each option — a `value` set on the <select> before its options
+                    exist leaves the control blank in Chrome. }}
+                <select disabled={{not this.isReady}} {{on "change" this.updateFilterType}}>
+                    <option value="driver" selected={{eq this.filterType "driver"}} disabled={{not this.hasDriverOptions}}>Driver / السائق</option>
+                    <option value="area" selected={{eq this.filterType "area"}}>Area / المنطقة</option>
                 </select>
             </label>
 
             <label>
                 <span>{{#if (eq this.filterType "driver")}}Driver / السائق{{else}}Area / المنطقة{{/if}}</span>
-                <select value={{this.filterValue}} disabled={{or (not this.isReady) (not this.filterOptions.length)}} {{on "change" this.updateFilterValue}}>
-                    {{#each this.filterOptions as |option|}}
-                        <option value={{option.id}}>{{option.label}} — {{option.count}} orders</option>
+                <select disabled={{or (not this.isReady) (not this.filterOptions.length)}} {{on "change" this.updateFilterValue}}>
+                    {{#each this.filterOptions key="id" as |option|}}
+                        <option value={{option.id}} selected={{eq option.id this.filterValue}}>{{option.label}} — {{option.count}} orders</option>
                     {{/each}}
                 </select>
             </label>
