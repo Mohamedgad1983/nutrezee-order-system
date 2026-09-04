@@ -40,7 +40,6 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 const NO_AREA_KEY = '__no_area__';
-const MAX_BATCH_LABELS = 500;
 
 export interface BatchLabelCandidate {
   selectionId: string;
@@ -361,11 +360,7 @@ export class LabelService {
     if (requested.length === 0) {
       throw new LabelError('validation_failed', { field: 'selection_ids' });
     }
-    if (requested.length > MAX_BATCH_LABELS) {
-      throw new LabelError('validation_failed', {
-        field: 'selection_ids', reason: 'batch_limit_exceeded', limit: MAX_BATCH_LABELS,
-      });
-    }
+    // A53 (owner, 2026-09-04): no cap on batch size — a full day (700+ labels) prints in one run.
 
     const allowed = new Map(filtered.map((candidate) => [candidate.selectionId, candidate]));
     const selected = requested.map((id) => allowed.get(id));
