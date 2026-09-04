@@ -75,3 +75,20 @@ Company cache keys cleared in Redis. Console renders KWD with Fleetbase's built-
 Side effect (Inferred): revenue/AOV metrics filter transactions by the company currency; the only 16 existing
 transactions are USD test rows, so money tiles now read 0 K.D. until real KWD transactions exist. Partner orders carry
 no transactions today.
+
+## Follow-up 2026-09-04 — owner asked to remove the Ledger "$0.00" block, Fleetbase Blog and Github card
+Root cause (Verified): "Default Dashboard" is a **virtual, non-persisted** dashboard (`user_uuid = 'system'`) that the
+console assembles from every widget registered with `default: true` on the `dashboard` registry — Fleet-Ops (8), Ledger
+(15, hence the `$` KPI tiles; Ledger KPIs have no company-currency fallback), plus the console's own Blog and Github
+cards. There is nothing to "delete" in the DB; the by-the-book fix is a **persisted user dashboard**, which the console
+prefers whenever one is marked `is_default` for the signed-in user (`services/dashboard.js#_getNextDashboard`).
+
+Created for Mohamed's user (`6f425109-…`, company `2db920aa-…`), extension `core`, `is_default = 1`:
+`dashboards.uuid = dfe3ec33-a869-11f1-b45d-424b2a3ad6bb`, name **Nutreeze Operations**, with the 8 Fleet-Ops default
+widgets only — Earnings, Avg Order Value, Active Orders, Drivers Online (row 1), Live Fleet Map + Revenue Trend (row 2),
+Top Drivers + Maintenance Overview (row 3). Rows use exactly the shape the console persists itself:
+`component = '#extension-component:@fleetbase/fleetops-engine:widget/<name>'` (resolved by the
+`lazy-engine-component` helper) and `options.widget_key = <registry id>`.
+
+The virtual "Default Dashboard" still exists in the dashboard switcher; the owner can add/remove widgets on the new one
+with Edit / Add widgets, and can switch back at any time. No console rebuild, no code change.
