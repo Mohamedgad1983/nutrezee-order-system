@@ -23,6 +23,16 @@ import type { FleetbaseAssignedOrder, FleetbaseDriverContext } from './fleetbase
 /** Statuses on which a day is not deliverable. */
 const CANCELLED_STATUSES = ['cancelled_day', 'skipped'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A54 batch-day window around the Kuwait date: one day back (reprints), seven ahead. */
+const BATCH_DAY_WINDOW_BACK = 1;
+const BATCH_DAY_WINDOW_AHEAD = 7;
+
+/** Calendar arithmetic on a YYYY-MM-DD string in UTC (no timezone drift). */
+function shiftDate(date: string, days: number): string {
+  const [y = 0, m = 0, d = 0] = date.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d + days));
+  return utc.toISOString().slice(0, 10);
+}
 const UNIQUE_VIOLATION = '23505';
 
 export class CollectionError extends Error {
@@ -91,6 +101,34 @@ export class CollectionService {
       });
     }
     return current;
+  }
+
+  /**
+   * A54 — the Fleet-Ops Batch Labels page prints a chosen delivery day, not only today: stickers
+   * for Sunday are printed on Saturday night. The server's Kuwait date still anchors the window
+   * (yesterday for reprints … a week ahead); anything else is refused, and no date is guessed.
+   */
+  async batchDay(requested?: string): Promise<{ deliveryDate: string; today: string; from: string; to: string }> {
+    const today = await this.today();
+    if (!DATE_RE.test(today)) {
+      throw new CollectionError('validation_failed', { field: 'delivery_date' });
+    }
+    const from = shiftDate(today, -BATCH_DAY_WINDOW_BACK);
+    const to = shiftDate(today, BATCH_DAY_WINDOW_AHEAD);
+    const value = (requested ?? '').trim();
+    if (value === '') return { deliveryDate: today, today, from, to };
+    if (!DATE_RE.test(value) || shiftDate(value, 0) !== value) {
+      throw new CollectionError('validation_failed', { field: 'delivery_date' });
+    }
+    if (value < from || value > to) {
+      throw new CollectionError('forbidden', {
+        reason: 'delivery_date_out_of_window',
+        field: 'delivery_date',
+        from,
+        to,
+      });
+    }
+    return { deliveryDate: value, today, from, to };
   }
 
   /**

@@ -52,16 +52,23 @@ export class LabelController {
 
   // ---- labels ----
 
-  /** Pure current-day options for the Fleet-Ops Batch Labels page. */
+  /**
+   * Pure options for the Fleet-Ops Batch Labels page. A54: the operator chooses the delivery day
+   * (default today, Kuwait); the server only admits dates inside its own window.
+   */
   @Get('fleet-ops/labels/batch/options')
-  async fleetbaseBatchOptions(@Req() req: Request) {
+  async fleetbaseBatchOptions(@Req() req: Request, @Query('delivery_date') requestedDate?: string) {
     return this.wrap(async () => {
-      const deliveryDate = await this.collection.currentDay();
+      const day = await this.collection.batchDay(requestedDate);
       const { orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
-        this.bearer(req), deliveryDate,
+        this.bearer(req), day.deliveryDate,
       );
-      const candidates = await this.labels.batchCandidates(deliveryDate, orders);
-      return batchOptionsResponse(deliveryDate, orders.length, candidates);
+      const candidates = await this.labels.batchCandidates(day.deliveryDate, orders);
+      return {
+        ...batchOptionsResponse(day.deliveryDate, orders.length, candidates),
+        today: day.today,
+        window: { from: day.from, to: day.to },
+      };
     });
   }
 
@@ -70,7 +77,7 @@ export class LabelController {
   @HttpCode(200)
   async fleetbaseBatchPreview(@Req() req: Request, @Body() body: FleetbaseBatchBody) {
     return this.wrap(async () => {
-      const deliveryDate = await this.collection.currentDay();
+      const { deliveryDate } = await this.collection.batchDay(body?.delivery_date);
       const { actor, orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
         this.bearer(req), deliveryDate,
       );
@@ -98,7 +105,7 @@ export class LabelController {
   @HttpCode(201)
   async fleetbaseBatchPrinted(@Req() req: Request, @Body() body: FleetbaseBatchPrintBody) {
     return this.wrap(async () => {
-      const deliveryDate = await this.collection.currentDay();
+      const { deliveryDate } = await this.collection.batchDay(body?.delivery_date);
       const { actor, orders } = await this.fleetbaseIdentity.ordersForOperatorDate(
         this.bearer(req), deliveryDate,
       );
@@ -382,6 +389,7 @@ interface BatchBody { delivery_date: string; driver_id?: string }
 interface PrintBody { delivery_date: string; kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbasePrintBody { kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbaseBatchBody {
+  delivery_date?: string;
   filter_type: 'driver' | 'area';
   filter_value: string;
   selection_ids?: string[];
