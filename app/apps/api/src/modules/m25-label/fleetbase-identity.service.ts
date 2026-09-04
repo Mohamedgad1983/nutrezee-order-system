@@ -1,7 +1,17 @@
+import { createHash } from 'node:crypto';
 import type { StaffContext } from '../../platform/auth/session.service';
 import type { DriverLabelColorToken } from '@nutrezee/shared';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A54.2 — the only order columns the label/batch projection reads. Fleetbase still attaches the
+ * assigned driver (with vehicle) to a column-limited row; customer/payload are not needed here.
+ */
+const ORDER_PROJECTION_COLUMNS = [
+  'uuid', 'public_id', 'internal_id', 'scheduled_at', 'status', 'meta', 'driver_assigned_uuid',
+] as const;
+const ORDER_COLUMNS_QUERY = ORDER_PROJECTION_COLUMNS.map((c) => `&columns[]=${c}`).join('');
 
 export interface FleetbaseOrderProjection {
   id: string;
@@ -108,9 +118,12 @@ export class FleetbaseIdentityError extends Error {
  */
 export class FleetbaseIdentityService {
   private gateway: FleetbaseIdentityGateway | null;
+  private readonly dayCacheTtlMs: number;
+  private readonly dayCache = new Map<string, { at: number; orders: FleetbaseOrderProjection[] }>();
 
-  constructor(gateway?: FleetbaseIdentityGateway) {
+  constructor(gateway?: FleetbaseIdentityGateway, dayCacheTtlMs = 60_000) {
     this.gateway = gateway ?? null;
+    this.dayCacheTtlMs = Math.max(0, dayCacheTtlMs);
   }
 
   async operatorContext(token: string): Promise<StaffContext> {
@@ -199,6 +212,15 @@ export class FleetbaseIdentityService {
     }
     const safeToken = requireToken(token);
     const actor = await this.operatorContext(safeToken);
+    // A54.2 — the Batch Labels page calls options → preview → printed back to back; each one
+    // needs the same complete day set. A short per-token, per-date memo (default 60 s) keeps the
+    // day fetched once per run without ever crossing users or dates. Identity is still verified
+    // on every call above; nothing here bypasses Fleetbase authorization.
+    const cacheKey = `${deliveryDate}:${tokenFingerprint(safeToken)}`;
+    const cached = this.dayCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < this.dayCacheTtlMs) {
+      return { actor, orders: cached.orders };
+    }
     const [sourceOrders, drivers] = await Promise.all([
       this.client().orders(safeToken, deliveryDate),
       this.client().drivers(safeToken),
@@ -206,6 +228,12 @@ export class FleetbaseIdentityService {
     const orders = enrichDriverAssignments(sourceOrders, drivers)
       .filter((order) => order.id && fleetbaseOrderDate(order) === deliveryDate)
       .filter((order) => !isHeldOrCancelled(order));
+    if (this.dayCacheTtlMs > 0) {
+      this.dayCache.set(cacheKey, { at: Date.now(), orders });
+      for (const [key, entry] of this.dayCache) {
+        if (Date.now() - entry.at >= this.dayCacheTtlMs) this.dayCache.delete(key);
+      }
+    }
     return { actor, orders };
   }
 
@@ -232,12 +260,21 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
   private readonly orderPageSize: number;
   private readonly maxOrderPages: number;
 
-  constructor(baseUrl?: string, timeoutMs = 15_000, orderPageSize = 100, maxOrderPages = 100) {
+  private readonly orderPageConcurrency: number;
+
+  constructor(
+    baseUrl?: string,
+    timeoutMs = 45_000,
+    orderPageSize = 100,
+    maxOrderPages = 100,
+    orderPageConcurrency = 4,
+  ) {
     const configured = baseUrl?.trim() || process.env.FLEETBASE_INTERNAL_API_BASE?.trim();
     this.base = (configured || 'https://ops.nutreeze.com').replace(/\/+$/, '');
     this.timeoutMs = timeoutMs;
     this.orderPageSize = Math.max(1, Math.min(500, Math.trunc(orderPageSize)));
     this.maxOrderPages = Math.max(1, Math.min(100, Math.trunc(maxOrderPages)));
+    this.orderPageConcurrency = Math.max(1, Math.min(8, Math.trunc(orderPageConcurrency)));
   }
 
   session(token: string): Promise<FleetbaseSession> {
@@ -284,16 +321,12 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     const seen = new Set<string>();
 
     // Fleetbase's unfiltered order history grows indefinitely and even one history page can exceed
-    // the per-request timeout. Apply Fleetbase's supported scheduled_at filter at the source, then
-    // use its standard paginator so each protected read stays bounded while still collecting the
-    // complete operator-visible set for this date. Duplicate/missing ids or a non-terminating
-    // paginator fail closed.
-    for (let page = 1; page <= this.maxOrderPages; page += 1) {
-      const response = await this.request<unknown>(
-        'GET',
-        `/v1/orders?scheduled_at=${encodeURIComponent(deliveryDate)}&limit=${this.orderPageSize}&page=${page}`,
-        token,
-      );
+    // the per-request timeout. Apply Fleetbase's supported scheduled_at filter at the source and
+    // ask only for the columns the label projection reads (A54.2: a full order document costs
+    // ~0.2 s each server-side; the column list cuts a 100-order page from ~18 s to ~4 s). Page 1
+    // is fetched alone; when it is full, following pages are fetched in small parallel waves until
+    // a short page ends the set. Duplicate/missing ids or a non-terminating paginator fail closed.
+    const absorb = (response: unknown): FleetbaseOrderProjection[] => {
       const pageOrders = arrayPayload<FleetbaseOrderProjection>(response);
       for (const order of pageOrders) {
         if (!order.id) {
@@ -309,16 +342,43 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
         seen.add(order.id);
         orders.push(order);
       }
+      return pageOrders;
+    };
 
-      const lastPage = paginationLastPage(response);
-      if ((lastPage !== null && page >= lastPage) || pageOrders.length < this.orderPageSize) {
-        return orders;
+    const first = await this.request<unknown>('GET', this.ordersPath(deliveryDate, 1), token);
+    const firstPage = absorb(first);
+    const lastPage = paginationLastPage(first);
+    if (firstPage.length < this.orderPageSize || lastPage === 1) return orders;
+
+    let page = 2;
+    while (page <= this.maxOrderPages) {
+      const upper = lastPage !== null
+        ? Math.min(lastPage, page + this.orderPageConcurrency - 1)
+        : page + this.orderPageConcurrency - 1;
+      const wave: number[] = [];
+      for (let n = page; n <= Math.min(upper, this.maxOrderPages); n += 1) wave.push(n);
+      if (wave.length === 0) break;
+      const responses = await Promise.all(
+        wave.map((n) => this.request<unknown>('GET', this.ordersPath(deliveryDate, n), token)),
+      );
+      // Absorb in page order so duplicate detection is deterministic.
+      let ended = false;
+      for (const response of responses) {
+        const pageOrders = absorb(response);
+        if (pageOrders.length < this.orderPageSize) ended = true;
       }
+      if (ended || (lastPage !== null && upper >= lastPage)) return orders;
+      page = upper + 1;
     }
 
     throw new FleetbaseIdentityError('upstream_unavailable', {
       reason: 'fleetbase_order_page_limit_exceeded',
     });
+  }
+
+  private ordersPath(deliveryDate: string, page: number): string {
+    return `/v1/orders?scheduled_at=${encodeURIComponent(deliveryDate)}`
+      + `&limit=${this.orderPageSize}&page=${page}${ORDER_COLUMNS_QUERY}`;
   }
 
   order(token: string, orderId: string): Promise<FleetbaseOrderProjection> {
@@ -369,6 +429,11 @@ function fleetbaseOperation(path: string): 'session' | 'driver' | 'orders' | 'or
   if (path.startsWith('/v1/drivers')) return 'driver';
   if (/^\/v1\/orders\/[^?]+/.test(path)) return 'order';
   return 'orders';
+}
+
+/** The token itself is never stored: the memo key carries only a one-way digest. */
+function tokenFingerprint(token: string): string {
+  return createHash('sha256').update(token).digest('hex').slice(0, 32);
 }
 
 function requireToken(token: string): string {
