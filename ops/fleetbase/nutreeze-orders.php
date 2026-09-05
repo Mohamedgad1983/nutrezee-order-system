@@ -149,6 +149,19 @@ const AREA_FALLBACK_CENTROIDS = [
     'yarmouk' => [29.3112015, 47.9694907],
     'zahra' => [29.2755879, 47.9997683],
     'jleeb alshuyokh' => [29.2596016, 47.9336667],
+    // A57.2 (2026-09-05): the ten routing areas the first two standing call-customer runs
+    // reported as unmapped (event daily_address_call_unknown_area). Looked up on OpenStreetMap
+    // Nominatim by area name only (no customer data sent); suburb/boundary centroids.
+    'abraq khaitan' => [29.2853097, 47.9759379], // no OSM entry of its own; Khaitan boundary centroid
+    'al ahmadi' => [29.0890687, 48.0610236],
+    'ali sabah al salem' => [28.9555874, 48.1507963],
+    'faiha' => [29.3384809, 47.9795444],
+    'mubarak al abdullah - west mishrif' => [29.2758779, 48.0463242],
+    'naeem' => [29.3330449, 47.6952081],
+    'nahda' => [29.3028796, 47.8609025],
+    'rehab' => [29.2843652, 47.9387200],
+    'sharq' => [29.3779375, 47.9759006],
+    'sulaibiya' => [29.2821714, 47.8268869], // residential Sulaibiya (الصليبية الشعبية), not the farms
 ];
 // Last resort for areas not in the map (logged so operators can extend the map):
 // Kuwait City centroid, flagged fallback_scope = 'country'.
