@@ -28,10 +28,11 @@
 
 ## Engineering Queue (take the top unblocked item)
 
-### WP-LBL-A55 — Searchable batch-label dropdowns · IN PROGRESS 2026-09-05
+### ✅ WP-LBL-A55 — Searchable batch-label dropdowns · DONE + LIVE 2026-09-05
 - Owner-requested Driver / Area / Orders filtering, individual-order narrowing and automatic previews through existing APIs.
 - Extension-only UI and request-race repair; existing print contract and authorization preserved.
-- DoD: behavioral regressions, extension boundary suite, production Console build, CI and visible staging browser proof.
+- Verified: 25 focused tests, lint/typecheck/build/scans, PR #72/#73 + post-merge CI green, production Console 0.7.48-a55.2 / extension 0.3.14, seven release gates and signed-in browser proof (81/58-driver, 17-area, exact single-order previews).
+- Evidence: `docs/evidence/label_barcode/19_a55_dropdown_filters.md`. Intermittent Partner transport failures remain a separate follow-up; Refresh recovered during proof.
 
 ### ✅ WP-OPS-07 — Near-live Partner mirror + Fleetbase evening refresh + daytime cancel-only (A50) · **LIVE ON STAGING 2026-09-03**
 
