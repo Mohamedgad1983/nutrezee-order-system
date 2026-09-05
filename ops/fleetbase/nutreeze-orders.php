@@ -4558,7 +4558,7 @@ function runSelfTest(): array
         || abs($areaPin['lat'] - AREA_FALLBACK_CENTROIDS['farwaniya'][0]) > 0.000001) {
         throw new RuntimeException('self_test_area_fallback');
     }
-    if (count(AREA_FALLBACK_CENTROIDS) !== 70) {
+    if (count(AREA_FALLBACK_CENTROIDS) !== 80) { // A57.2: 70 + the ten areas added 2026-09-05
         throw new RuntimeException('self_test_area_fallback_manifest');
     }
     foreach (AREA_FALLBACK_CENTROIDS as $area => [$lat, $lng]) {
