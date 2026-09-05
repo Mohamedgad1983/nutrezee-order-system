@@ -59,3 +59,15 @@ driver). The 171 orders landed on their Partner drivers mid-day with the call-cu
 `rolling` (00:45–01:45 Kuwait) imports **today+1 and today+2**; `sameday` (01:45–02:45) today and tomorrow; `evening`
 (20:00–02:45, hourly) tomorrow when the hour is ≥ 20, otherwise today; `daytime` today, cancel-only. So from ~01:00
 Sunday the Monday (and Tuesday) sets exist in Fleetbase and are selectable on Batch Labels via the date picker.
+
+## A57.2 — the ten unmapped areas added to `AREA_FALLBACK_CENTROIDS` (owner request, deployed)
+PR [#76](https://github.com/Mohamedgad1983/nutrezee-order-system/pull/76) · CI 29/29 · merged `56bb392` · installed 2026-09-05 ~11:00 UTC (backup `backups/a57-2-*/nutreeze-orders.php`)
+
+Nominatim lookups by area name only (no customer data sent), suburb/boundary centroids: al ahmadi, ali sabah al salem,
+faiha, mubarak al abdullah - west mishrif, naeem, nahda, rehab, sharq, sulaibiya (residential الصليبية الشعبية, not the
+farms). **abraq khaitan** has no OSM entry of its own → Khaitan boundary centroid, flagged like every fallback. Map now
+80 entries (self-test manifest updated 70 → 80; 43/43).
+
+Re-applied both days with the installed script: 2026-09-06 `assigned 834 / held 1`, 2026-09-05 `assigned 681 / held 2`.
+Dry-run `orders_location_country_fallback_held` for both days: 13 → 0 and 8 → 0. DB check: all 21 call-customer orders in
+those areas now sit on their area centroid (`places.meta.fallback_scope = area`), none on the Kuwait City point.
