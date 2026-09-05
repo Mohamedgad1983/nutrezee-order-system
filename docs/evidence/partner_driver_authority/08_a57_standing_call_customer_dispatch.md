@@ -48,3 +48,14 @@ nahda, rehab, sharq, sulaibiya → candidates for `AREA_FALLBACK_CENTROIDS`.
 Today's run is mid-delivery; the A50 daytime rule allows cancellations only. Applying the new policy to today would push
 171 additional orders to drivers at ~15:00 Kuwait. Left untouched pending an explicit owner instruction; the projection
 above shows what it would do.
+
+## Applied to 2026-09-05 (today) on explicit owner instruction — 12:4x UTC
+Orders-table dump first (`backups/fleetbase-orders-pre-a57-today-*.sql.gz`). Same recipe:
+`complete: source 683, assigned 681, held 2, verified true`. Fleetbase now for 09-05: 510 `dispatched`,
+171 `dispatched_call_customer_required`, 14 cancelled tombstones, 1 held (unapproved meal status), 1 held (no Partner
+driver). The 171 orders landed on their Partner drivers mid-day with the call-customer instruction.
+
+## Timer horizon for the owner's question
+`rolling` (00:45–01:45 Kuwait) imports **today+1 and today+2**; `sameday` (01:45–02:45) today and tomorrow; `evening`
+(20:00–02:45, hourly) tomorrow when the hour is ≥ 20, otherwise today; `daytime` today, cancel-only. So from ~01:00
+Sunday the Monday (and Tuesday) sets exist in Fleetbase and are selectable on Batch Labels via the date picker.
