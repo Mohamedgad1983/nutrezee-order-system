@@ -5526,7 +5526,11 @@ try {
             'address_call_override' => $allowAddressCall,
             'address_call_authorization' => $allowLocationRecovery
                 ? LOCATION_RECOVERY_AUTHORIZATION
-                : ($allowA19AddressCall ? ADDRESS_CALL_AUTHORIZATION : null),
+                : ($allowA19AddressCall
+                    ? (in_array($deliveryDate, ADDRESS_CALL_AUTHORIZED_DATES, true)
+                        ? ADDRESS_CALL_AUTHORIZATION
+                        : ADDRESS_CALL_STANDING_AUTHORIZATION)
+                    : null),
             'approved_location_captures_loaded' => count($locationCaptures),
             'expected_count' => $expectedCount,
             'source_digest' => $sourceDigest,
