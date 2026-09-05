@@ -561,6 +561,7 @@ function enrichDriverAssignments(
         ...assigned,
         ...profile,
         public_id: id,
+        name: cleanString(profile.name) ?? null,
         phone,
         vehicle: { ...(assigned.vehicle ?? {}), ...(profile.vehicle ?? {}), plate_number: plateNumber },
         label_color: colors.get(id)!,

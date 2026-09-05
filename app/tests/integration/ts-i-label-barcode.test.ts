@@ -458,6 +458,7 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
       'N-LBL-BATCH-1',
       'N-LBL-BATCH-2',
     ]);
+    expect(selected.every((item) => item.driverLabel === 'Ahmed · +96550000001 · KWT-101')).toBe(true);
     expect(selected.every((item) => item.driverRef === 'driver_ahmed')).toBe(true);
     expect(selected.every((item) => item.driverPhone === '+96550000001')).toBe(true);
     expect(selected.every((item) => item.vehicleNumber === 'KWT-101')).toBe(true);
@@ -467,6 +468,7 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
     expect(preview).toHaveLength(2);
     expect(preview.every((item) => item.prior_prints === 0)).toBe(true);
     expect(preview.every((item) => item.label.driver_ref === 'driver_ahmed')).toBe(true);
+    expect(preview.every((item) => item.label.driver_name === 'Ahmed')).toBe(true);
     expect(preview.every((item) => item.label.driver_phone === '+96550000001')).toBe(true);
     expect(preview.every((item) => item.label.vehicle_number === 'KWT-101')).toBe(true);
     expect(preview.every((item) => item.label.driver_color === 'teal')).toBe(true);

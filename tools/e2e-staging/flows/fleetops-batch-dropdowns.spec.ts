@@ -6,6 +6,7 @@ import { test, expect } from '@playwright/test';
 test.use({ storageState: process.env.FLEETOPS_E2E_STORAGE_STATE });
 
 test('A55 — searchable driver, area and exact-order label previews', async ({ page }) => {
+  await page.setViewportSize({ width: 1728, height: 1100 });
   const day = process.env.FLEETOPS_E2E_DATE;
   expect(day, 'Set FLEETOPS_E2E_DATE to the delivery day under test').toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await page.goto(`${process.env.FLEETOPS_BASE_URL ?? 'https://ops.nutreeze.com'}/fleet-ops/management/nutrezee-batch-labels`);
@@ -26,7 +27,24 @@ test('A55 — searchable driver, area and exact-order label previews', async ({ 
   await expect(scope.locator('.nz-filter__option')).toHaveCount(1);
   await driver.click();
   await expect(page.getByRole('heading', { name: /labels ready/ })).toBeVisible({ timeout: 60000 });
-  expect(await labels.count()).toBeGreaterThan(0);
+  expect(await labels.count()).toBeGreaterThan(1);
+  const panel = await page.locator('.nz-batch-panel').boundingBox();
+  expect(panel!.width).toBeGreaterThan(1300);
+  const firstBox = await labels.nth(0).boundingBox();
+  const secondBox = await labels.nth(1).boundingBox();
+  expect(Math.abs(firstBox!.y - secondBox!.y)).toBeLessThan(2);
+  expect(secondBox!.x).toBeGreaterThan(firstBox!.x + firstBox!.width);
+  const contact = labels.first().locator('.nz-driver-band__contact');
+  const name = await contact.locator('bdi').innerText();
+  const phone = await contact.locator('strong').innerText();
+  expect(driverLabel).toContain(`${name} · ${phone}`);
+  const header = await labels.first().locator('header').boundingBox();
+  const band = await labels.first().locator('.nz-driver-band').boundingBox();
+  expect(band!.y + band!.height).toBeLessThanOrEqual(header!.y + header!.height);
+  // Screen grid must not turn printed pages into multiple-label sheets.
+  await page.emulateMedia({ media: 'print' });
+  expect(await page.locator('.nz-batch-labels').evaluate((el) => getComputedStyle(el).gridTemplateColumns)).toBe('none');
+  await page.emulateMedia({ media: 'screen' });
 
   await group.locator('summary').click();
   await group.getByRole('button', { name: 'Area / المنطقة', exact: true }).click();

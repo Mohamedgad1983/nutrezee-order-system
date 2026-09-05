@@ -239,7 +239,7 @@ describe('TS-U Fleetbase identity boundary', () => {
     const { orders } = await identity.ordersForOperatorDate('token', '2099-05-12');
 
     expect(orders[0]?.driver_assigned).toMatchObject({
-      public_id: 'driver_b', phone: '+96550000002',
+      public_id: 'driver_b', name: 'Name Can Change', phone: '+96550000002',
       vehicle: { plate_number: 'KWT-202' }, label_color: 'blue',
     });
     expect(orders[1]?.driver_assigned).toMatchObject({
@@ -248,6 +248,10 @@ describe('TS-U Fleetbase identity boundary', () => {
     });
     expect(orders[0]?.driver_assigned?.label_color)
       .not.toBe(orders[1]?.driver_assigned?.label_color);
+    gateway.driverResults[0]!.name = undefined;
+    const fresh = await new FleetbaseIdentityService(gateway, 0).ordersForOperatorDate('token', '2099-05-12');
+    expect(fresh.orders[0]?.driver_assigned?.name).toBeNull();
+    expect(fresh.orders[0]?.driver_assigned?.label_color).toBe('blue');
   });
 
   it('blocks an assigned label when the current Fleetbase vehicle plate is absent', async () => {
