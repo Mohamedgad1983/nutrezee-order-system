@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.13');
+    expect(packageJson.version).toBe('0.3.14');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -158,7 +158,7 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     );
     expect(batchComponent).toContain('Driver / السائق');
     expect(batchComponent).toContain('Area / المنطقة');
-    expect(batchTemplate).toContain('<BatchFilterSelect');
+    expect(batchTemplate).toContain('nz-filter__dropdown');
     expect(batchComponent).toContain('All ${orders.length} orders / كل الطلبات');
     expect(batchTemplate).toContain('Nothing is recorded until you confirm');
     expect(batchTemplate).toContain('Cancel — do not record');
@@ -195,9 +195,11 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(batchTemplate).not.toContain('<select');
     expect(batchTemplate).not.toContain('nz-batch-choices');
     expect(batchTemplate).not.toContain('type="checkbox"');
-    expect(batchTemplate).toContain('@name="group"');
-    expect(batchTemplate).toContain('@name="scope"');
-    expect(batchTemplate).toContain('@name="order"');
+    expect(batchComponent).toContain("name: 'group'");
+    expect(batchComponent).toContain("name: 'scope'");
+    expect(batchComponent).toContain("name: 'order'");
+    expect(batchTemplate).not.toMatch(/<[A-Z]/);
+    expect(batchTemplate).toContain('this.dropdowns');
     expect(batchComponent).toContain('chooseFilterValue(filterValue)');
 
   });

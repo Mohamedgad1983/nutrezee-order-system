@@ -71,23 +71,40 @@
 
         <div class="nz-batch-filter-card" aria-busy={{or this.loading this.preparing}}>
             <div class="nz-batch-controls" data-test-batch-controls>
-                <BatchFilterSelect
-                    @name="group" @label="Filter by / الاختيار حسب"
-                    @options={{this.filterTypes}} @value={{this.filterType}} @onChange={{this.chooseFilterType}}
-                    @disabled={{or this.loading this.confirming (not this.isReady)}}
-                />
-                {{#unless this.isOrderFilter}}
-                    <BatchFilterSelect
-                        @name="scope" @label={{this.filterLabel}}
-                        @options={{this.filterOptions}} @value={{this.filterValue}} @onChange={{this.chooseFilterValue}}
-                        @disabled={{or this.loading this.confirming (not this.isReady)}}
-                    />
-                {{/unless}}
-                <BatchFilterSelect
-                    @name="order" @label="Orders / الطلبات"
-                    @options={{this.orderOptions}} @value={{this.orderValue}} @onChange={{this.chooseOrder}}
-                    @disabled={{or this.loading this.confirming (not this.isReady)}}
-                />
+                {{! Fleet-Ops renders this virtual panel in the host owner: keep controls inline. }}
+                {{#each this.dropdowns key="name" as |dropdown|}}
+                    <div class="nz-filter" data-test-batch-filter={{dropdown.name}}>
+                        <span class="nz-filter__label" id="nz-filter-label-{{dropdown.name}}">{{dropdown.label}}</span>
+                        <details name="nz-batch-filter" class="nz-filter__dropdown"
+                            {{on "toggle" (fn this.toggleDropdown dropdown.name)}} {{on "keydown" this.closeDropdown}}>
+                            <summary aria-disabled={{this.filtersDisabled}}
+                                aria-labelledby="nz-filter-label-{{dropdown.name}} nz-filter-value-{{dropdown.name}}"
+                                {{on "click" this.preventDisabledDropdown}}>
+                                <span id="nz-filter-value-{{dropdown.name}}">{{dropdown.selectedLabel}}</span>
+                                <span class="nz-filter__chevron" aria-hidden="true">⌄</span>
+                            </summary>
+                            <div class="nz-filter__menu">
+                                <input type="search" value={{dropdown.query}} aria-label="Search {{dropdown.label}}"
+                                    placeholder="Search… / ابحث" disabled={{this.filtersDisabled}}
+                                    {{on "input" (fn this.searchDropdown dropdown.name)}} />
+                                <div class="nz-filter__choices" aria-label={{dropdown.label}}>
+                                    {{#each dropdown.choices key="id" as |option|}}
+                                        <button type="button"
+                                            class="nz-filter__option {{if option.selected "nz-filter__option--selected"}}"
+                                            aria-pressed={{option.selected}} disabled={{this.filtersDisabled}}
+                                            {{on "click" (fn this.chooseDropdown dropdown.name option.id)}}>
+                                            <span>{{option.label}}</span>
+                                            {{#if option.count}}<small>{{option.count}} orders / طلب</small>{{/if}}
+                                            {{#if option.selected}}<span class="nz-filter__check" aria-hidden="true">✓</span>{{/if}}
+                                        </button>
+                                    {{else}}
+                                        <p class="nz-filter__empty" role="status">No matches / لا توجد نتائج</p>
+                                    {{/each}}
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                {{/each}}
             </div>
             <div class="nz-batch-current" data-test-batch-current aria-live="polite">
                 <span><strong>{{this.selectedCount}}</strong> labels selected / ملصقات محددة

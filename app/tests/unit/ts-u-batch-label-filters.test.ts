@@ -139,17 +139,17 @@ describe('TS-U A55 batch-label dropdown selection', () => {
   });
 
   it('searches dropdown labels without changing the active selection; supports Arabic and no matches', () => {
-    const Dropdown = component('batch-filter-select');
-    const dropdown = new Dropdown();
-    dropdown.args = { value: '1', options: [
-      { id: '1', label: '21-56792 · Car 1' }, { id: '2', label: 'السالمية' },
+    const state = batch();
+    state.options = { ...options, drivers: [
+      { id: 'd1', label: '21-56792 · Car 1' }, { id: 'd2', label: 'السالمية' },
     ] };
-    dropdown.search({ target: { value: '56792' } });
-    expect(dropdown.choices.map((row: { id: string }) => row.id)).toEqual(['1']);
-    dropdown.search({ target: { value: 'السالمية' } });
-    expect(dropdown.choices.map((row: { id: string }) => row.id)).toEqual(['2']);
-    expect(dropdown.selectedLabel).toBe('21-56792 · Car 1');
-    dropdown.search({ target: { value: 'absent' } });
-    expect(dropdown.choices).toEqual([]);
+    const scope = () => state.dropdowns.find((field: { name: string }) => field.name === 'scope');
+    state.searchDropdown('scope', { target: { value: '56792' } });
+    expect(scope().choices.map((row: { id: string }) => row.id)).toEqual(['d1']);
+    state.searchDropdown('scope', { target: { value: 'السالمية' } });
+    expect(scope().choices.map((row: { id: string }) => row.id)).toEqual(['d2']);
+    expect(scope().selectedLabel).toBe('21-56792 · Car 1');
+    state.searchDropdown('scope', { target: { value: 'absent' } });
+    expect(scope().choices).toEqual([]);
   });
 });

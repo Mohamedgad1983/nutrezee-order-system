@@ -15,6 +15,7 @@ export default class BatchLabelsComponent extends Component {
     @tracked filterType = 'driver';
     @tracked filterValue = '';
     @tracked orderValue = '';
+    @tracked searches = {};
     previewRevision = 0;
     optionsRevision = 0;
     // A54: the operator picks the delivery day (Kuwait). '' means "server's today".
@@ -32,6 +33,64 @@ export default class BatchLabelsComponent extends Component {
     constructor() {
         super(...arguments);
         void this.loadOptions();
+    }
+
+    get filtersDisabled() {
+        return this.loading || this.confirming || !this.isReady;
+    }
+
+    get dropdowns() {
+        const fields = [{ name: 'group', label: 'Filter by / الاختيار حسب', options: this.filterTypes, value: this.filterType }];
+        if (!this.isOrderFilter) fields.push({ name: 'scope', label: this.filterLabel, options: this.filterOptions, value: this.filterValue });
+        fields.push({ name: 'order', label: 'Orders / الطلبات', options: this.orderOptions, value: this.orderValue });
+        return fields.map((field) => {
+            const query = this.searches[field.name] ?? '';
+            return {
+                ...field, query,
+                selectedLabel: field.options.find((option) => option.id === field.value)?.label ?? 'Choose… / اختر',
+                choices: field.options
+                    .filter((option) => String(option.label).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+                    .map((option) => ({ ...option, selected: option.id === field.value })),
+            };
+        });
+    }
+
+    @action
+    searchDropdown(name, event) {
+        this.searches = { ...this.searches, [name]: event.target.value };
+    }
+
+    @action
+    toggleDropdown(name, event) {
+        const details = event.currentTarget;
+        if (this.filtersDisabled) details.open = false;
+        if (!details.open) this.searches = { ...this.searches, [name]: '' };
+        else details.querySelector('input')?.focus();
+    }
+
+    @action
+    preventDisabledDropdown(event) {
+        if (this.filtersDisabled) event.preventDefault();
+    }
+
+    @action
+    closeDropdown(event) {
+        if (event.key !== 'Escape') return;
+        const details = event.currentTarget;
+        details.open = false;
+        details.querySelector('summary')?.focus();
+    }
+
+    @action
+    chooseDropdown(name, id, event) {
+        if (this.filtersDisabled) return;
+        const details = event.currentTarget.closest('details');
+        details.open = false;
+        details.querySelector('summary')?.focus();
+        this.searches = {};
+        if (name === 'group') this.chooseFilterType(id);
+        else if (name === 'scope') this.chooseFilterValue(id);
+        else if (name === 'order') this.chooseOrder(id);
     }
 
     get filterTypes() {
