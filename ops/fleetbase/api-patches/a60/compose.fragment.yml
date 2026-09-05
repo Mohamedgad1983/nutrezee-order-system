@@ -1,0 +1,11 @@
+# A60 — bind the patched vendor files read-only over the stock v0.7.48 image.
+# Merged into /opt/fleetbase/docker-compose.override.yml (application, queue, scheduler)
+# and /opt/fleetbase/docker-compose.application-queue.json (application-queue) on 2026-09-05.
+services:
+  application:
+    volumes:
+      - /opt/fleetbase/patches/a60/fleetops-api/server/src/Models/Order.php:/fleetbase/api/vendor/fleetbase/fleetops-api/server/src/Models/Order.php:ro
+      - /opt/fleetbase/patches/a60/fleetops-api/server/src/Models/Place.php:/fleetbase/api/vendor/fleetbase/fleetops-api/server/src/Models/Place.php:ro
+      - /opt/fleetbase/patches/a60/fleetops-api/server/src/Http/Controllers/Internal/v1/OrderController.php:/fleetbase/api/vendor/fleetbase/fleetops-api/server/src/Http/Controllers/Internal/v1/OrderController.php:ro
+      - /opt/fleetbase/patches/a60/fleetops-api/server/src/Http/Controllers/Api/v1/OrderController.php:/fleetbase/api/vendor/fleetbase/fleetops-api/server/src/Http/Controllers/Api/v1/OrderController.php:ro
+      - /opt/fleetbase/patches/a60/fleetops-api/server/src/Http/Resources/v1/Index/Payload.php:/fleetbase/api/vendor/fleetbase/fleetops-api/server/src/Http/Resources/v1/Index/Payload.php:ro
