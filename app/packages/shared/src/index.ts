@@ -165,6 +165,8 @@ export interface LabelDocumentContract {
   driver_ref: string | null;
   driver_color: DriverLabelColorToken | null;
   driver_phone: string | null;
+  /** Current Fleetbase display name; never an assignment or color key. */
+  driver_name?: string | null;
   vehicle_number: string | null;
   order_number: string;
   address: LabelAddressContract;

@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.14');
+    expect(packageJson.version).toBe('0.3.15');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -204,6 +204,16 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
 
   });
 
+  it('A56: shows the current name as plain label data with an explicit missing-name state', () => {
+    const source = normalize.replace(/^import .*;\n/gm, '')
+      .replace('export default function', 'function').replace(/export function/g, 'function');
+    const render = new Function('htmlSafe', `${source}; return normalizeLabel;`)((value: string) => value);
+    expect(render({ driver_name: '  Current Driver  ', driver_phone: '+96550000001' }))
+      .toMatchObject({ driverName: 'Current Driver', driverPhone: '+96550000001' });
+    expect(render({ driver_name: ' ' }).driverName).toBe('Name unavailable / الاسم غير متوفر');
+    expect(render({}).driverName).toBe('Name unavailable / الاسم غير متوفر');
+  });
+
   it('preserves the legacy structure and adds one Code 128 footer', () => {
     expect(template.match(/<polygon/g)).toHaveLength(2);
     expect(template).toContain('Full Name :');
@@ -224,7 +234,8 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
 
   it('prints vehicle and phone in a driver color while keeping the barcode black', () => {
     expect(template).toContain('CAR / سيارة');
-    expect(template).toContain('TEL / هاتف');
+    expect(template).toContain('this.label.driverName');
+    expect(batchTemplate).toContain('item.label.driverName');
     expect(template).toContain('this.label.vehicleNumber');
     expect(template).toContain('this.label.driverPhone');
     expect(template).not.toContain('Driver ID');

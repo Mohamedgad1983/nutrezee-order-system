@@ -55,6 +55,7 @@ export default function normalizeLabel(document) {
         legacyUserId: value(document?.legacy_user_id),
         driverRef: value(document?.driver_ref),
         driverPhone: value(document?.driver_phone),
+        driverName: document?.driver_name?.trim() || 'Name unavailable / الاسم غير متوفر',
         vehicleNumber: value(document?.vehicle_number),
         driverColorClass: driverColor ? `nz-driver-color--${driverColor}` : '',
         orderNumber: value(document?.order_number),

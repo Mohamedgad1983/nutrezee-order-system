@@ -839,6 +839,40 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     opacity: 0.8;
 }
 
+/* A56: only this contributed screen escapes Fleet-Ops' narrow virtual-page wrapper. */
+@media screen {
+    .console-fleet-ops-virtual .container:has(.nz-batch-panel) {
+        width: 100%;
+        max-width: none;
+        height: auto;
+        padding: 0;
+    }
+    .console-fleet-ops-virtual .max-w-3xl:has(> .nz-batch-panel) {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+    }
+    .nz-batch-panel { width: 100%; min-width: 0; padding: 0.5rem 0; }
+    .nz-batch-panel .nz-batch-labels {
+        width: 100%;
+        grid-template-columns: repeat(auto-fill, minmax(100mm, 1fr));
+        justify-items: center;
+        align-items: start;
+    }
+    .nz-batch-controls {
+        grid-template-columns: minmax(9rem, 0.65fr) minmax(18rem, 1.2fr) minmax(18rem, 1.2fr);
+    }
+    .nz-filter__dropdown summary > span:first-child {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        unicode-bidi: plaintext;
+    }
+}
+
+@media screen and (max-width: 1050px) {
+    .nz-batch-controls { grid-template-columns: 1fr; }
+}
+
 .nz-batch-labels {
     display: grid;
     gap: 1rem;
@@ -962,7 +996,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    width: 35mm;
+    width: 69mm;
     min-height: 8.2mm;
     box-sizing: border-box;
     padding: 0.7mm 1.1mm;
@@ -975,6 +1009,22 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     text-align: left;
     white-space: nowrap;
 }
+
+.nz-driver-band__contact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5mm;
+}
+.nz-driver-band__name {
+    max-width: 39mm;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-weight: 700;
+    font-size: 2.4mm;
+    line-height: 1.1;
+}
+.nz-driver-band__contact strong { flex: none; }
 
 .nz-label-freshness {
     margin: 0 0 0.6rem;
@@ -999,17 +1049,19 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     display: block;
     width: 4.2mm;
     height: 3.8mm;
-    margin: 0 auto 0.15mm;
+    margin: 0 0 0.15mm 10.9mm;
     color: #555;
 }
 
 .nz-legacy-label__brand {
+    width: 26mm;
     font-size: 3.9mm;
     line-height: 1;
     letter-spacing: 0.05mm;
 }
 
 .nz-legacy-label__tagline {
+    width: 26mm;
     margin-top: 0.1mm;
     color: #555;
     font-family: Georgia, serif;
@@ -1284,6 +1336,12 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 }
 
 @media (max-width: 760px) {
+    .nz-batch-panel .nz-batch-labels {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
+        overflow-x: auto;
+    }
+
     .nz-batch-summary,
     .nz-batch-controls {
         grid-template-columns: 1fr;

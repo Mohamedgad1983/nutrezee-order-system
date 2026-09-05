@@ -1,6 +1,6 @@
 {
   "name": "@nutrezee/fleetops-labels-engine",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Nutrezee-branded Fleet-Ops shell, daily-meal labels, permanent customer barcodes, and driver locations",
   "fleetbase": {
     "route": "nutrezee-labels"

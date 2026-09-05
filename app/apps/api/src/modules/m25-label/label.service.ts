@@ -51,6 +51,7 @@ export interface BatchLabelCandidate {
   driverLabel: string | null;
   driverRef: string | null;
   driverPhone: string | null;
+  driverName?: string | null;
   vehicleNumber: string | null;
   driverColor: DriverLabelColorToken | null;
 }
@@ -58,6 +59,7 @@ export interface BatchLabelCandidate {
 export interface FleetbaseDriverLabelSource {
   driverRef: string | null;
   driverPhone: string | null;
+  driverName?: string | null;
   vehicleNumber: string | null;
   driverColor: DriverLabelColorToken | null;
 }
@@ -181,6 +183,7 @@ export class LabelService {
       driver_ref: driverRef,
       driver_color: source?.driverColor ?? null,
       driver_phone: source?.driverPhone ?? null,
+      driver_name: source?.driverName ?? null,
       vehicle_number: source?.vehicleNumber ?? null,
       order_number: r.order_number as string,
       address,
@@ -239,14 +242,14 @@ export class LabelService {
 
   /**
    * Resolve the current Fleetbase assignment into the operational box identity. Names are
-   * deliberately excluded: the driver unit owns the color (A49: stable by Fleetbase creation
-   * order among plated drivers), while the visible label carries the current phone and plate. An assigned row with incomplete
+   * display-only: the driver unit owns the color (A49: stable by Fleetbase creation order among
+   * plated drivers). The header shows the current name, phone and plate. Incomplete operational
    * identity fails closed instead of printing a misleading box.
    */
   fleetbaseDriverSource(order: FleetbaseOrderProjection): FleetbaseDriverLabelSource {
     const driver = order.driver_assigned;
     if (!driver) {
-      return { driverRef: null, driverPhone: null, vehicleNumber: null, driverColor: null };
+      return { driverRef: null, driverName: null, driverPhone: null, vehicleNumber: null, driverColor: null };
     }
     const driverRef = this.fleetbaseDriverRef(order);
     const driverPhone = driver.phone?.trim() || null;
@@ -264,7 +267,7 @@ export class LabelService {
         missing,
       });
     }
-    return { driverRef, driverPhone, vehicleNumber, driverColor };
+    return { driverRef, driverName: driver.name?.trim() || null, driverPhone, vehicleNumber, driverColor };
   }
 
   /**
@@ -328,7 +331,7 @@ export class LabelService {
         areaLabel: area || 'No area / بدون منطقة',
         driverId,
         driverLabel: driverSource.vehicleNumber && driverSource.driverPhone
-          ? `${driverSource.vehicleNumber} · ${driverSource.driverPhone}`
+          ? `${driverSource.driverName || 'Name unavailable / الاسم غير متوفر'} · ${driverSource.driverPhone} · ${driverSource.vehicleNumber}`
           : null,
         ...driverSource,
       };
@@ -393,6 +396,7 @@ export class LabelService {
           this.build(actor, candidate.localOrderId, deliveryDate, {
             driverRef: candidate.driverRef,
             driverPhone: candidate.driverPhone,
+            driverName: candidate.driverName,
             vehicleNumber: candidate.vehicleNumber,
             driverColor: candidate.driverColor,
           }),
