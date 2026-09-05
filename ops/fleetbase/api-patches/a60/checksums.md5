@@ -1,0 +1,7 @@
+# fleetbase/fleetbase-api:v0.7.48 (sha256:eb46d93e7fe86551cc0e5a95afe97aba6996aff6252cdb89709d2ecc683c2fda)
+# original -> patched, paths relative to /fleetbase/api/vendor/fleetbase/
+08d06733bc57437312245737bb633785 877c999532fec30fc7a74460a02b7269 fleetops-api/server/src/Http/Controllers/Api/v1/OrderController.php
+81f22c6459f6754dbb65007b695aca61 343b984672124306457f6f87eee45bd2 fleetops-api/server/src/Http/Controllers/Internal/v1/OrderController.php
+2b527fd258d897d9a10a5a261426e361 5a728388f8a74889a679dcebb5ee98ea fleetops-api/server/src/Http/Resources/v1/Index/Payload.php
+ce64e951ed5030b0e6c3057eb8424282 0c9e6c6a251845b18df6d2354de958cf fleetops-api/server/src/Models/Order.php
+abbcf5c1e923b37bb961a0c323a92f82 b25ae529e9f4fad1314d1873c0865bc9 fleetops-api/server/src/Models/Place.php

@@ -1,0 +1,120 @@
+--- a/fleetops-api/server/src/Http/Controllers/Api/v1/OrderController.php
++++ b/fleetops-api/server/src/Http/Controllers/Api/v1/OrderController.php
+@@ -578,7 +578,8 @@
+         set_time_limit(180);
+ 
+         $results = Order::queryWithRequest($request, function (&$query, $request) {
+-            $query->with(['trackingStatuses', 'driverAssigned', 'vehicleAssigned', 'customer', 'facilitator']);
++            // A60 (Nutreeze): superset of the previous list, see Order::apiListRelations().
++            $query->with(Order::apiListRelations());
+             $query->where('company_uuid', session('company'));
+             $query->whereNotNull('payload_uuid');
+ 
+--- a/fleetops-api/server/src/Http/Controllers/Internal/v1/OrderController.php
++++ b/fleetops-api/server/src/Http/Controllers/Internal/v1/OrderController.php
+@@ -69,6 +69,15 @@
+     public $indexResource = OrderIndexResource::class;
+ 
+     /**
++     * A60 (Nutreeze): eager-load the relations the index/list resources touch.
++     * See Order::apiListRelations().
++     */
++    public static function onQueryRecord($query, $request): void
++    {
++        $query->with(Order::apiListRelations());
++    }
++
++    /**
+      * Handle order waypoint changes if any.
+      */
+     public function onAfterUpdate($request, $order)
+--- a/fleetops-api/server/src/Http/Resources/v1/Index/Payload.php
++++ b/fleetops-api/server/src/Http/Resources/v1/Index/Payload.php
+@@ -44,12 +44,12 @@
+             // Entity count instead of full entities
+             'entities_count' => $this->whenLoaded('entities', function () {
+                 return $this->entities->count();
+-            }, $this->entities()->count()),
++            }, fn () => $this->entities()->count()), // A60: lazy default
+ 
+             // Waypoint count for lightweight route-shape summaries.
+             'waypoints_count' => $this->whenLoaded('waypoints', function () {
+                 return $this->waypoints->count();
+-            }, $this->waypoints()->count()),
++            }, fn () => $this->waypoints()->count()), // A60: lazy default
+ 
+             'type'       => $this->type,
+             'created_at' => $this->created_at,
+--- a/fleetops-api/server/src/Models/Order.php
++++ b/fleetops-api/server/src/Models/Order.php
+@@ -197,6 +197,42 @@
+     protected $with = [];
+ 
+     /**
++     * A60 (Nutreeze, 2026-09-05): relations the list resources touch, eager-loaded by the
++     * list endpoints so a page of orders costs a fixed handful of queries instead of
++     * roughly 45 queries per order. Read paths only; single-record and write paths are untouched.
++     *
++     * @return array<int|string, string|\Closure>
++     */
++    public static function apiListRelations(): array
++    {
++        return [
++            'payload.pickup',
++            'payload.dropoff',
++            'payload.return',
++            'payload.currentWaypoint',
++            'payload.firstWaypointMarker.place',
++            'payload.lastWaypointMarker.place',
++            'trackingNumber.owner',
++            'trackingStatuses',
++            'purchaseRate',
++            'transaction',
++            'company',
++            'comments',
++            'files',
++            'customFieldValues.customField',
++            'driverAssigned',
++            'vehicleAssigned',
++            'facilitator',
++            'customer' => function (MorphTo $morphTo) {
++                $morphTo->morphWith([
++                    Contact::class => ['photo', 'user'],
++                    Vendor::class  => ['place'],
++                ]);
++            },
++        ];
++    }
++
++    /**
+      * The attributes that should be cast to native types.
+      *
+      * @var array
+--- a/fleetops-api/server/src/Models/Place.php
++++ b/fleetops-api/server/src/Models/Place.php
+@@ -216,6 +216,13 @@
+      */
+     public static function getAvatarOptions()
+     {
++        // A60 (Nutreeze): memoise for 60 s per worker. This ran one full `files` table scan for
++        // every place serialised (three per order on a list page).
++        static $a60Memo = null;
++        if (is_array($a60Memo) && $a60Memo['expires'] > microtime(true)) {
++            return collect($a60Memo['options']);
++        }
++
+         $options = [
+             'basic-building.png',
+         ];
+@@ -238,7 +245,10 @@
+             }
+         );
+ 
+-        return $customAvatars->merge($avatars);
++        $result  = $customAvatars->merge($avatars);
++        $a60Memo = ['expires' => microtime(true) + 60, 'options' => $result->all()];
++
++        return $result;
+     }
+ 
+     /**
