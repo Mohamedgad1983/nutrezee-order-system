@@ -1,6 +1,6 @@
 {
   "name": "Nutrezee Labels",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Nutrezee-branded Fleet-Ops shell with governed labels, barcodes, and driver locations",
   "license": "AGPL-3.0-or-later",
   "engine": "package.json"

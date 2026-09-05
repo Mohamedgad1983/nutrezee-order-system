@@ -2,9 +2,9 @@
     <header class="nz-label-panel__header">
         <div>
             <h2>Batch Labels / طباعة الملصقات بالجملة</h2>
-            <p>Pick the delivery day, pick a driver, and every sticker for that driver appears below — then print them all at once. / اختر يوم التوصيل ثم السائق، وستظهر كل ملصقاته هنا ثم تُطبع دفعة واحدة.</p>
+            <p>Choose a day, filter by driver, area or order, and see your labels below. / اختر اليوم ثم السائق أو المنطقة أو الطلب لعرض الملصقات.</p>
         </div>
-        <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.reload}}>
+        <button type="button" class="btn btn-default btn-sm" disabled={{or this.loading this.confirming}} {{on "click" this.reload}}>
             Reload / تحديث
         </button>
     </header>
@@ -17,15 +17,15 @@
                 value={{this.selectedDate}}
                 min={{this.dateWindow.from}}
                 max={{this.dateWindow.to}}
-                disabled={{this.loading}}
+                disabled={{or this.loading this.confirming}}
                 {{on "change" this.updateDate}}
             />
         </label>
         <div class="nz-batch-date__quick">
-            <button type="button" class="btn btn-sm {{if this.isToday "btn-primary" "btn-default"}}" disabled={{or this.loading (not this.today)}} {{on "click" this.showToday}}>
+            <button type="button" class="btn btn-sm {{if this.isToday "btn-primary" "btn-default"}}" disabled={{or this.loading this.confirming (not this.today)}} {{on "click" this.showToday}}>
                 Today / اليوم
             </button>
-            <button type="button" class="btn btn-sm {{if this.isTomorrow "btn-primary" "btn-default"}}" disabled={{or this.loading (not this.today)}} {{on "click" this.showTomorrow}}>
+            <button type="button" class="btn btn-sm {{if this.isTomorrow "btn-primary" "btn-default"}}" disabled={{or this.loading this.confirming (not this.today)}} {{on "click" this.showTomorrow}}>
                 Tomorrow / غدًا
             </button>
             {{#if this.dayLabel}}<span class="nz-batch-date__label">{{this.dayLabel}}</span>{{/if}}
@@ -69,92 +69,38 @@
             {{/unless}}
         {{/if}}
 
-        {{! A54.4: plain buttons instead of a select control — the selects rendered blank on the real console
-            (Chrome kept selectedIndex -1 and the render stalled), and a visible driver list is what
-            dispatch actually wants: one tap per driver, every label of that driver below. }}
-        <div class="nz-batch-controls {{unless this.isReady "nz-batch-controls--disabled"}}">
-            <div class="nz-batch-groupby" data-test-batch-groupby>
-                <span>Group by / الاختيار حسب</span>
-                <button
-                    type="button"
-                    class="btn btn-sm {{if (eq this.filterType "driver") "btn-primary" "btn-default"}}"
-                    disabled={{or (not this.isReady) (not this.hasDriverOptions)}}
-                    {{on "click" (fn this.chooseFilterType "driver")}}
-                >
-                    Driver / السائق ({{this.options.drivers.length}})
-                </button>
-                <button
-                    type="button"
-                    class="btn btn-sm {{if (eq this.filterType "area") "btn-primary" "btn-default"}}"
-                    disabled={{not this.isReady}}
-                    {{on "click" (fn this.chooseFilterType "area")}}
-                >
-                    Area / المنطقة ({{this.options.areas.length}})
+        <div class="nz-batch-filter-card" aria-busy={{or this.loading this.preparing}}>
+            <div class="nz-batch-controls" data-test-batch-controls>
+                <BatchFilterSelect
+                    @name="group" @label="Filter by / الاختيار حسب"
+                    @options={{this.filterTypes}} @value={{this.filterType}} @onChange={{this.chooseFilterType}}
+                    @disabled={{or this.loading this.confirming (not this.isReady)}}
+                />
+                {{#unless this.isOrderFilter}}
+                    <BatchFilterSelect
+                        @name="scope" @label={{this.filterLabel}}
+                        @options={{this.filterOptions}} @value={{this.filterValue}} @onChange={{this.chooseFilterValue}}
+                        @disabled={{or this.loading this.confirming (not this.isReady)}}
+                    />
+                {{/unless}}
+                <BatchFilterSelect
+                    @name="order" @label="Orders / الطلبات"
+                    @options={{this.orderOptions}} @value={{this.orderValue}} @onChange={{this.chooseOrder}}
+                    @disabled={{or this.loading this.confirming (not this.isReady)}}
+                />
+            </div>
+            <div class="nz-batch-current" data-test-batch-current aria-live="polite">
+                <span><strong>{{this.selectedCount}}</strong> labels selected / ملصقات محددة
+                    {{#if this.currentFilterLabel}} · {{this.currentFilterLabel}}{{/if}}</span>
+                <button type="button" class="btn btn-default btn-sm"
+                    disabled={{or this.loading this.preparing this.confirming (not this.selectedCount)}}
+                    {{on "click" this.prepareLabels}}>
+                    {{#if this.preparing}}Loading labels… / جارٍ التحميل{{else}}Refresh preview / تحديث المعاينة{{/if}}
                 </button>
             </div>
-
-            <div class="nz-batch-choices" data-test-batch-choices>
-                {{#each this.filterOptions as |option|}}
-                    <button
-                        type="button"
-                        class="nz-batch-choice {{if (eq option.id this.filterValue) "nz-batch-choice--active"}}"
-                        disabled={{not this.isReady}}
-                        {{on "click" (fn this.chooseFilterValue option.id)}}
-                    >
-                        <strong>{{option.label}}</strong>
-                        <span>{{option.count}} orders / طلب</span>
-                    </button>
-                {{else}}
-                    <div class="nz-label-state">No choices for this day. / لا توجد خيارات لهذا اليوم.</div>
-                {{/each}}
-            </div>
-
-            {{#if this.filterValue}}
-                <div class="nz-batch-current" data-test-batch-current>
-                    {{#if (eq this.filterType "driver")}}Driver / السائق{{else}}Area / المنطقة{{/if}}:
-                    <strong>{{this.currentFilterLabel}}</strong> · {{this.filteredOrders.length}} orders on {{this.selectedDate}}
-                </div>
-            {{/if}}
         </div>
-
-        {{#if (and this.isReady this.filteredOrders.length)}}
-            <div class="nz-batch-order-list">
-                <div class="nz-batch-order-list__header">
-                    <label>
-                        <input type="checkbox" checked={{this.allSelected}} {{on "change" this.toggleAll}} />
-                        <strong>Select all {{this.filteredOrders.length}} / اختيار الكل</strong>
-                    </label>
-                    <span>{{this.selectedCount}} selected</span>
-                </div>
-                <div class="nz-batch-order-list__rows">
-                    {{#each this.filteredOrders as |order|}}
-                        <label class="nz-batch-order-row">
-                            <input
-                                type="checkbox"
-                                value={{order.selection_id}}
-                                checked={{order.selected}}
-                                {{on "change" this.toggleOrder}}
-                            />
-                            <strong>{{order.order_number}}</strong>
-                            <span>{{order.area}}</span>
-                            <span>{{#if order.driver_label}}{{order.driver_label}}{{else}}Not assigned yet{{/if}}</span>
-                        </label>
-                    {{/each}}
-                </div>
-            </div>
-
-            <div class="nz-batch-primary-action">
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    disabled={{or this.preparing (not this.selectedCount)}}
-                    {{on "click" this.prepareLabels}}
-                >
-                    {{#if this.preparing}}Loading labels…{{else}}Show {{this.selectedCount}} labels / عرض الملصقات{{/if}}
-                </button>
-            </div>
-        {{else}}
-            <div class="nz-label-state">No orders on {{this.selectedDate}} match this choice. / لا توجد طلبات لهذا الاختيار في هذا اليوم.</div>
+        {{#if (and this.isReady (not this.selectedCount))}}
+            <div class="nz-label-state">No orders match this choice. / لا توجد طلبات لهذا الاختيار.</div>
         {{/if}}
     {{/if}}
 
@@ -182,7 +128,7 @@
                     </label>
                 {{/if}}
             </div>
-            <button type="button" class="btn btn-primary" {{on "click" this.openPrintDialog}}>
+            <button type="button" class="btn btn-primary" disabled={{or this.preparing this.confirming this.loading}} {{on "click" this.openPrintDialog}}>
                 {{this.printButtonText}}
             </button>
         </div>

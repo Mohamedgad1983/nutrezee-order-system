@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.12');
+    expect(packageJson.version).toBe('0.3.13');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -149,17 +149,17 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(batchComponent).toContain('this.request(`/nz/fleet-ops/labels/batch/options${query}`)');
     expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/preview'");
     expect(batchComponent).toContain("this.request('/nz/fleet-ops/labels/batch/printed'");
-    expect(batchComponent).toContain("filter_type: this.filterType");
+    expect(batchComponent).toContain("filter_type: this.isOrderFilter ? 'area' : this.filterType");
     expect(batchComponent).toContain("selection_ids: this.selectionIds");
     expect(batchComponent).not.toContain("document.body.classList.add('nutrezee-batch-print-mode')");
     expect(batchComponent).toContain('this.awaitingConfirmation = true');
     expect(batchComponent.indexOf('window.print()')).toBeLessThan(
       batchComponent.indexOf("this.request('/nz/fleet-ops/labels/batch/printed'"),
     );
-    expect(batchTemplate).toContain('Driver / السائق');
-    expect(batchTemplate).toContain('Area / المنطقة');
-    expect(batchTemplate).toContain('nz-batch-choice--active');
-    expect(batchTemplate).toContain('Select all');
+    expect(batchComponent).toContain('Driver / السائق');
+    expect(batchComponent).toContain('Area / المنطقة');
+    expect(batchTemplate).toContain('<BatchFilterSelect');
+    expect(batchComponent).toContain('All ${orders.length} orders / كل الطلبات');
     expect(batchTemplate).toContain('Nothing is recorded until you confirm');
     expect(batchTemplate).toContain('Cancel — do not record');
     expect(batchTemplate).toContain('A partial driver or area batch will not be printed');
@@ -186,20 +186,20 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(batchComponent).toContain('?delivery_date=${encodeURIComponent(this.deliveryDate)}');
     // Drivers come first and are the default grouping; the labels load as soon as a driver is chosen.
     expect(batchComponent).toContain("@tracked filterType = 'driver';");
-    expect(batchTemplate.indexOf('(fn this.chooseFilterType "driver")')).toBeLessThan(
-      batchTemplate.indexOf('(fn this.chooseFilterType "area")'),
-    );
     expect(batchComponent).toContain('async showSelection()');
     expect(batchComponent).toContain('void this.showSelection();');
     // Still nothing is recorded by viewing: the print confirmation flow is untouched.
     expect(batchComponent).toContain('this.awaitingConfirmation = true');
     expect(batchTemplate).not.toContain('Reload today');
-    // A54.4: drivers and areas are plain buttons (the raw <select> rendered blank on the live console).
+    // A55: searchable disclosure selectors replace the expanded cards and checkboxes.
     expect(batchTemplate).not.toContain('<select');
-    expect(batchTemplate).toContain('data-test-batch-choices');
-    expect(batchTemplate).toContain('(fn this.chooseFilterValue option.id)');
-    expect(batchTemplate).toContain('(fn this.chooseFilterType "driver")');
+    expect(batchTemplate).not.toContain('nz-batch-choices');
+    expect(batchTemplate).not.toContain('type="checkbox"');
+    expect(batchTemplate).toContain('@name="group"');
+    expect(batchTemplate).toContain('@name="scope"');
+    expect(batchTemplate).toContain('@name="order"');
     expect(batchComponent).toContain('chooseFilterValue(filterValue)');
+
   });
 
   it('preserves the legacy structure and adds one Code 128 footer', () => {

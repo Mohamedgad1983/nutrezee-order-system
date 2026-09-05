@@ -664,72 +664,106 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     font-size: 0.75rem;
 }
 
+.nz-batch-filter-card {
+    margin: 1rem 0;
+    padding: 1.1rem;
+    border: 1px solid var(--nz-border, #e5ded5);
+    border-radius: 1rem;
+    background: var(--nz-surface, #fff);
+    box-shadow: var(--nz-shadow-sm, 0 2px 8px rgb(55 35 15 / 4%));
+}
+
 .nz-batch-controls {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(9rem, 0.7fr) minmax(12rem, 1fr) minmax(16rem, 1.4fr);
     gap: 1rem;
-    margin-bottom: 1rem;
 }
 
-.nz-batch-controls label > span {
-    display: block;
-    margin-bottom: 0.3rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.nz-batch-controls select {
-    width: 100%;
-    padding: 0.55rem 0.625rem;
-    border: 1px solid var(--nz-border, #d1d5db);
-    border-radius: 0.6rem;
-    background: var(--nz-input, #fff);
-    color: var(--nz-text, #111827);
-}
-
-.nz-batch-controls--disabled {
-    opacity: 0.55;
-}
-
-.nz-batch-order-list {
-    overflow: hidden;
-    border: 1px solid var(--nz-border, #d1d5db);
-    border-radius: 0.75rem;
-    background: var(--nz-surface, #fff);
-    box-shadow: var(--nz-shadow-sm, none);
-}
-
-.nz-batch-order-list__header,
-.nz-batch-order-row {
-    display: grid;
-    grid-template-columns: minmax(12rem, 1fr) minmax(6rem, 0.45fr);
-    gap: 0.75rem;
+.nz-filter { min-width: 0; }
+.nz-filter__label { display: block; margin-bottom: 0.45rem; font-size: 0.8rem; font-weight: 600; }
+.nz-filter__dropdown { position: relative; }
+.nz-filter__dropdown summary {
+    display: flex;
     align-items: center;
-    padding: 0.65rem 0.75rem;
+    justify-content: space-between;
+    gap: 0.6rem;
+    min-height: 2.8rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--nz-border, #d9cfc3);
+    border-radius: 0.65rem;
+    background: #fff;
+    color: var(--nz-text, #33281f);
+    font-size: 0.875rem;
+    cursor: pointer;
+    list-style: none;
 }
-
-.nz-batch-order-list__header {
-    border-bottom: 1px solid var(--nz-border, #d1d5db);
-    background: var(--nz-surface-soft, #f9fafb);
+.nz-filter__dropdown summary::-webkit-details-marker { display: none; }
+.nz-filter__dropdown summary > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nz-filter__dropdown summary[aria-disabled='true'] { opacity: 0.55; cursor: default; }
+.nz-filter__dropdown summary:focus-visible,
+.nz-filter__option:focus-visible { outline: 2px solid #956132; outline-offset: 2px; }
+.nz-filter__dropdown[open] summary { border-color: #956132; box-shadow: 0 0 0 3px rgb(149 97 50 / 10%); }
+.nz-filter__chevron { flex: none; font-size: 1.15rem; color: #956132; }
+.nz-filter__menu {
+    position: absolute;
+    z-index: 40;
+    inset-inline-start: 0;
+    top: calc(100% + 0.4rem);
+    width: 100%;
+    min-width: min(19rem, 85vw);
+    border: 1px solid var(--nz-border, #d9cfc3);
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    background: #fff;
+    color: #33281f;
+    box-shadow: 0 12px 32px rgb(55 35 15 / 16%);
 }
-
-.nz-batch-order-list__rows {
-    max-height: 18rem;
-    overflow-y: auto;
+.nz-filter__menu input[type='search'] {
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid #d9cfc3;
+    border-radius: 0.5rem;
+    background: #faf7f3;
+    color: #33281f;
+    font-size: 0.875rem;
 }
-
-.nz-batch-order-row {
-    grid-template-columns: 1.2rem minmax(7rem, 0.55fr) minmax(8rem, 1fr) minmax(8rem, 1fr);
-    border-bottom: 1px solid var(--nz-border, #e5e7eb);
+.nz-filter__choices { max-height: 17rem; overflow-y: auto; margin-top: 0.4rem; }
+.nz-filter__option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.15rem;
+    border: 0;
+    border-radius: 0.45rem;
+    padding: 0.65rem 1.8rem 0.65rem 0.65rem;
+    background: #fff;
+    color: #33281f;
+    text-align: start;
+    font: inherit;
+    font-size: 0.85rem;
     cursor: pointer;
 }
-
-.nz-batch-order-row:hover {
-    background: var(--nz-row-hover, #f9fafb);
+.nz-filter__option:hover, .nz-filter__option--selected { background: #f7eee4; color: #70441e; }
+.nz-filter__option small { color: #766657; font-size: 0.75rem; }
+.nz-filter__check { position: absolute; inset-inline-end: 0.6rem; top: 0.7rem; }
+.nz-filter__empty { padding: 0.8rem; color: #766657; }
+.nz-batch-current {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--nz-border, #e5ded5);
+    color: var(--nz-muted, #766657);
+    font-size: 0.85rem;
 }
-
-.nz-batch-order-row:last-child {
-    border-bottom: 0;
+.nz-batch-current strong { color: #956132; }
+@media (max-width: 1050px) {
+    .nz-batch-controls { grid-template-columns: 1fr; }
+    .nz-filter__menu { min-width: 0; }
 }
 
 .nz-batch-primary-action,
@@ -803,62 +837,6 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 .nz-batch-date__label {
     font-weight: 600;
     opacity: 0.8;
-}
-
-.nz-batch-groupby {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0 0 0.75rem;
-    font-weight: 600;
-}
-
-.nz-batch-choices {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 0.5rem;
-    max-height: 22rem;
-    overflow-y: auto;
-    padding: 0.25rem;
-}
-
-.nz-batch-choice {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.2rem;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid var(--nz-border, #d1d5db);
-    border-radius: 0.5rem;
-    background: #fff;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-}
-
-.nz-batch-choice strong {
-    direction: ltr;
-    unicode-bidi: isolate;
-}
-
-.nz-batch-choice span {
-    font-size: 0.85rem;
-    opacity: 0.75;
-}
-
-.nz-batch-choice:hover:not(:disabled) {
-    border-color: var(--nz-accent, #a16207);
-}
-
-.nz-batch-choice--active {
-    border-color: var(--nz-accent, #a16207);
-    background: var(--nz-accent-soft, #fdf3e3);
-    box-shadow: 0 0 0 2px var(--nz-accent-soft, #fdf3e3);
-}
-
-.nz-batch-current {
-    margin: 0.75rem 0 0;
-    font-size: 0.95rem;
 }
 
 .nz-batch-labels {

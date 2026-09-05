@@ -14,6 +14,9 @@ export default class BatchLabelsComponent extends Component {
     @tracked options = null;
     @tracked filterType = 'driver';
     @tracked filterValue = '';
+    @tracked orderValue = '';
+    previewRevision = 0;
+    optionsRevision = 0;
     // A54: the operator picks the delivery day (Kuwait). '' means "server's today".
     @tracked deliveryDate = '';
     @tracked today = '';
@@ -31,36 +34,58 @@ export default class BatchLabelsComponent extends Component {
         void this.loadOptions();
     }
 
+    get filterTypes() {
+        return [
+            { id: 'driver', label: 'Driver / السائق' },
+            { id: 'area', label: 'Area / المنطقة' },
+            { id: 'order', label: 'Orders / الطلبات' },
+        ].filter((option) => option.id !== 'driver' || this.hasDriverOptions);
+    }
+
+    get isOrderFilter() {
+        return this.filterType === 'order';
+    }
+
+    get filterLabel() {
+        return this.filterType === 'driver' ? 'Driver / السائق' : 'Area / المنطقة';
+    }
+
     get filterOptions() {
-        if (!this.options) {
-            return [];
-        }
-        return this.filterType === 'driver' ? this.options.drivers : this.options.areas;
+        if (!this.options || this.isOrderFilter) return [];
+        return (this.filterType === 'driver' ? this.options.drivers : this.options.areas) ?? [];
+    }
+
+    get scopedOrders() {
+        const orders = Array.isArray(this.options?.orders) ? this.options.orders : [];
+        return orders.filter((order) => this.isOrderFilter || (
+            this.filterType === 'driver'
+                ? order.driver_id === this.filterValue
+                : order.area_id === this.filterValue
+        ));
+    }
+
+    get orderOptions() {
+        const orders = this.scopedOrders.map((order) => ({
+            id: order.selection_id,
+            label: `#${order.order_number} · ${order.area} · ${order.driver_label || 'Unassigned / غير معين'}`,
+        }));
+        return this.isOrderFilter ? orders : [
+            { id: '', label: `All ${orders.length} orders / كل الطلبات` }, ...orders,
+        ];
     }
 
     get filteredOrders() {
-        const orders = Array.isArray(this.options?.orders) ? this.options.orders : [];
-        return orders
-            .filter((order) =>
-                this.filterType === 'driver'
-                    ? order.driver_id === this.filterValue
-                    : order.area_id === this.filterValue
-            )
-            .map((order) => ({
-                ...order,
-                selected: this.selectionIds.includes(order.selection_id),
-            }));
+        return this.scopedOrders
+            .filter((order) => !this.orderValue || order.selection_id === this.orderValue)
+            .map((order) => ({ ...order, selected: this.selectionIds.includes(order.selection_id) }));
+    }
+
+    get selectedOrder() {
+        return this.scopedOrders.find((order) => order.selection_id === this.orderValue);
     }
 
     get selectedCount() {
         return this.selectionIds.length;
-    }
-
-    get allSelected() {
-        return (
-            this.filteredOrders.length > 0 &&
-            this.selectionIds.length === this.filteredOrders.length
-        );
     }
 
     get selectedDate() {
@@ -87,6 +112,7 @@ export default class BatchLabelsComponent extends Component {
     }
 
     get currentFilterLabel() {
+        if (this.selectedOrder) return `#${this.selectedOrder.order_number} · ${this.selectedOrder.area}`;
         const match = this.filterOptions.find((option) => option.id === this.filterValue);
         return match?.label ?? '';
     }
@@ -145,6 +171,10 @@ export default class BatchLabelsComponent extends Component {
     }
 
     async loadOptions(requestedDate) {
+        const revision = ++this.optionsRevision;
+        this.resetPreview();
+        this.selectionIds = [];
+        this.orderValue = '';
         this.loading = true;
         this.error = null;
         this.notice = null;
@@ -155,13 +185,17 @@ export default class BatchLabelsComponent extends Component {
         }
         try {
             const query = this.deliveryDate ? `?delivery_date=${encodeURIComponent(this.deliveryDate)}` : '';
-            this.options = await this.request(`/nz/fleet-ops/labels/batch/options${query}`);
+            const options = await this.request(`/nz/fleet-ops/labels/batch/options${query}`);
+            if (revision !== this.optionsRevision || this.isDestroyed || this.isDestroying) return;
+            this.options = options;
             this.today = this.options.today ?? '';
             this.dateWindow = this.options.window ?? null;
             this.deliveryDate = this.options.delivery_date ?? this.deliveryDate;
-            this.freshness = await this.request(
+            const freshness = await this.request(
                 `/nz/fleet-ops/labels/freshness?delivery_date=${encodeURIComponent(this.selectedDate)}`
             ).catch(() => null);
+            if (revision !== this.optionsRevision || this.isDestroyed || this.isDestroying) return;
+            this.freshness = freshness;
             // Drivers first: the sticker run is per driver. Areas only when nobody is assigned yet.
             if (this.isReady && this.hasDriverOptions) {
                 this.filterType = 'driver';
@@ -174,17 +208,18 @@ export default class BatchLabelsComponent extends Component {
             }
             this.selectAllFiltered();
         } catch (error) {
+            if (revision !== this.optionsRevision) return;
             this.options = null;
             this.error = messageOf(error);
         } finally {
-            this.loading = false;
+            if (revision === this.optionsRevision) this.loading = false;
         }
-        await this.showSelection();
+        if (revision === this.optionsRevision) await this.showSelection();
     }
 
     /** A54: the chosen driver's (or area's) labels for the chosen day appear as a view at once. */
     async showSelection() {
-        if (this.isReady && this.filterValue && this.selectedCount > 0) {
+        if (!this.loading && this.isReady && this.selectedCount > 0) {
             await this.prepareLabels();
         }
     }
@@ -218,11 +253,13 @@ export default class BatchLabelsComponent extends Component {
 
     @action
     chooseFilterType(filterType) {
-        if (filterType !== 'driver' && filterType !== 'area') return;
+        if (this.loading || this.confirming || !this.filterTypes.some((option) => option.id === filterType)) return;
         if (filterType === 'driver' && !this.hasDriverOptions) return;
         this.filterType = filterType;
+        this.orderValue = '';
         const first = this.filterOptions[0];
         this.filterValue = first?.id ?? '';
+        if (this.isOrderFilter) this.orderValue = this.orderOptions[0]?.id ?? '';
         this.resetPreview();
         this.selectAllFiltered();
         void this.showSelection();
@@ -230,30 +267,23 @@ export default class BatchLabelsComponent extends Component {
 
     @action
     chooseFilterValue(filterValue) {
+        if (this.loading || this.confirming) return;
         const value = String(filterValue ?? '');
         if (!value || !this.filterOptions.some((option) => option.id === value)) return;
-        if (value === this.filterValue && this.preview) return;
         this.filterValue = value;
+        this.orderValue = '';
         this.resetPreview();
         this.selectAllFiltered();
         void this.showSelection();
     }
 
     @action
-    toggleOrder(event) {
-        const id = event.target.value;
-        this.selectionIds = event.target.checked
-            ? [...new Set([...this.selectionIds, id])]
-            : this.selectionIds.filter((selectionId) => selectionId !== id);
+    chooseOrder(value) {
+        if (this.loading || this.confirming || !this.orderOptions.some((option) => option.id === value)) return;
+        this.orderValue = value;
         this.resetPreview();
-    }
-
-    @action
-    toggleAll(event) {
-        this.selectionIds = event.target.checked
-            ? this.filteredOrders.map((order) => order.selection_id)
-            : [];
-        this.resetPreview();
+        this.selectAllFiltered();
+        void this.showSelection();
     }
 
     @action
@@ -263,9 +293,11 @@ export default class BatchLabelsComponent extends Component {
 
     @action
     async prepareLabels() {
-        if (!this.isReady || this.preparing || this.selectedCount === 0) {
+        if (this.loading || !this.isReady || this.selectedCount === 0) {
             return;
         }
+        const revision = ++this.previewRevision;
+        const payload = this.batchPayload();
         this.preparing = true;
         this.error = null;
         this.notice = null;
@@ -273,8 +305,9 @@ export default class BatchLabelsComponent extends Component {
         try {
             const response = await this.request('/nz/fleet-ops/labels/batch/preview', {
                 method: 'POST',
-                body: JSON.stringify(this.batchPayload()),
+                body: JSON.stringify(payload),
             });
+            if (revision !== this.previewRevision || this.isDestroyed || this.isDestroying) return;
             this.preview = {
                 ...response,
                 items: (response.items ?? []).map((item) => ({
@@ -284,10 +317,11 @@ export default class BatchLabelsComponent extends Component {
             };
             this.notice = `${response.count} label(s) for ${this.selectedDate} shown below. No print has been recorded yet.`;
         } catch (error) {
+            if (revision !== this.previewRevision) return;
             this.preview = null;
             this.error = messageOf(error);
         } finally {
-            this.preparing = false;
+            if (revision === this.previewRevision) this.preparing = false;
         }
     }
 
@@ -343,10 +377,12 @@ export default class BatchLabelsComponent extends Component {
     }
 
     batchPayload() {
+        // Orders mode reuses the exact order's server-validated area scope; no new API authority.
+        const order = this.isOrderFilter ? this.selectedOrder : null;
         return {
             delivery_date: this.selectedDate,
-            filter_type: this.filterType,
-            filter_value: this.filterValue,
+            filter_type: this.isOrderFilter ? 'area' : this.filterType,
+            filter_value: this.isOrderFilter ? order?.area_id : this.filterValue,
             selection_ids: this.selectionIds,
         };
     }
@@ -356,6 +392,8 @@ export default class BatchLabelsComponent extends Component {
     }
 
     resetPreview() {
+        ++this.previewRevision;
+        this.preparing = false;
         this.preview = null;
         this.awaitingConfirmation = false;
         this.notice = null;
