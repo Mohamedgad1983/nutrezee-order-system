@@ -1,6 +1,6 @@
 # A58 — Fleet-Ops invitation delivery
 
-Date: 2026-09-05. Status: configuration verified; SMTP activation blocked.
+Date: 2026-09-05. Status: LIVE; Exchange message trace confirms both invitations Delivered.
 
 ## Verified
 
@@ -16,8 +16,9 @@ Date: 2026-09-05. Status: configuration verified; SMTP activation blocked.
   was disabled; enabled and saved through Microsoft 365 admin center. The UI confirmed
   the update and the checked state. No other email-app or tenant setting was changed.
 - Entra Properties reports that Security defaults are already disabled.
-- Server-side TLS SMTP authentication checks still return 535 / 5.7.139, explicitly
-  stating SmtpClientAuthentication is disabled for the tenant. No test email was sent.
+- Initial TLS SMTP checks returned 535 / 5.7.139 during propagation of the mailbox
+  exception. Authentication subsequently succeeded without any tenant-wide setting
+  change. The tenant SMTP prohibition remains enabled; only hello has the new exception.
 - New opt-in worker overlay passes seven live Compose checks: application image,
   environment, volumes and networks match; no published ports; every existing
   service is unchanged; generated file permissions are 0600.
@@ -25,12 +26,26 @@ Date: 2026-09-05. Status: configuration verified; SMTP activation blocked.
   round-trip rendering, inherited ports disappear and permissions remain 0600.
 - Python syntax and git diff whitespace validation pass.
 
-## Release boundary
+## Release verification
 
-The protected overlay is rendered on the host, but the new worker is not started.
-SMTP credentials have not been installed into application configuration pending
-validated authentication. No vendor source, existing worker, scheduler, dispatch,
-Partner or legacy data changed. Do not retry all failed jobs. After authentication
-works, configure the protected sender, activate only the application worker, and
-retry the two exact original invitation jobs. Verify SMTP acceptance separately
-from actual mailbox delivery. The original invitations expire after 48 hours.
+- PR #77 merged as `2a1268e`; source `017aa61`. Push and PR CI runs
+  `33970309094` and `33970341572` passed 14/14 each (CodeRabbit also passed).
+  Post-merge main run `33970517610` also passed 14/14.
+- Installed Microsoft 365 SMTP at smtp.office365.com:587 with TLS in the existing
+  root-protected API environment file, preserving its bind-mounted inode. The
+  previous configuration backup remains root-protected on the host. No credential
+  is present in source, evidence or generated public artifacts.
+- Started only `fleetbase-application-queue-1`. It is running and healthy.
+- Matched the two original failed notification jobs to the exact requested users,
+  then retried only those two UUIDs through the supported Laravel queue command.
+- Both `UserInvited` jobs completed DONE at 14:01:50/51 UTC (17:01 Kuwait), with
+  no queued/reserved jobs and no original failed jobs remaining. Microsoft accepted
+  both messages. No duplicate user or replacement invitation was created.
+- Existing application, queue, scheduler and dispatch services were not restarted.
+  No Fleetbase vendor code, Partner or legacy data changed.
+- Exchange message trace, scoped to hello@nutreeze.com, returned exactly two
+  invitation messages at 17:01 Kuwait: callcenter@nutreeze.com — Delivered;
+  Sulayman@nutreeze.com — Delivered. Subject: the standard Nutreeze Fleetbase
+  invitation. No message bodies or invitation tokens were read or saved.
+- All four application/queue/scheduler containers are healthy. The three existing
+  services retain their September 3 start times; only the new worker started today.
