@@ -1,0 +1,26 @@
+<div class="nz-filter" data-test-batch-filter={{@name}}>
+    <span class="nz-filter__label" id="nz-filter-label-{{@name}}">{{@label}}</span>
+    <details name="nz-batch-filter" class="nz-filter__dropdown" {{on "toggle" this.toggle}} {{on "keydown" this.keydown}}>
+        <summary aria-disabled={{@disabled}} aria-labelledby="nz-filter-label-{{@name}} nz-filter-value-{{@name}}"
+            {{on "click" this.preventDisabled}}>
+            <span id="nz-filter-value-{{@name}}">{{this.selectedLabel}}</span>
+            <span class="nz-filter__chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="nz-filter__menu">
+            <input type="search" value={{this.query}} aria-label="Search {{@label}}"
+                placeholder="Search… / ابحث" disabled={{@disabled}} {{on "input" this.search}} />
+            <div class="nz-filter__choices" aria-label={{@label}}>
+                {{#each this.choices key="id" as |option|}}
+                    <button type="button" class="nz-filter__option {{if option.selected "nz-filter__option--selected"}}"
+                        aria-pressed={{option.selected}} disabled={{@disabled}} {{on "click" (fn this.choose option.id)}}>
+                        <span>{{option.label}}</span>
+                        {{#if option.count}}<small>{{option.count}} orders / طلب</small>{{/if}}
+                        {{#if option.selected}}<span class="nz-filter__check" aria-hidden="true">✓</span>{{/if}}
+                    </button>
+                {{else}}
+                    <p class="nz-filter__empty" role="status">No matches / لا توجد نتائج</p>
+                {{/each}}
+            </div>
+        </div>
+    </details>
+</div>

@@ -28,6 +28,11 @@
 
 ## Engineering Queue (take the top unblocked item)
 
+### WP-LBL-A55 — Searchable batch-label dropdowns · IN PROGRESS 2026-09-05
+- Owner-requested Driver / Area / Orders filtering, individual-order narrowing and automatic previews through existing APIs.
+- Extension-only UI and request-race repair; existing print contract and authorization preserved.
+- DoD: behavioral regressions, extension boundary suite, production Console build, CI and visible staging browser proof.
+
 ### ✅ WP-OPS-07 — Near-live Partner mirror + Fleetbase evening refresh + daytime cancel-only (A50) · **LIVE ON STAGING 2026-09-03**
 
 ### ✅ WP-OPS-06 — Partner daily-deliveries → Nutrezee order feed · **LIVE ON STAGING 2026-09-03 (09-05 applied, 02:20 Kuwait timer enabled)**
