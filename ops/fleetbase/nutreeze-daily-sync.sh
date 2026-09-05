@@ -15,6 +15,9 @@ TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
 # daytime (A50):     every 30 min 03:00-19:59 Kuwait, CANCEL-ONLY for today: Partner
 #                    cancellations and on-hold deliveries are withdrawn from drivers; nothing
 #                    else (driver, address, pin, new/missing rows) is touched.
+# A57 (owner, 2026-09-05): every full sync carries the per-date call-customer confirmation, so
+# Partner orders with a driver but no real pin are dispatched on a flagged fallback pin instead
+# of being held. Daytime cancel-only runs never carry it (the importer refuses the combination).
 MODE="${NUTREEZE_DAILY_MODE:-rolling}"
 case "$MODE" in
   rolling) WINDOW_START=45;   WINDOW_END=105;  WINDOW_LABEL='00:45-01:45' ;;
@@ -140,7 +143,8 @@ for DELIVERY_DATE in "$@"; do
     "--expected-count=$COUNT" \
     "--expected-digest=$DIGEST" \
     --verify \
-    "--confirm-daily-sync=$DELIVERY_DATE"
+    "--confirm-daily-sync=$DELIVERY_DATE" \
+    "--confirm-address-call-dispatch=$DELIVERY_DATE"
   if [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
     set -- "$@" "--driver-orders-manifest=$CONTAINER_MEMBERSHIP"
   fi
