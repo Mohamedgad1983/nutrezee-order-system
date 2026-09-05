@@ -5,10 +5,10 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 **This file's §Amendments table is the sole canonical A-id counter** — stale "next free id" notes in earlier documents are superseded.
 *(Date note: Phase 2–4 documents carry 2026-06-11 date stamps written one day ahead in error; git history — all commits 2026-06-10 — is authoritative.)*
 
-**Latest completed owner-requested unit (2026-09-05): WP-LBL-A55 searchable dropdowns DONE + LIVE.**
-Driver / Area / Orders filtering and single-order narrowing are browser-verified on Console a55.2 / extension
-0.3.14; PR #72 and host-integration correction #73 are merged and CI green. See
-`docs/evidence/label_barcode/19_a55_dropdown_filters.md` for release and 81/58/17/1-label proof.
+**Latest completed owner-requested unit (2026-09-05): WP-LBL-A56 full-width batch grid DONE + LIVE.**
+Full-width 1464 px Fleet-Ops panel, three-column previews and current driver name beside phone in selectors
+and label headers are browser-verified on Console a56.1 / extension 0.3.15. PR #74 merge `25338b6`,
+post-merge CI `33949743808` green. Evidence: `docs/evidence/label_barcode/20_a56_full_width_grid.md`.
 
 ## Gate snapshot (re-verify live each session — last verified 2026-06-11)
 
@@ -168,6 +168,7 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 | 2026-09-04 | **A54.3 batch selects hotfix DEPLOYED** (Build Mode) | Group-by and driver/area selects rendered blank (value bound on `<select>` before options exist). Option-level `selected`; extension 0.3.11 / console `0.7.48-a54.3`; PR #70 CI 29/29, merged `3656390`. Evidence `docs/evidence/label_barcode/18_a54_batch_day_driver_view.md`. |
 | 2026-09-04 | **A54.4 driver/area tappable lists DEPLOYED** (Build Mode) | Raw `<select>` still blank on the live console after A54.3; replaced by button lists (driver cards with plate · phone · count). Extension 0.3.12 / console `0.7.48-a54.4`; PR #71 CI 29/29, merged `2f09dca`. Evidence `docs/evidence/label_barcode/18_a54_batch_day_driver_view.md`. |
 | 2026-09-05 | **WP-LBL-A55 searchable dropdowns DONE + LIVE** (Build/Fix) | Owner requested Driver / Area / Orders dropdowns. PR #72 merge `9d94242`; PR #73 host-owner correction merge `fa0b375`. Local 25/25 focused + lint/typecheck/build/scans; both PRs 29/29 checks; post-merge `33948443019` green. Console a55.2 / extension 0.3.14, image `a55-2-fdbc252`; image gates 7/7; signed-in Chrome 81/58 driver labels, 17 area labels and exact single-order previews. Upstream transient error recovered on Refresh; no print confirmed. Evidence `docs/evidence/label_barcode/19_a55_dropdown_filters.md`. |
+| 2026-09-05 | **WP-LBL-A56 full-width label grid DONE + LIVE** (Fix/Deployment/UAT) | Owner requested full width, horizontal rows and driver name beside phone. PR #74 merge `25338b6`; 52 focused tests + lint/typecheck/build/scans; push/PR 14/14 each and post-merge CI `33949743808` green. Console a56.1 / extension 0.3.15 and API source `6dbf641` deployed. Browser: 1464 px panel, three columns, 81 driver / 17 area / one exact-order label; name search and header fit verified. No print confirmation or database migration. Evidence `docs/evidence/label_barcode/20_a56_full_width_grid.md`. |
 
 ## Amendments log (continues `phase_4_to_build_handoff.md` §4 — A1–A4 recorded there)
 

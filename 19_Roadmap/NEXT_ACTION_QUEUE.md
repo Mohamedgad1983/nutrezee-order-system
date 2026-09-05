@@ -28,6 +28,12 @@
 
 ## Engineering Queue (take the top unblocked item)
 
+### ✅ WP-LBL-A56 — Full-width batch-label grid and named drivers · DONE + LIVE 2026-09-05
+- Owner-requested full available width, horizontal preview rows and current driver name beside phone.
+- PR #74 merge `25338b6`; all CI green, including post-merge `33949743808`. Console a56.1 / extension 0.3.15 and Nutrezee API deployed.
+- Verified: 52 focused tests + lint/typecheck/build/scans; actual browser 1464 px panel / three columns, 81-driver / 17-area / one-order previews and driver-name search.
+- Evidence: `docs/evidence/label_barcode/20_a56_full_width_grid.md`. No new software blocker; existing physical print/camera UAT and separate sponsor gates remain.
+
 ### ✅ WP-LBL-A55 — Searchable batch-label dropdowns · DONE + LIVE 2026-09-05
 - Owner-requested Driver / Area / Orders filtering, individual-order narrowing and automatic previews through existing APIs.
 - Extension-only UI and request-race repair; existing print contract and authorization preserved.
