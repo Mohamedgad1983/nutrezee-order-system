@@ -56,6 +56,14 @@ const DAILY_DISPATCHABLE_ORDER_STATUSES = ['success'];
 // the unattended timer deliberately never supplies it.
 const ADDRESS_CALL_AUTHORIZED_DATES = ['2026-07-20'];
 const ADDRESS_CALL_AUTHORIZATION = 'A19';
+// A57 (owner, 2026-09-05): call-customer dispatch is a STANDING policy from this delivery
+// date on. A Partner order with a driver but no real customer pin is no longer held; it is
+// dispatched to that driver on the area (or, for areas missing from the map, the Kuwait
+// City) fallback centroid, flagged approximate, with the call-customer instruction. The
+// timers supply the per-date confirmation themselves. Rows without a customer phone still
+// hold: nobody can be called.
+const ADDRESS_CALL_STANDING_FROM = '2026-09-05';
+const ADDRESS_CALL_STANDING_AUTHORIZATION = 'A57';
 const LOCATION_RECOVERY_AUTHORIZATION = 'A30';
 const ADDRESS_CALL_INSTRUCTION = 'NO EXACT PIN - CALL CUSTOMER / لا يوجد موقع دقيق - اتصل بالعميل';
 const ADDRESS_CALL_PLACE_PREFIX = 'CALL CUSTOMER FIRST / اتصل بالعميل أولا - ';
@@ -558,11 +566,10 @@ function dailyWithdrawalReason(array $row): ?string
     return null;
 }
 
+/** A57: a call needs a phone; the written address is printed on the label either way. */
 function rowHasAddressCallContext(array $row): bool
 {
-    return is_string($row['address_text'] ?? null)
-        && trim($row['address_text']) !== ''
-        && is_string($row['customer_phone'] ?? null)
+    return is_string($row['customer_phone'] ?? null)
         && trim($row['customer_phone']) !== '';
 }
 
@@ -574,8 +581,16 @@ function rowRequiresCustomerCall(array $row, bool $allowAddressCall = false): bo
         return false;
     }
     $effectivePin = resolveEffectivePin($row);
+    // A57: the country-level centroid is accepted too (flagged fallback_scope = 'country' and
+    // logged per area so the map can be extended); the driver calls before navigating.
     return in_array($effectivePin['pin_source'], ['known_stop_anchor', 'area_fallback'], true)
-        && $effectivePin['fallback_scope'] === 'area';
+        && in_array($effectivePin['fallback_scope'], ['area', 'country'], true);
+}
+
+function addressCallDateAuthorized(string $deliveryDate): bool
+{
+    return in_array($deliveryDate, ADDRESS_CALL_AUTHORIZED_DATES, true)
+        || strcmp($deliveryDate, ADDRESS_CALL_STANDING_FROM) >= 0;
 }
 
 function rowIsDailyRoutable(array $row, bool $allowAddressCall = false): bool
@@ -593,7 +608,7 @@ function resolveAddressCallAuthorization(?string $deliveryDate, mixed $confirmat
         || !hash_equals($deliveryDate, $confirmation)) {
         throw new RuntimeException('daily_address_call_confirmation_guard');
     }
-    if (!in_array($deliveryDate, ADDRESS_CALL_AUTHORIZED_DATES, true)) {
+    if (!addressCallDateAuthorized($deliveryDate)) {
         throw new RuntimeException('daily_address_call_date_not_authorized');
     }
     return true;
@@ -617,9 +632,15 @@ function addressCallAuthorization(array $row, bool $allowAddressCall = false): ?
     if (!rowRequiresCustomerCall($row, $allowAddressCall)) {
         return null;
     }
-    return in_array((string) ($row['delivery_date'] ?? ''), ADDRESS_CALL_AUTHORIZED_DATES, true)
-        && !isset($row['recovery_anchor'])
-        ? ADDRESS_CALL_AUTHORIZATION
+    if (isset($row['recovery_anchor'])) {
+        return LOCATION_RECOVERY_AUTHORIZATION;
+    }
+    $deliveryDate = (string) ($row['delivery_date'] ?? '');
+    if (in_array($deliveryDate, ADDRESS_CALL_AUTHORIZED_DATES, true)) {
+        return ADDRESS_CALL_AUTHORIZATION;
+    }
+    return strcmp($deliveryDate, ADDRESS_CALL_STANDING_FROM) >= 0
+        ? ADDRESS_CALL_STANDING_AUTHORIZATION
         : LOCATION_RECOVERY_AUTHORIZATION;
 }
 
@@ -4746,10 +4767,14 @@ function runSelfTest(): array
         || !rowRequiresCustomerCall($authorizedInvalid, true)
         || !rowIsDailyRoutable($authorizedFallback, true)
         || rowRequiresCustomerCall($authorizedRealPin, true)
-        || rowRequiresCustomerCall($authorizedCountryFallback, true)
+        // A57: unmapped areas fall back to the country centroid and are still call-dispatched.
+        || !rowRequiresCustomerCall($authorizedCountryFallback, true)
+        || resolveEffectivePin($authorizedCountryFallback)['fallback_scope'] !== 'country'
         || rowRequiresCustomerCall($authorizedUnapproved, true)
-        || rowRequiresCustomerCall(['address_text' => ''] + $authorizedFallback, true)
-        || rowRequiresCustomerCall(['customer_phone' => ''] + $authorizedFallback, true)) {
+        // A57: a missing written address no longer holds the row; a missing phone still does.
+        || !rowRequiresCustomerCall(['address_text' => ''] + $authorizedFallback, true)
+        || rowRequiresCustomerCall(['customer_phone' => ''] + $authorizedFallback, true)
+        || rowRequiresCustomerCall($authorizedFallback, false)) {
         throw new RuntimeException('self_test_daily_address_call_policy');
     }
     $authorizedAllocation = allocateDailyDrivers(
@@ -4765,12 +4790,21 @@ function runSelfTest(): array
         throw new RuntimeException('self_test_daily_address_call_allocation');
     }
     if (!resolveAddressCallAuthorization('2026-07-20', '2026-07-20')
-        || resolveAddressCallAuthorization('2026-07-20', null)) {
+        || resolveAddressCallAuthorization('2026-07-20', null)
+        // A57: standing from 2026-09-05; the per-date confirmation is still mandatory.
+        || !resolveAddressCallAuthorization('2026-09-05', '2026-09-05')
+        || !resolveAddressCallAuthorization('2027-01-01', '2027-01-01')
+        || resolveAddressCallAuthorization('2026-09-06', null)
+        || addressCallAuthorization(['delivery_date' => '2026-09-06'] + $authorizedFallback, true)
+            !== ADDRESS_CALL_STANDING_AUTHORIZATION
+        || addressCallAuthorization($authorizedFallback, true) !== ADDRESS_CALL_AUTHORIZATION) {
         throw new RuntimeException('self_test_daily_address_call_confirmation');
     }
     foreach ([
         ['2026-07-20', '2026-07-19', 'daily_address_call_confirmation_guard'],
         ['2026-07-21', '2026-07-21', 'daily_address_call_date_not_authorized'],
+        ['2026-09-04', '2026-09-04', 'daily_address_call_date_not_authorized'],
+        ['2026-09-06', '2026-09-05', 'daily_address_call_confirmation_guard'],
     ] as [$date, $confirmation, $expectedError]) {
         try {
             resolveAddressCallAuthorization($date, $confirmation);
@@ -5568,7 +5602,13 @@ try {
             exit(0);
         }
         if ($allowAddressCall && $locationCountryFallbackCount > 0) {
-            throw new RuntimeException('daily_address_call_unknown_area');
+            // A57: unmapped areas no longer abort the run; they are call-dispatched on the
+            // country centroid and reported here so AREA_FALLBACK_CENTROIDS can be extended.
+            safeLog('daily_address_call_unknown_area', [
+                'delivery_date' => $deliveryDate,
+                'orders' => $locationCountryFallbackCount,
+                'areas' => array_keys($locationCountryFallbackAreas),
+            ]);
         }
         if (!isset($options['confirm-daily-sync'])
             || !hash_equals($deliveryDate, (string) $options['confirm-daily-sync'])) {

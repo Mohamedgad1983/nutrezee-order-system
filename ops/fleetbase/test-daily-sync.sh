@@ -80,6 +80,7 @@ if run_sync 2026-08-13 > "$ROOT/failure.log" 2>&1; then
   exit 1
 fi
 grep -q -- '--confirm-daily-sync=2026-08-14' "$CALL_LOG"
+grep -q -- '--confirm-address-call-dispatch=2026-08-14' "$CALL_LOG"
 grep -q '"days_succeeded":1,"days_failed":1' "$ROOT/failure.log"
 
 : > "$CALL_LOG"
@@ -144,6 +145,7 @@ MOCK_CALL_LOG="$CALL_LOG" NUTREEZE_DAILY_TEST_MODE=1 NUTREEZE_DAILY_MODE=evening
 grep -q -- '--delivery-date=2026-08-13' "$CALL_LOG"
 ! grep -q -- '--delivery-date=2026-08-12' "$CALL_LOG"
 grep -q -- '--confirm-daily-sync=2026-08-13' "$CALL_LOG"
+grep -q -- '--confirm-address-call-dispatch=2026-08-13' "$CALL_LOG"
 ! grep -q -- '--cancel-only=' "$CALL_LOG"
 grep -q '"days_succeeded":1,"days_failed":0' "$ROOT/evening.log"
 
@@ -178,6 +180,7 @@ grep -q -- '--cancel-only=2026-08-13' "$CALL_LOG"
 grep -q -- '--expected-digest=aaaaaaaa' "$CALL_LOG"
 grep -q -- '--driver-orders-manifest=/fleetbase/test-config/driver-orders-20260813.json' "$CALL_LOG"
 ! grep -q -- '--confirm-daily-sync=' "$CALL_LOG"
+! grep -q -- '--confirm-address-call-dispatch=' "$CALL_LOG"
 ! grep -q -- '--verify' "$CALL_LOG"
 grep -q '"days_succeeded":1,"days_failed":0' "$ROOT/daytime.log"
 
