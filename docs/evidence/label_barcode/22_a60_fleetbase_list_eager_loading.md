@@ -28,7 +28,7 @@ No write, job or single-record path touched. Syntax-checked with `php -l`; behav
 | `/v1/orders?limit=1` | 0.20 s | 0.15 s |
 | Console list JSON | — | key-for-key identical except `order_config`: was null, now the 4-field object the index resource emits when the relation is loaded; the detail endpoint already returns the full `order_config` object, so the console serializer handles it. (Then `orderConfig` was removed from the list; the relation is still loaded by the kernel path itself, so the object remains.) |
 
-Importer dry-run for 2026-09-06 after the deploy: ran clean against the patched API (source summary 836 rows / 834 orders as before); application log free of errors.
+After the deploy: the labels/importer read path (`/v1/orders?scheduled_at=2026-09-06&limit=100&columns[]=…`) answers 100 orders in 2.2 s with `driver_assigned` + `vehicle` attached as before (A54.2 contract intact); the importer dry-run for 2026-09-06 (Partner source only — it does not walk Fleetbase in dry-run mode) reports 836 rows / 834 orders as before; the application log is free of errors. The write path (PUT by the evening importer) is unpatched code and will be exercised by the 20:05 Kuwait run.
 
 ## Deploy — Verified (staging Fleetbase, owner-authorized)
 - Originals: `/opt/fleetbase/backups/a60-vendor-orig/` (md5 in `checksums.md5`); patched files `/opt/fleetbase/patches/a60/`; diff `/opt/fleetbase/patches/a60.diff`.
