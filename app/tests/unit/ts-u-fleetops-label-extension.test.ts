@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.15');
+    expect(packageJson.version).toBe('0.3.16');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -232,21 +232,23 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toMatch(/\.nz-legacy-label__barcode\s*\{/);
   });
 
-  it('prints vehicle and phone in a driver color while keeping the barcode black', () => {
+  it('prints the driver box black-on-white with car number, name and phone only (A58)', () => {
     expect(template).toContain('CAR / سيارة');
     expect(template).toContain('this.label.driverName');
     expect(batchTemplate).toContain('item.label.driverName');
     expect(template).toContain('this.label.vehicleNumber');
     expect(template).toContain('this.label.driverPhone');
     expect(template).not.toContain('Driver ID');
-    expect(batchTemplate).toContain('item.label.driverColorClass');
+    expect(template).not.toContain('driverColorClass');
+    expect(batchTemplate).not.toContain('driverColorClass');
     expect(batchTemplate).toContain('item.label.vehicleNumber');
     expect(batchTemplate).toContain('item.label.driverPhone');
     expect(batchTemplate).not.toContain('order.driver_name');
-    expect(normalize).toContain('DRIVER_COLORS');
-    expect(normalize).toContain('driver_color');
-    expect(styles).toContain('.nz-driver-color--red');
-    expect(styles).toContain('.nz-driver-color--coral');
+    expect(normalize).not.toContain('DRIVER_COLORS');
+    expect(normalize).not.toContain('driverColorClass');
+    expect(styles).not.toContain('.nz-driver-color--');
+    expect(styles).toMatch(/\.nz-driver-band\s*\{[^}]*background: #fff;[^}]*color: #000;/);
+    expect(styles).toMatch(/\.nz-legacy-label\s*\{[^}]*--nz-label-fg: #000;[^}]*--nz-label-rule: #000;/);
     expect(styles).toContain('-webkit-print-color-adjust: exact');
     expect(styles).toMatch(/\.nz-barcode-svg svg[\s\S]*fill: #000/);
   });

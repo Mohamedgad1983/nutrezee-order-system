@@ -944,10 +944,11 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 }
 
 .nz-legacy-label {
-    --nz-label-fg: #151515;
-    --nz-label-rule: #9a9a9a;
-    --nz-driver-color: #fff;
-    --nz-driver-ink: #151515;
+    /* A58 (owner, 2026-09-05): the label printer is black-and-white only. The whole label is
+       pure black on white — no driver colour band. The driver box carries exactly three facts:
+       car number, driver name, driver phone. */
+    --nz-label-fg: #000;
+    --nz-label-rule: #000;
     box-sizing: border-box;
     position: relative;
     width: 100mm;
@@ -963,22 +964,6 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     print-color-adjust: exact;
 }
 
-.nz-driver-color--red { --nz-driver-color: #d7191c; --nz-driver-ink: #fff; }
-.nz-driver-color--blue { --nz-driver-color: #1d4ed8; --nz-driver-ink: #fff; }
-.nz-driver-color--green { --nz-driver-color: #15803d; --nz-driver-ink: #fff; }
-.nz-driver-color--orange { --nz-driver-color: #f97316; --nz-driver-ink: #111; }
-.nz-driver-color--purple { --nz-driver-color: #7e22ce; --nz-driver-ink: #fff; }
-.nz-driver-color--teal { --nz-driver-color: #0f766e; --nz-driver-ink: #fff; }
-.nz-driver-color--pink { --nz-driver-color: #db2777; --nz-driver-ink: #fff; }
-.nz-driver-color--navy { --nz-driver-color: #1e3a8a; --nz-driver-ink: #fff; }
-.nz-driver-color--brown { --nz-driver-color: #7c2d12; --nz-driver-ink: #fff; }
-.nz-driver-color--cyan { --nz-driver-color: #06b6d4; --nz-driver-ink: #111; }
-.nz-driver-color--olive { --nz-driver-color: #4d7c0f; --nz-driver-ink: #fff; }
-.nz-driver-color--amber { --nz-driver-color: #f59e0b; --nz-driver-ink: #111; }
-.nz-driver-color--magenta { --nz-driver-color: #a21caf; --nz-driver-ink: #fff; }
-.nz-driver-color--slate { --nz-driver-color: #475569; --nz-driver-ink: #fff; }
-.nz-driver-color--lime { --nz-driver-color: #84cc16; --nz-driver-ink: #111; }
-.nz-driver-color--coral { --nz-driver-color: #fb7185; --nz-driver-ink: #111; }
 
 .nz-legacy-label__header {
     position: relative;
@@ -1000,10 +985,10 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     min-height: 8.2mm;
     box-sizing: border-box;
     padding: 0.7mm 1.1mm;
-    border: 0.2mm solid #111;
+    border: 0.45mm solid #000;
     border-radius: 0.8mm;
-    background: var(--nz-driver-color);
-    color: var(--nz-driver-ink);
+    background: #fff;
+    color: #000;
     font-size: 2.15mm;
     line-height: 1.35;
     text-align: left;
@@ -1050,7 +1035,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     width: 4.2mm;
     height: 3.8mm;
     margin: 0 0 0.15mm 10.9mm;
-    color: #555;
+    color: #000;
 }
 
 .nz-legacy-label__brand {
@@ -1063,7 +1048,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 .nz-legacy-label__tagline {
     width: 26mm;
     margin-top: 0.1mm;
-    color: #555;
+    color: #000;
     font-family: Georgia, serif;
     font-size: 1.45mm;
 }
@@ -1177,7 +1162,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
 .nz-meals-table__empty {
     padding: 1.8mm 0.4mm !important;
-    color: #555;
+    color: #000;
     font-style: italic;
     text-align: center !important;
 }
