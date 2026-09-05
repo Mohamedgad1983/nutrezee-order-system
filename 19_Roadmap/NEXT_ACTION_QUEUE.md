@@ -17,6 +17,8 @@
 
 ## Done baseline (verify against register, do not rebuild from memory)
 
+- **WP-OPS-A58 DONE + LIVE (2026-09-05)** — PR #77 merge `2a1268e`, post-merge CI `33970517610` green. The application-context worker is healthy, and Exchange trace confirms both requested Administrator invitations Delivered from the hello sender. Existing scheduler/queue and tenant-wide SMTP policy preserved. No remaining invitation-delivery blocker.
+
 - Phases 1–5 complete. **WP-00 … WP-13 DONE & merged** (all CI-green; see register rows).
 - **WP-UI-01 DONE & merged** — PR #3, merge `b06d646`: login + app shell + sidebar nav (10 sections) + kitchen board + read-only drafts/review-queue/orders lists.
 - **WP-API-01 DONE & merged** — PR #4, merge `f9dcae6` (+ D8 nginx-proxy fix `0c3af5a`): M04 customers controller, M05 catalog-read controller, settings masters/reason-code routes. Deployed + verified on staging. (merge/undo deferred → item 5 below.)

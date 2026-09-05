@@ -5,7 +5,13 @@ Created 2026-06-10. WP definitions: `codex_implementation_sequence.md` (WP-01…
 **This file's §Amendments table is the sole canonical A-id counter** — stale "next free id" notes in earlier documents are superseded.
 *(Date note: Phase 2–4 documents carry 2026-06-11 date stamps written one day ahead in error; git history — all commits 2026-06-10 — is authoritative.)*
 
-**Latest completed owner-requested unit (2026-09-05): WP-LBL-A56 full-width batch grid DONE + LIVE.**
+**Latest completed owner-requested unit (2026-09-05): WP-OPS-A58 invitation delivery DONE + LIVE.**
+The two requested Administrator invitations are confirmed Delivered in Exchange message trace.
+The new application worker is healthy; Microsoft 365 SMTP uses the protected hello sender.
+PR #77 merge `2a1268e`, post-merge CI `33970517610` green. Evidence:
+`docs/evidence/iam/01_a58_invitation_delivery.md`.
+
+**Previous completed presentation unit (2026-09-05): WP-LBL-A56 full-width batch grid DONE + LIVE.**
 Full-width 1464 px Fleet-Ops panel, three-column previews and current driver name beside phone in selectors
 and label headers are browser-verified on Console a56.1 / extension 0.3.15. PR #74 merge `25338b6`,
 post-merge CI `33949743808` green. Evidence: `docs/evidence/label_barcode/20_a56_full_width_grid.md`.
