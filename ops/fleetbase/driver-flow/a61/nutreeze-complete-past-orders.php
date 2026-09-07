@@ -116,7 +116,7 @@ if (!$confirmed) {
 }
 
 $now = date('Y-m-d H:i:s');
-$stats = ['closed' => 0, 'completed' => 0, 'expired' => 0, 'status_rows_inserted' => 0, 'status_rows_reused' => 0, 'no_tracking_number' => 0];
+$stats = ['closed' => 0, 'completed' => 0, 'expired' => 0, 'status_rows_inserted' => 0, 'status_rows_reused' => 0, 'no_tracking_number' => 0, 'current_job_cleared' => 0];
 $touchedOrderUuids = [];
 
 $query = $scope()->select(['uuid', 'status', 'tracking_number_uuid'])->orderBy('uuid');
@@ -170,6 +170,10 @@ foreach ($rows->chunk(CHUNK) as $chunk) {
             }
             DB::table('orders')->where('uuid', $order->uuid)
                 ->update(['status' => $targetStatus, 'updated_at' => $now]);
+            // A61: a non-completing close never ran Driver::unassignCurrentOrder(); clear it here.
+            $stats['current_job_cleared'] += DB::table('drivers')
+                ->where('current_job_uuid', $order->uuid)
+                ->update(['current_job_uuid' => null]);
             $stats['closed']++;
             $stats[$targetStatus]++;
             $touchedOrderUuids[] = $order->uuid;
