@@ -43,3 +43,28 @@ created → dispatched → started ─┬→ completed            Delivered / ت
 
 ## الرجوع
 استعادة `order_configs` من النسخة الاحتياطية + نسخ السكربتين الأصليين من `/opt/fleetbase/backups/a61-pre/` (انظر README الوحدة).
+
+---
+
+## ملحق — اختبار A إلى Z على تليفون سائق حقيقي (2026-09-07، 11:05–11:20 الكويت) — Verified
+
+الجهاز: realme RMX3760 عبر adb، التطبيق Nutreeze Navigator 1.0.11 (#12)، مسجّل دخول كسائق حقيقي **Arsad Ali** (`driver_mW76oeHnja`، 115 طلباً حقيقياً اليوم). لم يُلمس أي طلب عميل؛ أُنشئ طلبان تجريبيان بالـ API (`meta.a61_test=true`, dropoff = موقع الهاتف) وأُسندا للسائق ثم dispatched.
+
+| الخطوة | التطبيق | الـ backend |
+|---|---|---|
+| فتح الطلب A ← **Start Order** | الحالة Started، الزر تحوّل إلى Update Activity | `started=1`, صف STARTED، `current_job` = الطلب |
+| Update Activity | قائمة 6 خيارات: Delivered + 5 أسباب (العناوين الطويلة كانت تُقتطع ← A61.2 قصّرها) | `GET next-activity` |
+| اختيار "غائب ولا يوجد صندوق" | الحالة **Not Delivered**، الطلب ما زال مفتوحاً | `status=not_delivered`, صف NOT_DELIVERED، لا إكمال |
+| Update Activity مرة أخرى | خياران: Delivered / Returned to kitchen | — |
+| اختيار Returned to kitchen | الحالة **Returned To Kitchen** | `status=returned_to_kitchen`, صف RETURNED_TO_KITCHEN |
+| الطلب B ← Start ← Update Activity ← **Delivered** | توست "Order status updated to: Delivered"، الطلب اختفى من القائمة (100 ← 99) | `completed`, صف COMPLETED (complete=1), `current_job` أُفرغ |
+| سكربت الإقفال على الطلب A (بعد نقل موعده إلى أمس، نطاق = 1) | بعد التحديث اختفى الطلب من القائمة | `expired` + صف EXPIRED "Closed without delivery" tag `a61_returned_closed` |
+
+النصوص العربية مخزّنة utf8mb4 سليمة. لوج التطبيق بلا exceptions. الطلبان التجريبيان ومكانا التسليم حُذفا (soft delete) بعد الاختبار.
+
+### A61.2 (PR #81, merged a9027c8, CI 29/29) — نتيجة الاختبار
+- عناوين الأنشطة ≤ 48 حرفاً (مثل "Not delivered — absent, no bin / غائب ولا صندوق") حتى لا تُقتطع في ورقة الاختيار. مطبّقة live.
+- سكربت الإقفال يفرّغ `drivers.current_job_uuid` عند إقفال طلب غير مكتمل (Fleetbase لا يفرّغه إلا عند الإكمال). مركّب على الـ VPS.
+
+### اكتشاف جانبي مهم (خارج نطاق هذه الوحدة) — Verified
+**التطبيق يعرض 100 طلب كحد أقصى.** الـ API يقطع الصفحة عند 100 (`limit=200` يعيد 100)، والتطبيق يطلب `limit=50` بلا ترقيم صفحات. Arsad له 115 طلباً اليوم ← **15 طلباً غير مرئية له في التطبيق**. الحل في التطبيق (ترقيم/تحميل المزيد) أو تقسيم القائمة حسب المنطقة — وحدة منفصلة قبل التسليم للسائقين الذين يتجاوزون 100 طلب (اليوم: Nicholas 116، Arsad 115، Ibrahim 109، Amandeep 107).
