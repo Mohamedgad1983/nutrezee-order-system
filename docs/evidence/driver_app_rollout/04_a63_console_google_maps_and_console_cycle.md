@@ -21,3 +21,9 @@
 - بعد التبديل ظهرت في اللوحة "Oops! Something went wrong". إعادة الإنتاج بصفحة اختبار محلية بنفس المفتاح (متصفح التطبيق): `Google Maps JavaScript API error: ApiNotActivatedMapError`. أي أن **Maps JavaScript API غير مفعّلة على مشروع Google Cloud الخاص بالمفتاح** (المفتاح مفعّل لخرائط Android والجيوكود فقط). اختبار curl السابق كان يعيد سكربت التحميل فقط ولا يكشف التفويض — درس مسجّل.
 - رجوع مؤقت (14:31): `mapProvider` أُعيد إلى `leaflet` على مستوى النظام والشركة، restart لحاوية `application` فقط؛ المفتاح باقٍ في `system.services.google_maps`. اللوحة عادت لخرائط CARTO مع العلامة المائية (تعمل).
 - المطلوب من المالك (إجراء في حساب Google Cloud، لا يقوم به المساعد): تفعيل **Maps JavaScript API** على مشروع المفتاح، وإن كان المفتاح مقيّداً بواجهات API إضافة Maps JavaScript API إليه، وإن كان مقيّداً بمُحيلات إضافة `https://ops.nutreeze.com/*`. بعدها يُعاد التبديل إلى google بأمر واحد (نفس كتابة `Setting`).
+
+## ملحق 16:10 الكويت — المالك فعّل Maps JavaScript API؛ التبديل إلى Google أُعيد — Verified
+- المالك: الخدمة مفعّلة على المشروع وموجودة ضمن قيود API للمفتاح؛ Application restrictions = None.
+- إعادة الإنتاج بنفس صفحة الاختبار المحلية: `MAP_CREATED` بلا `gm_authFailure`، الخريطة ظهرت (الكويت).
+- `mapProvider` أُعيد إلى `google` (نظام + شركة)، restart لحاوية `application`، التحقق: provider google، المفتاح set، الحاوية healthy. صفحة الاختبار المحلية والخادم المؤقت حُذفا.
+- المتبقي: تأكيد المالك أن اللوحة تعرض Google Maps بعد Reload.
