@@ -37,7 +37,7 @@ describe('TS-U fleetbase driver flow a61', () => {
       expect(flow[key].code).toBe('not_delivered');
       expect(flow[key].complete).toBe(false);
       expect(flow[key].activities).toEqual(['completed', 'returned_to_kitchen']);
-      expect(flow[key].status).toMatch(/Not delivered — .+ \/ لم يتم التسليم — .+/u);
+      expect(flow[key].status).toMatch(/^Not delivered — .+ \/ .+/u);
     }
     expect(flow.returned_to_kitchen.code).toBe('returned_to_kitchen');
     expect(flow.returned_to_kitchen.complete).toBe(false);
@@ -74,5 +74,15 @@ describe('TS-U fleetbase driver flow a61', () => {
     expect(apply).toContain('unreachable from created');
     expect(apply).toContain("in_array('--confirm=NUTREEZE', $argv, true)");
     expect(apply.indexOf('invalid_flow')).toBeLessThan(apply.indexOf("require '/fleetbase/api/vendor/autoload.php'"));
+  });
+});
+
+describe('TS-U fleetbase driver flow a61.2 polish', () => {
+  it('keeps activity titles short enough for the Navigator sheet and clears the driver current job on close', () => {
+    const flow = JSON.parse(readFileSync(join(root, 'transport.flow.json'), 'utf8')) as Record<string, { status: string }>;
+    for (const key of Object.keys(flow)) expect(flow[key].status.length).toBeLessThanOrEqual(48);
+    const script = readFileSync(join(root, 'nutreeze-complete-past-orders.php'), 'utf8');
+    expect(script).toContain("->where('current_job_uuid', $order->uuid)");
+    expect(script).toContain("'current_job_cleared' => 0");
   });
 });
