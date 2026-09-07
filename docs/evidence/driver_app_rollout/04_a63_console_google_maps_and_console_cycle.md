@@ -16,3 +16,8 @@
 - المالك يعيد تحميل اللوحة ويؤكد ظهور خريطة Google بلا علامة.
 - قيد مفتاح Google (HTTP referrer) يجب أن يشمل `ops.nutreeze.com` إن كان مقيّداً — الاختبار بالمرجع نجح.
 - حذف الطلب التجريبي `order_zYwGtfMcAk` ومكان التسليم بعد إذن المالك.
+
+## ملحق 14:30 الكويت — Google رفض المفتاح: `ApiNotActivatedMapError` — Verified، ورجوع مؤقت
+- بعد التبديل ظهرت في اللوحة "Oops! Something went wrong". إعادة الإنتاج بصفحة اختبار محلية بنفس المفتاح (متصفح التطبيق): `Google Maps JavaScript API error: ApiNotActivatedMapError`. أي أن **Maps JavaScript API غير مفعّلة على مشروع Google Cloud الخاص بالمفتاح** (المفتاح مفعّل لخرائط Android والجيوكود فقط). اختبار curl السابق كان يعيد سكربت التحميل فقط ولا يكشف التفويض — درس مسجّل.
+- رجوع مؤقت (14:31): `mapProvider` أُعيد إلى `leaflet` على مستوى النظام والشركة، restart لحاوية `application` فقط؛ المفتاح باقٍ في `system.services.google_maps`. اللوحة عادت لخرائط CARTO مع العلامة المائية (تعمل).
+- المطلوب من المالك (إجراء في حساب Google Cloud، لا يقوم به المساعد): تفعيل **Maps JavaScript API** على مشروع المفتاح، وإن كان المفتاح مقيّداً بواجهات API إضافة Maps JavaScript API إليه، وإن كان مقيّداً بمُحيلات إضافة `https://ops.nutreeze.com/*`. بعدها يُعاد التبديل إلى google بأمر واحد (نفس كتابة `Setting`).
