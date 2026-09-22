@@ -31,5 +31,5 @@
 - Rollback: restore the two rows from the backup, or PUT the previous values back.
 
 ## Left for the owner [NC]
-- Ibrahim's sheet plate `21/21412` differs from the previous record `23-21231` in more than format; I took the sheet as authoritative. Confirm with the fleet office if the car actually changed.
+- ~~Ibrahim's sheet plate `21/21412` differs from the previous record `23-21231` in more than format; I took the sheet as authoritative.~~ **Owner confirmed 2026-09-22: the car did change; `21-21412` stands. Closed.**
 - Car model (`Toyota Liteace-2023` / `CMC 2026`) is not stored in Fleetbase vehicles today (make/model/year all null); not added, out of the directive.
