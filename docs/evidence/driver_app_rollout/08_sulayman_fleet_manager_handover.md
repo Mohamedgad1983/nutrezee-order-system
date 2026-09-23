@@ -26,3 +26,21 @@ Not chosen: `Administrator` (AdministratorAccess, too broad) and `Fleet Supervis
 ## Left with the owner [NC]
 - Sulayman has to complete his first login (invitation or password reset) before tomorrow; his console access was never exercised.
 - If Sulayman should also publish APKs himself (not just message drivers), he needs SSH/scp access to the VPS folder — not granted; today the assistant/owner publishes and Sulayman announces.
+
+---
+
+## Addendum 2026-09-23 — driver login codes now go to Sulayman's mailbox (A65.2)
+
+**Finding:** the WhatsApp sender for login codes (Evolution instance `nutreeze-otp`, number +965 67645642) has been **logged out since 2026-08-21 03:58** (`WAMonitoringService … LOGOUT`); `verification_codes` had zero `driver_login` rows in 30 days. The custom_http SMS provider returns `success:false` without throwing, so Fleetbase reported "sent" while nothing arrived. The owner has no WhatsApp on that number and chose: **code by email to Sulayman, who relays it to the driver.**
+
+**Applied — Verified**
+- Backup `/opt/fleetbase/backups/a64-pre/users_settings-otp-email-20260923T1627Z.sql`.
+- 9 driver users' emails changed from undeliverable `driver.<hash>@nutreeze.local` to plus-addresses of the fleet manager's mailbox (`users.email` index is non-unique, but distinct addresses were used so the recipient identifies the driver):
+  naseer, feroz, amandeep, vineesh, arsad, ibrahim, salato, nicholas, ravi → `Sulayman+<slug>@nutreeze.com`.
+- No settings changed: SMS default provider is `twilio` with no credentials, `+965` has no routing rule, so `SmsService` throws and `DriverController::loginWithPhone` falls through to `generateEmailVerificationFor` (synchronous `Mail::send`, Office 365 SMTP from hello@nutreeze.com).
+- Test: `POST /v1/drivers/login-with-sms {"phone":"+96550133727"}` (Ravi) → `{"status":"OK","method":"email"}`; `verification_codes` row `driver_login` for `Sulayman+ravi@nutreeze.com`, created 16:30:53Z, **expires after 60 minutes**; no ERROR in laravel.log at that time, so SMTP accepted the message. Mail subject = `<code> is your … verification code`, so the code is visible in the inbox list and the To-address names the driver.
+- Mailbox receipt at Sulayman@nutreeze.com not observable from the VPS → **owner/Sulayman to confirm** the test mail arrived [NC]. If Exchange plus-addressing were disabled the mail would bounce to hello@nutreeze.com.
+
+**Daily routine:** driver types phone in app → within seconds Sulayman gets "123456 is your … verification code" addressed to Sulayman+<driver>@ → he sends the 6 digits to that driver (any channel) → driver enters it. Valid 60 min; a driver can tap "resend" to get a fresh one.
+
+**Upgrade path (2 minutes when Sulayman has WhatsApp on his phone):** link his WhatsApp to the `nutreeze-otp` instance with a pairing code (`GET /instance/connect/nutreeze-otp?number=<his number>`); codes then reach drivers directly and email stays as fallback. Old pairing code `ND3F-WJ9D` was issued for the owner's number and is void.
