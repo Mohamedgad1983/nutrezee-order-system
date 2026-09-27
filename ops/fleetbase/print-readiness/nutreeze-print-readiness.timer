@@ -1,0 +1,10 @@
+[Unit]
+Description=A69 print-readiness email nightly 00:55 Kuwait (before the 01:00 label print)
+
+[Timer]
+OnCalendar=*-*-* 21:55:00 UTC
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

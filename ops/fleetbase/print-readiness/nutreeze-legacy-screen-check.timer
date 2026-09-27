@@ -1,0 +1,10 @@
+[Unit]
+Description=A69 legacy screen check nightly 00:45 Kuwait (before the 00:55 print-readiness email)
+
+[Timer]
+OnCalendar=*-*-* 21:45:00 UTC
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

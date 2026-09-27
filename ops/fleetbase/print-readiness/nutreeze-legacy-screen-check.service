@@ -1,0 +1,8 @@
+[Unit]
+Description=A69 legacy admin Orders Driver Wise screen check for tomorrow (Playwright, read-only)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/root/a68/run-legacy-check.sh
+TimeoutStartSec=900

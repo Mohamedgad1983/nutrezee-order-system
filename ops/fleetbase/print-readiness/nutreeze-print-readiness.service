@@ -1,0 +1,7 @@
+[Unit]
+Description=A69 print-readiness check for tomorrow: legacy screen + Partner API + Fleetbase + label DB, email to callcenter+it
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/a68/night-check.py
+TimeoutStartSec=900
