@@ -93,8 +93,28 @@ if MOCK_CALL_LOG="$CALL_LOG" \
   printf '%s\n' 'expected 07:00 Kuwait to be rejected' >&2
   exit 1
 fi
-grep -q 'outside guarded 00:45-01:45 Kuwait sync window' "$ROOT/outside-window.log"
+grep -q 'outside guarded 00:20-01:45 Kuwait sync window' "$ROOT/outside-window.log"
 [ ! -s "$CALL_LOG" ]
+
+# A68: the rolling window opens at 00:20 Kuwait (00:25 run) and still rejects 00:15.
+for NOW in 15 25; do
+  : > "$CALL_LOG"
+  if MOCK_CALL_LOG="$CALL_LOG" \
+    NUTREEZE_DAILY_TEST_MODE=1 \
+    NUTREEZE_DAILY_TEST_NOW_MINUTES="$NOW" \
+    NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
+    NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
+    NUTREEZE_DAILY_CONFIG_ROOT="$CONFIG_ROOT" \
+    NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT=/fleetbase/test-config \
+    "$(dirname "$0")/nutreeze-daily-sync.sh" > "$ROOT/rolling-$NOW.log" 2>&1; then
+    [ "$NOW" = 25 ] || { printf '%s\n' 'expected 00:15 Kuwait to be rejected' >&2; exit 1; }
+    [ "$(wc -l < "$CALL_LOG" | tr -d ' ')" = 4 ]
+  else
+    [ "$NOW" = 15 ] || { printf '%s\n' 'expected 00:25 Kuwait to run' >&2; exit 1; }
+    grep -q 'outside guarded 00:20-01:45 Kuwait sync window' "$ROOT/rolling-$NOW.log"
+    [ ! -s "$CALL_LOG" ]
+  fi
+done
 
 # sameday mode (A46): 02:00 Kuwait window, targets today and +1 day.
 : > "$CALL_LOG"

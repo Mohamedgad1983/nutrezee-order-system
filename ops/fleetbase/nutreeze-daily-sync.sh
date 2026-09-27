@@ -6,7 +6,8 @@ RUNNER="${NUTREEZE_DAILY_RUNNER:-/opt/fleetbase/integrations/nutreeze-orders/run
 CONFIG_ROOT="${NUTREEZE_DAILY_CONFIG_ROOT:-/opt/fleetbase/api/storage/app/integrations/config}"
 CONTAINER_CONFIG_ROOT="${NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT:-/fleetbase/api/storage/app/integrations/config}"
 TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
-# rolling (default): 01:00 Kuwait, refresh +1/+2 days.
+# rolling (default): 00:25 Kuwait (A68, so tomorrow's labels are complete for the 01:00 print)
+#                    with the original 01:00 run kept as a fallback; refresh +1/+2 days.
 # sameday (A46):     02:00 Kuwait, refresh today (drivers collect ~03:00) and +1 day,
 #                    so Partner driver assignments made after midnight still reach Navigator.
 # evening (A50):     hourly 20:00-02:45 Kuwait, full refresh of the next collection day
@@ -20,7 +21,7 @@ TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
 # of being held. Daytime cancel-only runs never carry it (the importer refuses the combination).
 MODE="${NUTREEZE_DAILY_MODE:-rolling}"
 case "$MODE" in
-  rolling) WINDOW_START=45;   WINDOW_END=105;  WINDOW_LABEL='00:45-01:45' ;;
+  rolling) WINDOW_START=20;   WINDOW_END=105;  WINDOW_LABEL='00:20-01:45' ;;
   sameday) WINDOW_START=105;  WINDOW_END=165;  WINDOW_LABEL='01:45-02:45' ;;
   evening) WINDOW_START=1200; WINDOW_END=165;  WINDOW_LABEL='20:00-02:45' ;;
   daytime) WINDOW_START=180;  WINDOW_END=1199; WINDOW_LABEL='03:00-19:59' ;;

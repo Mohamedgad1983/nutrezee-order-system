@@ -2,6 +2,9 @@
 Description=Refresh Nutrezee Fleetbase orders for the next 48 hours
 
 [Timer]
+# A68 (2026-09-27): 00:25 Kuwait so D+1 is complete before the 01:00 label print; after the 00:05
+# evening run (~15 min) to avoid integration_lock_busy. 01:00 Kuwait kept as the fallback run.
+OnCalendar=*-*-* 21:25:00 UTC
 OnCalendar=*-*-* 22:00:00 UTC
 Persistent=false
 RandomizedDelaySec=120
