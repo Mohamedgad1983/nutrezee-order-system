@@ -88,6 +88,8 @@ def main():
         missing = sorted(n for n in numbers if n in drivers and n not in dispatched)
         wrong = sorted(n for n in numbers if n in drivers and n in dispatched and fb[n]['driver'] != drivers[n])
         extra = sorted(n for n in dispatched if n not in numbers)
+        if screen.get('test_orders_excluded'):
+            lines.append(f"Test orders removed from print / طلبات تجربة اتشالت من الطباعة: {short(screen['test_orders_excluded'])}")
         lines.append(f"Legacy screen / شاشة السيستم القديم: {len(numbers)} orders, {len(drivers)} with driver, "
                      f"{len(waiting)} with no driver even on the legacy sticker (read {age_min} min ago)")
         if waiting:
@@ -118,7 +120,7 @@ def main():
         for key, label in (('drivers_changed_to_screen', 'driver changed to screen'),
                            ('on_hold_released_by_screen', 'on hold in Partner, on screen → delivered'),
                            ('cancel_released_by_screen', 'cancelled in Partner, on screen → delivered'),
-                           ('partner_only_held', 'in Partner, not on screen → held'),
+                           ('partner_only_held', 'in Partner, not on screen (or test order) → held'),
                            ('screen_only_not_in_partner', 'on screen, not in Partner → cannot create')):
             if applied.get(key):
                 lines.append(f'  {label}: {short(applied[key])}')

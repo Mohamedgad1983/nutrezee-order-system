@@ -134,6 +134,11 @@ async function readTable(page) {
     // under no driver filter can be looked up directly (owner: an order never stays without a driver).
     const drvCol = headers.findIndex((h) => /driver/i.test(h));
     const stickerById = {};
+    // A70.5 (owner: "شيل طلبات التجربة من الطباعة"): test orders are recognised by the legacy customer name;
+    // only their order numbers leave the browser.
+    const nameCol = headers.findIndex((h) => /customer/i.test(h));
+    const testIds = [];
+    const isTest = (name) => /do\s*not\s*deliver|\btest(ing)?\b|تجرب/i.test(name);
     const drawPage = (p) => new Promise((resolve) => {
       const timer = setTimeout(resolve, 45000);
       $(t).one('draw.dt', () => { clearTimeout(timer); setTimeout(resolve, 150); });
@@ -182,6 +187,7 @@ async function readTable(page) {
                 const link = /href=["'](\/printDeliverySticker\/[^"']+)["']/.exec(cell);
                 if (link) stickerById[id] = link[1];
               }
+              if (nameCol >= 0 && Array.isArray(r) && isTest(clean(r[nameCol]))) testIds.push(id);
             }
             if (rows.length === 0) break;
           }
@@ -204,7 +210,8 @@ async function readTable(page) {
       }
       await drawPage(0);
     }
-    return { total: dt.page.info().recordsDisplay, ids: [...ids], pages: info0.pages, diag, stickerById };
+    return { total: dt.page.info().recordsDisplay, ids: [...ids], pages: info0.pages, diag, stickerById,
+      testIds: [...new Set(testIds)] };
   } catch (e) { return { total: null, ids: [], pages: null, diag: { api_error: String(e && e.message || e).slice(0, 160) } }; } }).catch((e) => ({ total: null, ids: [], pages: null, diag: { eval_error: String(e.message).slice(0, 160) } }));
   // the count must agree before and after reading the ids; a disagreement is reported, never guessed
   await waitTableSettled(page);
@@ -215,7 +222,7 @@ async function readTable(page) {
   }
   const ids = viaApi && viaApi.ids.length ? viaApi.ids : first.ids;
   return { total, ids, info: first.info, pages: viaApi?.pages ?? null, diag: viaApi?.diag ?? { api: 'unavailable' },
-    stickerById: viaApi?.stickerById ?? {},
+    stickerById: viaApi?.stickerById ?? {}, testIds: viaApi?.testIds ?? [],
     complete: total === null ? false : ids.length === total };
 }
 
@@ -249,6 +256,7 @@ async function main() {
     result.table_info = all.info;
     result.ids_complete = all.complete;
     result.table_diag = all.diag;
+    result.test_orders = all.testIds;
     if (!all.complete) result.errors.push(`order_ids_incomplete: ${all.ids.length} of ${all.total}`);
 
     for (const d of await driverOptions(page)) {

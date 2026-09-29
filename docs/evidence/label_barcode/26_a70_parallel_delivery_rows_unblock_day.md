@@ -134,3 +134,9 @@ Owner: "مفيش حاجه اسمها اورد بدون سواق لما تلاق�
   in the legacy admin: no driver on its order page ("Select Driver") and `Driver ID -` on its sticker → a legacy test order,
   nothing to take. The status email names such orders as "no driver in the legacy admin itself".
 - Oct 1 re-synced from the 08:21 screen (Partner had caught up: 0 driver changes needed).
+
+## A70.5 — test orders removed from printing (owner: "شيل طلبات التجربة من الطباعة")
+- The screen runner flags orders whose legacy customer name matches `do not deliver` / `test` / `testing` / `تجرب`
+  (only order numbers leave the browser). The manifest drops them from the day (`test_orders_excluded`); the sync then holds
+  them like any order not on the screen (unassigned, not dispatched), and Batch Labels already skips held orders.
+- 2026-10-01: **29384** ("Testing do not deliver") removed. The status email lists removed test orders.

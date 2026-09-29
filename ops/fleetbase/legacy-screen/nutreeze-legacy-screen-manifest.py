@@ -66,6 +66,13 @@ def build_manifest(day, reading):
             from_sticker.append(n)
     if problems:
         return None, sorted(set(problems))
+    # A70.5 (owner: "شيل طلبات التجربة من الطباعة"): legacy test orders ("Testing do not deliver") leave the day;
+    # the sync then holds them like any order that is not on the screen, so they are neither dispatched nor printed.
+    test_orders = sorted({str(n).strip() for n in reading.get('test_orders') or []} & on_screen)
+    on_screen -= set(test_orders)
+    for n in test_orders:
+        drivers.pop(n, None)
+    from_sticker = [n for n in from_sticker if n in on_screen]
     ordered = sorted(on_screen)
     return {
         'schema_version': 2,
@@ -79,6 +86,7 @@ def build_manifest(day, reading):
         'driver_names': names,
         'drivers_from_sticker': sorted(from_sticker),
         'no_driver_in_legacy': sorted(on_screen - set(drivers)),
+        'test_orders_excluded': test_orders,
     }, []
 
 
@@ -110,7 +118,7 @@ def main():
     os.replace(tmp, target)
     log('legacy_screen_manifest_written', delivery_date=day, screen_orders=manifest['expected_count'],
         with_driver=len(manifest['drivers']), from_sticker=manifest['drivers_from_sticker'],
-        no_driver_in_legacy=manifest['no_driver_in_legacy'], bytes=os.path.getsize(target))
+        no_driver_in_legacy=manifest['no_driver_in_legacy'], test_orders_excluded=manifest['test_orders_excluded'], bytes=os.path.getsize(target))
     return 0
 
 
