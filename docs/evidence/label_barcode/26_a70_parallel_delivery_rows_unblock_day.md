@@ -1,4 +1,4 @@
-# 26 — A70: one order with parallel Partner delivery rows no longer blocks a whole day's Fleetbase sync
+# 26 — A70: nothing stops the night print — Partner rows repaired, failed days retried, every ready label printable
 
 **Date:** 2026-09-29. **Owner:** "انا عايز استخدم fleetbase print من غير اي خطا" / "انا عايزهم يشتغلوا".
 The A69 nightly email was cancelled by the owner the same morning ("الغي الايميل … لانك لم تحل المشكله"):
@@ -32,3 +32,53 @@ still fails closed exactly as before. New self-test for the 8/4/4 case.
 ## Rollback
 `cat /root/a70/nutreeze-orders.php.bak-20260929T041629Z > /opt/fleetbase/api/storage/app/integrations/nutreeze-orders.php`
 (previous SHA `49b0cf6c…c54a`).
+
+## A70.2 — owner: "كل حاجه ممكن توقف الطباعه حلها مفيش حجاه اسمها ان الطباعه تقف" (same day)
+
+### What stopped days in the last month — Verified (journal 2026-08-25..09-29)
+| Failure | Count | Effect before | Now |
+|---|---|---|---|
+| `contract_daily_delivery_duplicate_ambiguous` (one order, several rows) | 78 | whole day not written | newest row used (parallel rows summed), order logged |
+| `contract_routing_area` (one order with no area) | 62 | whole day not written | row repaired (`Unknown area`), order logged |
+| `DeadlockException` at ~01:06 Kuwait (evening run vs rolling run) | 16 | day not written | date retried (3 attempts, 90 s apart) |
+| `integration_lock_busy` at ~02:05 Kuwait (evening vs same-day) | 20 | day skipped | date retried |
+| `vendor_daily_window` / `source_read_failed` | 30 | day skipped | date retried (the window refusal itself is by design for dates Partner does not serve) |
+
+### Sync (`nutreeze-orders.php`)
+- `repairDailyDeliveryRow`: a row failing the strict contract is repaired field by field with neutral,
+  **deterministic** values (dry-run and write keep the same digest) and validated again. Logged as
+  `daily_contract_issues` with order number, field names and error code only — no customer data.
+  Only a row without `order_id`/`order_number` is excluded (it cannot be matched to anything).
+- Any duplicate shape (identity conflict, stale meal row, ambiguous) → newest instance, reported.
+- Shared order number and future timestamps → reported, no longer fatal.
+- Kept fail-closed on purpose: incomplete Partner page set (`vendor_daily_distinct_order_mismatch`,
+  completeness mismatch) — writing a partial set would withdraw real orders. A failed run leaves the
+  last good Fleetbase set in place (evening runs refresh tomorrow hourly until midnight).
+- Self-test 43/43, including a field-by-field fuzz (17 broken fields, each still yields the order with a
+  stable digest). Real-data dry-runs 09-30 (865) and 10-01 (844): identical counts and digests to the
+  previous file.
+
+### Scheduler (`daily-sync.sh`, units)
+- Each date: up to 3 attempts, 90 s apart (`horizon_date_retry` event). Tests 38/38 on the VPS
+  (new: persistent failure = 3 attempts then reported; one-off write failure = retried, day completes).
+- `TimeoutStartSec`: rolling + same-day 45 → 100 min, evening 45 → 60 min (room for retries).
+
+### Batch Labels (Nutrezee API `m25-label`) — owner rule replaces the earlier fail-closed rule
+- Unmapped Fleetbase orders no longer block: `ready` = day has orders and at least one mapped label;
+  the page summary still shows *Fleetbase orders that day* vs *Labels fully mapped*.
+- An assigned driver with no phone / plate / colour prints with that field empty instead of failing the
+  whole page (`fleetbase_driver_label_identity_incomplete` removed).
+- Partner meal source unavailable / no rows / incomplete nutrition → label prints with the existing
+  "No dish detail recorded for this date" table (`no_dish_source`); it no longer blocks render or the
+  batch confirmation.
+- Tests: 95/95 label-related (TS-U + TS-I) locally on PG16; typecheck, lint, both scans pass.
+
+### Installed — Verified 2026-09-29 ~07:35 Kuwait
+- `nutreeze-orders.php` SHA-256 `d45d9ec7…61704`, `daily-sync.sh` `a95e7839…a46a5` (= repo), mode 700 root.
+- API image `nutrezee-api:a70-3ebcd62` (`ce5956847c79`), recreated with `--env-file /opt/nutrezee/.env`;
+  container env fingerprint identical before/after; `/health` 200, `/nz/health` 200, restarts 0.
+- Rollback: `/root/a70/bak-*/` (PHP, daily-sync.sh, 3 units) and image `nutrezee-api:pre-a70-20260929`
+  (= a56-6dbf641): `docker tag nutrezee-api:pre-a70-20260929 nutrezee-api:latest` then the same
+  `compose --env-file … up -d --no-deps api`.
+- Not changed: Console extension (the page text "Batch printing is blocked" can no longer appear because
+  `ready` is true whenever labels exist). [NC] owner to open Batch Labels → Tomorrow and confirm.
