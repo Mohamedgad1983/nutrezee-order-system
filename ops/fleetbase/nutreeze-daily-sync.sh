@@ -101,13 +101,46 @@ done
 ATTEMPTS="${NUTREEZE_DAILY_ATTEMPTS:-3}"
 RETRY_SECONDS="${NUTREEZE_DAILY_RETRY_SECONDS:-90}"
 
+# A70.3 (owner, 2026-09-29): the legacy admin screen is the reference. Before the rolling and
+# same-day runs, the print day (Kuwait tomorrow) is read from "Orders Driver Wise"; a full sync
+# of that day then follows the screen (orders + drivers). A missing, failed or stale (>6 h)
+# reading falls back to Partner alone. Daytime cancel-only runs never use it.
+LEGACY_SCREEN_CAPTURE="${NUTREEZE_LEGACY_SCREEN_CAPTURE-/opt/fleetbase/integrations/nutreeze-orders/legacy-screen-manifest.py}"
+if [ "${NUTREEZE_DAILY_TEST_MODE:-0}" = 1 ]; then
+  LEGACY_SCREEN_CAPTURE="${NUTREEZE_LEGACY_SCREEN_CAPTURE:-}"
+fi
+PRINT_DAY="${NUTREEZE_PRINT_DAY:-$(TZ=Asia/Kuwait date -d "$TODAY +1 day" +%F)}"
+
+screen_manifest_arg() {
+  SCREEN_FILE="$CONFIG_ROOT/legacy-screen-$1.json"
+  if [ "$MODE" != daytime ] && [ -f "$SCREEN_FILE" ] && [ ! -L "$SCREEN_FILE" ] \
+    && [ -n "$(find "$SCREEN_FILE" -maxdepth 0 -mmin -360 2>/dev/null)" ]; then
+    printf '%s' "--legacy-screen-manifest=$CONTAINER_CONFIG_ROOT/legacy-screen-$1.json"
+  fi
+}
+
+case "$MODE" in
+  rolling|sameday)
+    case " $* " in
+      *" $PRINT_DAY "*)
+        if [ -n "$LEGACY_SCREEN_CAPTURE" ]; then
+          "$LEGACY_SCREEN_CAPTURE" "$PRINT_DAY" || \
+            printf '%s\n' "{\"event\":\"legacy_screen_fallback_partner\",\"delivery_date\":\"$PRINT_DAY\"}" >&2
+        fi
+        ;;
+    esac
+    ;;
+esac
+
 sync_one_date() {
   DELIVERY_DATE="$1"
   COMPACT_DATE="$(printf '%s' "$DELIVERY_DATE" | tr -d '-')"
   HOST_MEMBERSHIP="$CONFIG_ROOT/driver-orders-$COMPACT_DATE.json"
   CONTAINER_MEMBERSHIP="$CONTAINER_CONFIG_ROOT/driver-orders-$COMPACT_DATE.json"
   set -- "--delivery-date=$DELIVERY_DATE" --limit=1000 --dry-run
-  if [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
+  if [ -n "$(screen_manifest_arg "$COMPACT_DATE")" ]; then
+    set -- "$@" "$(screen_manifest_arg "$COMPACT_DATE")"
+  elif [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
     set -- "$@" "--driver-orders-manifest=$CONTAINER_MEMBERSHIP"
   fi
   if ! "$RUNNER" "$@" > "$MANIFEST_LOG"; then
@@ -151,7 +184,9 @@ sync_one_date() {
     --verify \
     "--confirm-daily-sync=$DELIVERY_DATE" \
     "--confirm-address-call-dispatch=$DELIVERY_DATE"
-  if [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
+  if [ -n "$(screen_manifest_arg "$COMPACT_DATE")" ]; then
+    set -- "$@" "$(screen_manifest_arg "$COMPACT_DATE")"
+  elif [ -f "$HOST_MEMBERSHIP" ] && [ ! -L "$HOST_MEMBERSHIP" ]; then
     set -- "$@" "--driver-orders-manifest=$CONTAINER_MEMBERSHIP"
   fi
   if [ "$COUNT" -eq 0 ]; then

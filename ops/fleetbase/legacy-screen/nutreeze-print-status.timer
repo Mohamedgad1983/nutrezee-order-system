@@ -1,0 +1,9 @@
+[Unit]
+Description=A70.3 night print status at 00:52 Kuwait (after the 00:25 legacy-screen sync)
+
+[Timer]
+OnCalendar=*-*-* 21:52:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

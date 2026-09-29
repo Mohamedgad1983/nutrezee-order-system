@@ -1876,6 +1876,138 @@ function applyDriverOrdersMembershipManifest(array $dailyRows, array $manifest, 
 }
 
 /**
+ * A70.3 (owner, 2026-09-29): the legacy admin screen "Orders Driver Wise" is the reference —
+ * it has run the operation for three years. The host runner reads it for the delivery day and
+ * writes this root-only manifest: order numbers plus the legacy driver id shown for each order
+ * (the same id space as Partner driver.id). No names of customers, phones or addresses.
+ */
+function loadLegacyScreenManifest(string $path, string $deliveryDate): array
+{
+    return validateLegacyScreenManifest(loadLockedJson($path, 'legacy_screen_manifest'), $deliveryDate);
+}
+
+function validateLegacyScreenManifest(array $manifest, string $deliveryDate): array
+{
+    if (($manifest['schema_version'] ?? null) !== 2
+        || ($manifest['source'] ?? null) !== 'legacy_driver_orders_screen_v2'
+        || ($manifest['delivery_date'] ?? null) !== $deliveryDate
+        || !is_int($manifest['expected_count'] ?? null)
+        || $manifest['expected_count'] < 1
+        || !is_array($manifest['order_numbers'] ?? null)
+        || !is_array($manifest['drivers'] ?? null)
+        || !is_string($manifest['order_number_digest'] ?? null)) {
+        throw new RuntimeException('legacy_screen_manifest_shape');
+    }
+    $numbers = [];
+    foreach ($manifest['order_numbers'] as $number) {
+        if (!is_string($number) || !preg_match('/^[A-Za-z0-9._-]{1,255}$/', $number) || isset($numbers[$number])) {
+            throw new RuntimeException('legacy_screen_manifest_order_number');
+        }
+        $numbers[$number] = true;
+    }
+    if (count($numbers) !== $manifest['expected_count']) {
+        throw new RuntimeException('legacy_screen_manifest_count');
+    }
+    $sorted = array_keys($numbers);
+    sort($sorted, SORT_STRING);
+    if (!hash_equals(hash('sha256', implode("\n", $sorted) . "\n"), $manifest['order_number_digest'])) {
+        throw new RuntimeException('legacy_screen_manifest_digest');
+    }
+    $drivers = [];
+    foreach ($manifest['drivers'] as $number => $driverId) {
+        $number = (string) $number;
+        if (!isset($numbers[$number]) || !is_string($driverId)) {
+            throw new RuntimeException('legacy_screen_manifest_driver');
+        }
+        $drivers[$number] = normalizePartnerDriverId($driverId)
+            ?? throw new RuntimeException('legacy_screen_manifest_driver');
+    }
+    $names = [];
+    foreach (($manifest['driver_names'] ?? []) as $driverId => $name) {
+        if (is_string($name) && mb_strlen($name) <= 255) {
+            $names[(string) $driverId] = trim($name);
+        }
+    }
+    return ['numbers' => $numbers, 'drivers' => $drivers, 'names' => $names];
+}
+
+/**
+ * Before contract validation: every raw Partner row of an order that is on the legacy screen takes
+ * the screen's driver, and is delivered (not on hold / not cancelled) because the screen lists it.
+ * An order the screen shows without a driver keeps Partner's value.
+ */
+function applyLegacyScreenOverrides(array $rawRows, array $screen): array
+{
+    $reassigned = [];
+    $unheld = [];
+    $uncancelled = [];
+    foreach ($rawRows as $index => $raw) {
+        if (!is_array($raw) || !is_string($raw['order_number'] ?? null)) {
+            continue;
+        }
+        $number = trim($raw['order_number']);
+        if (!isset($screen['numbers'][$number])) {
+            continue;
+        }
+        $screenDriver = $screen['drivers'][$number] ?? null;
+        if ($screenDriver !== null) {
+            try {
+                $current = normalizePartnerDriverId(is_array($raw['driver'] ?? null) ? ($raw['driver']['id'] ?? null) : null);
+            } catch (RuntimeException) {
+                $current = null;
+            }
+            if ($current !== $screenDriver) {
+                $raw['driver'] = ['id' => $screenDriver, 'name' => $screen['names'][$screenDriver] ?? null];
+                $reassigned[$number] = true;
+            }
+        }
+        if (($raw['is_on_hold'] ?? false) !== false) {
+            $raw['is_on_hold'] = false;
+            $raw['hold_state'] = 'scheduled';
+            $unheld[$number] = true;
+        }
+        if (($raw['is_cancelled'] ?? false) !== false || ($raw['order_status'] ?? null) === 'cancel') {
+            $raw['is_cancelled'] = false;
+            $raw['order_status'] = 'success';
+            $uncancelled[$number] = true;
+        }
+        $rawRows[$index] = $raw;
+    }
+    return [
+        'rows' => $rawRows,
+        'reassigned' => array_map('strval', array_keys($reassigned)),
+        'unheld' => array_map('strval', array_keys($unheld)),
+        'uncancelled' => array_map('strval', array_keys($uncancelled)),
+    ];
+}
+
+/**
+ * After validation: only orders on the legacy screen stay in the day. Partner-only orders drop out
+ * (the writer holds them as source-missing; nothing is deleted). A screen order that Partner does
+ * not return at all cannot be created from the screen and is reported.
+ */
+function applyLegacyScreenMembership(array $dailyRows, array $screen): array
+{
+    $selected = [];
+    $partnerOnly = [];
+    $seen = [];
+    foreach ($dailyRows as $row) {
+        $number = (string) $row['order_number'];
+        if (isset($screen['numbers'][$number])) {
+            $selected[] = $row;
+            $seen[$number] = true;
+        } else {
+            $partnerOnly[] = $number;
+        }
+    }
+    return [
+        'rows' => $selected,
+        'partner_only_held' => $partnerOnly,
+        'screen_only_missing' => array_map('strval', array_keys(array_diff_key($screen['numbers'], $seen))),
+    ];
+}
+
+/**
  * Freeze a started job, but allow the transactional writer to reconcile an
  * integration-owned job that has not started yet. Partner may legitimately
  * advance an allowed lifecycle status or refresh updated_at after Fleetbase has
@@ -5151,6 +5283,46 @@ function runSelfTest(): array
         || $parallelInstanceRows[0]['source_delivery_row_count'] !== 3) {
         throw new RuntimeException('self_test_daily_delivery_parallel_instances');
     }
+    $screenNumbers = ['DELIVERY-31', 'DELIVERY-33'];
+    sort($screenNumbers, SORT_STRING);
+    $screen = validateLegacyScreenManifest([
+        'schema_version' => 2,
+        'source' => 'legacy_driver_orders_screen_v2',
+        'delivery_date' => '2026-08-12',
+        'expected_count' => 2,
+        'order_numbers' => $screenNumbers,
+        'order_number_digest' => hash('sha256', implode("\n", $screenNumbers) . "\n"),
+        'drivers' => ['DELIVERY-31' => '125'],
+        'driver_names' => ['125' => 'Screen Driver'],
+    ], '2026-08-12');
+    $screenOverrides = applyLegacyScreenOverrides([
+        array_replace($deliveryBase, ['is_on_hold' => true, 'hold_state' => 'on_hold', 'meal_item_count' => 2,
+            'driver' => ['id' => 9, 'name' => 'Partner Driver']]),
+        array_replace($deliveryBase, ['delivery_id' => 503, 'order_id' => 32, 'order_number' => 'DELIVERY-32',
+            'meal_item_count' => 2]),
+    ], $screen);
+    $screenRows = buildDailyDeliveryRows($screenOverrides['rows'], '2026-08-12');
+    $screenMembership = applyLegacyScreenMembership($screenRows, $screen);
+    if ($screenOverrides['reassigned'] !== ['DELIVERY-31']
+        || $screenOverrides['unheld'] !== ['DELIVERY-31']
+        || count($screenMembership['rows']) !== 1
+        || $screenMembership['rows'][0]['partner_driver_id'] !== '125'
+        || $screenMembership['rows'][0]['meal_status'] === 'on_hold'
+        || $screenMembership['partner_only_held'] !== ['DELIVERY-32']
+        || $screenMembership['screen_only_missing'] !== ['DELIVERY-33']) {
+        throw new RuntimeException('self_test_legacy_screen_reference');
+    }
+    try {
+        validateLegacyScreenManifest(array_replace([
+            'schema_version' => 2, 'source' => 'legacy_driver_orders_screen_v2', 'delivery_date' => '2026-08-12',
+            'expected_count' => 2, 'order_numbers' => $screenNumbers, 'drivers' => [],
+        ], ['order_number_digest' => str_repeat('0', 64)]), '2026-08-12');
+        throw new RuntimeException('self_test_legacy_screen_digest_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'legacy_screen_manifest_digest') {
+            throw $exception;
+        }
+    }
     foreach ([
         [
             array_replace($deliveryBase, [
@@ -5414,7 +5586,7 @@ try {
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
-        'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:',
+        'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:', 'legacy-screen-manifest:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -5440,6 +5612,10 @@ try {
     }
     if (isset($options['driver-orders-manifest']) && $deliveryDate === null) {
         throw new RuntimeException('driver_orders_manifest_daily_only');
+    }
+    if (isset($options['legacy-screen-manifest'])
+        && ($deliveryDate === null || isset($options['driver-orders-manifest']) || isset($options['cancel-only']))) {
+        throw new RuntimeException('legacy_screen_manifest_full_daily_only');
     }
     if (isset($options['partner-driver-map']) && $deliveryDate === null) {
         throw new RuntimeException('partner_driver_map_daily_only');
@@ -5563,6 +5739,13 @@ try {
         putenv('NUTREEZE_API_KEY');
 
         $stage = 'daily_contract_validation';
+        $legacyScreen = null;
+        $screenOverrides = null;
+        if (isset($options['legacy-screen-manifest'])) {
+            $legacyScreen = loadLegacyScreenManifest((string) $options['legacy-screen-manifest'], $deliveryDate);
+            $screenOverrides = applyLegacyScreenOverrides($fetched['delivery_rows'], $legacyScreen);
+            $fetched['delivery_rows'] = $screenOverrides['rows'];
+        }
         $contractIssues = [];
         $dailyRows = buildDailyDeliveryRows($fetched['delivery_rows'], $deliveryDate, $contractIssues);
         $sourceDeclaredOrders = $fetched['daily_completeness']['distinct_orders'];
@@ -5582,6 +5765,22 @@ try {
         if (count($dailyRows) !== $sourceDeclaredOrders
             && !($excludedRows > 0 && count($dailyRows) + $excludedRows >= $sourceDeclaredOrders)) {
             throw new RuntimeException('vendor_daily_distinct_order_mismatch');
+        }
+        if ($legacyScreen !== null) {
+            $screenMembership = applyLegacyScreenMembership($dailyRows, $legacyScreen);
+            $dailyRows = $screenMembership['rows'];
+            // Order numbers only.
+            safeLog('legacy_screen_applied', [
+                'delivery_date' => $deliveryDate,
+                'screen_orders' => count($legacyScreen['numbers']),
+                'screen_orders_with_driver' => count($legacyScreen['drivers']),
+                'orders_following_screen' => count($dailyRows),
+                'drivers_changed_to_screen' => $screenOverrides['reassigned'],
+                'on_hold_released_by_screen' => $screenOverrides['unheld'],
+                'cancel_released_by_screen' => $screenOverrides['uncancelled'],
+                'partner_only_held' => $screenMembership['partner_only_held'],
+                'screen_only_not_in_partner' => $screenMembership['screen_only_missing'],
+            ]);
         }
         $driverOrdersMembership = null;
         if (isset($options['driver-orders-manifest'])) {

@@ -82,3 +82,42 @@ still fails closed exactly as before. New self-test for the 8/4/4 case.
   `compose --env-file … up -d --no-deps api`.
 - Not changed: Console extension (the page text "Batch printing is blocked" can no longer appear because
   `ready` is true whenever labels exist). [NC] owner to open Batch Labels → Tomorrow and confirm.
+
+## A70.3 — the legacy admin screen is the reference (owner, same day)
+Owner: "ليه ما تخليش legacy app هو المرجع … بقالهم ٣ سنوات شغالين ومفيش مشاكل" → approved "أيوه اعمله دلوقتي قبل الليلة",
+short status email to it@nutreeze.com only.
+
+### Flow (Kuwait time)
+1. **00:25** rolling run (and 02:00 same-day run): `legacy-screen-manifest.py` reads *Orders Driver Wise* for the print day
+   (tomorrow) with the owner-installed Playwright runner (read-only, ~70 s) and writes the root-only
+   `config/legacy-screen-YYYYMMDD.json`: order numbers + the legacy driver id shown per order (verified: the screen's driver
+   option values are the Partner `driver.id` values, e.g. 122…19033). Written only from a complete, error-free reading;
+   otherwise the old file is removed and the sync uses Partner alone.
+2. The full sync for that day runs with `--legacy-screen-manifest` (file ≤ 6 h old; never in daytime cancel-only runs):
+   - screen order → the screen's driver; on hold / cancelled in Partner but on the screen → delivered;
+   - Partner order not on the screen → held by the existing source-missing path (never deleted);
+   - screen order Partner does not return at all → reported (cannot be created from the screen).
+   Logged as `legacy_screen_applied` (order numbers only).
+3. **00:52** `nutreeze-print-status.timer` → short email to it@nutreeze.com: Fleetbase vs screen, drivers, label DB,
+   what changed tonight.
+- Disabled: `nutreeze-legacy-screen-check.timer` (00:45, fed the cancelled A69 email). `nutreeze-print-readiness.timer` stays disabled.
+
+### Verification — Verified 2026-09-29
+- PHP self-test 43/43 incl. new legacy-screen test (driver override, hold release, Partner-only held, screen-only
+  reported, digest guard). Scheduler tests **45/45** (new: capture runs for the print day before a rolling run, fresh
+  screen file replaces the driver-orders manifest, stale file ignored). Pre-existing `! grep` assertions were no-ops under
+  `set -e`; converted to real checks — all pass.
+- Dry-run 2026-09-30 with the screen (read-only; today's file removed afterwards): **28798** (on hold in Partner, on the
+  screen under Nicholas) → delivered; **26262** (Partner only) → held; result 864 = screen 864.
+- **2026-10-01 loaded now** (it had never been written: the 00:25/01:00 runs failed on 29977 before A70):
+  screen read 07:03 CEST = 844 orders, 726 with driver; **121 orders had the driver on the screen but not yet in the
+  Partner snapshot** → written with the screen's driver. Result: 844 in Fleetbase, 726 dispatched, 118 waiting for a
+  driver (as on the screen), `daily_verification.passed=true`, 10 min.
+- First status email sent to it@nutreeze.com (manual note). 20 orders not yet in the label DB: the label feed covers
+  today/tomorrow only; 10-01 is fed from 00:20 tonight.
+
+### Installed
+`/opt/fleetbase/integrations/nutreeze-orders/{legacy-screen-manifest.py, print-status.py, run.sh (new option allowed),
+daily-sync.sh}`, `nutreeze-orders.php`, `/etc/systemd/system/nutreeze-print-status.{service,timer}` (enabled). Screen runner
+script updated to record the driver id. Rollback: `/root/a70/bak-20260929T050201Z/`; disable `nutreeze-print-status.timer`;
+delete `config/legacy-screen-*.json` (the sync then follows Partner alone).
