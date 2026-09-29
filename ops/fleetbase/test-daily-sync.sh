@@ -48,6 +48,11 @@ fi
 if [ "$COUNT" -eq 0 ] && [ "$ZERO" -ne 1 ]; then
   exit 9
 fi
+if [ "$DATE" = "${MOCK_FAIL_ONCE_DATE:-}" ] && [ ! -f "$MOCK_CALL_LOG.once" ]; then
+  : > "$MOCK_CALL_LOG.once"
+  printf '%s\n' '{"event":"fatal","error_class":"DeadlockException","error_code":"internal_error"}'
+  exit 1
+fi
 if [ "$CANCEL" -eq 1 ]; then
   printf '%s\n' "{\"event\":\"complete\",\"delivery_date\":\"$DATE\",\"mode\":\"cancel_only_v1\"}"
   exit 0
@@ -59,6 +64,8 @@ chmod 0700 "$MOCK_RUNNER"
 run_sync() {
   MOCK_CALL_LOG="$CALL_LOG" \
   MOCK_FAIL_DATE="${1:-}" \
+  MOCK_FAIL_ONCE_DATE="${2:-}" \
+  NUTREEZE_DAILY_RETRY_SECONDS=0 \
   NUTREEZE_DAILY_TEST_MODE=1 \
   NUTREEZE_DAILY_TEST_NOW_MINUTES=60 \
   NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
@@ -82,6 +89,18 @@ fi
 grep -q -- '--confirm-daily-sync=2026-08-14' "$CALL_LOG"
 grep -q -- '--confirm-address-call-dispatch=2026-08-14' "$CALL_LOG"
 grep -q '"days_succeeded":1,"days_failed":1' "$ROOT/failure.log"
+# A70: a persistently failing date is tried 3 times, then reported; the other date still runs.
+[ "$(grep -c -- '--delivery-date=2026-08-13 --limit=1000 --dry-run' "$CALL_LOG")" = 3 ]
+[ "$(grep -c '"event":"horizon_date_retry"' "$ROOT/failure.log")" = 2 ]
+
+# A70: a one-off write failure (e.g. a deadlock with another sync) is retried and the day completes.
+: > "$CALL_LOG"
+rm -f "$CALL_LOG.once"
+run_sync '' 2026-08-13 > "$ROOT/retry.log" 2>&1
+grep -q '"event":"horizon_date_retry","delivery_date":"2026-08-13","attempt":1' "$ROOT/retry.log"
+grep -q '"days_succeeded":2,"days_failed":0' "$ROOT/retry.log"
+[ "$(grep -c -- '--delivery-date=2026-08-13 --limit=1000 --dry-run' "$CALL_LOG")" = 2 ]
+rm -f "$CALL_LOG.once"
 
 : > "$CALL_LOG"
 if MOCK_CALL_LOG="$CALL_LOG" \
@@ -93,8 +112,28 @@ if MOCK_CALL_LOG="$CALL_LOG" \
   printf '%s\n' 'expected 07:00 Kuwait to be rejected' >&2
   exit 1
 fi
-grep -q 'outside guarded 00:45-01:45 Kuwait sync window' "$ROOT/outside-window.log"
+grep -q 'outside guarded 00:20-01:45 Kuwait sync window' "$ROOT/outside-window.log"
 [ ! -s "$CALL_LOG" ]
+
+# A68: the rolling window opens at 00:20 Kuwait (00:25 run) and still rejects 00:15.
+for NOW in 15 25; do
+  : > "$CALL_LOG"
+  if MOCK_CALL_LOG="$CALL_LOG" \
+    NUTREEZE_DAILY_TEST_MODE=1 \
+    NUTREEZE_DAILY_TEST_NOW_MINUTES="$NOW" \
+    NUTREEZE_DAILY_TARGET_DATES='2026-08-13 2026-08-14' \
+    NUTREEZE_DAILY_RUNNER="$MOCK_RUNNER" \
+    NUTREEZE_DAILY_CONFIG_ROOT="$CONFIG_ROOT" \
+    NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT=/fleetbase/test-config \
+    "$(dirname "$0")/nutreeze-daily-sync.sh" > "$ROOT/rolling-$NOW.log" 2>&1; then
+    [ "$NOW" = 25 ] || { printf '%s\n' 'expected 00:15 Kuwait to be rejected' >&2; exit 1; }
+    [ "$(wc -l < "$CALL_LOG" | tr -d ' ')" = 4 ]
+  else
+    [ "$NOW" = 15 ] || { printf '%s\n' 'expected 00:25 Kuwait to run' >&2; exit 1; }
+    grep -q 'outside guarded 00:20-01:45 Kuwait sync window' "$ROOT/rolling-$NOW.log"
+    [ ! -s "$CALL_LOG" ]
+  fi
+done
 
 # sameday mode (A46): 02:00 Kuwait window, targets today and +1 day.
 : > "$CALL_LOG"
@@ -205,4 +244,4 @@ fi
 grep -q 'outside guarded 03:00-19:59 Kuwait sync window' "$ROOT/daytime-outside.log"
 [ ! -s "$CALL_LOG" ]
 
-printf '%s\n' 'daily sync tests: 33/33 passed'
+printf '%s\n' 'daily sync tests: 38/38 passed'

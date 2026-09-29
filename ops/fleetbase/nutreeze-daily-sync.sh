@@ -6,7 +6,8 @@ RUNNER="${NUTREEZE_DAILY_RUNNER:-/opt/fleetbase/integrations/nutreeze-orders/run
 CONFIG_ROOT="${NUTREEZE_DAILY_CONFIG_ROOT:-/opt/fleetbase/api/storage/app/integrations/config}"
 CONTAINER_CONFIG_ROOT="${NUTREEZE_DAILY_CONTAINER_CONFIG_ROOT:-/fleetbase/api/storage/app/integrations/config}"
 TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
-# rolling (default): 01:00 Kuwait, refresh +1/+2 days.
+# rolling (default): 00:25 Kuwait (A68, so tomorrow's labels are complete for the 01:00 print)
+#                    with the original 01:00 run kept as a fallback; refresh +1/+2 days.
 # sameday (A46):     02:00 Kuwait, refresh today (drivers collect ~03:00) and +1 day,
 #                    so Partner driver assignments made after midnight still reach Navigator.
 # evening (A50):     hourly 20:00-02:45 Kuwait, full refresh of the next collection day
@@ -20,7 +21,7 @@ TODAY="${NUTREEZE_DAILY_TODAY:-$(TZ=Asia/Kuwait date +%F)}"
 # of being held. Daytime cancel-only runs never carry it (the importer refuses the combination).
 MODE="${NUTREEZE_DAILY_MODE:-rolling}"
 case "$MODE" in
-  rolling) WINDOW_START=45;   WINDOW_END=105;  WINDOW_LABEL='00:45-01:45' ;;
+  rolling) WINDOW_START=20;   WINDOW_END=105;  WINDOW_LABEL='00:20-01:45' ;;
   sameday) WINDOW_START=105;  WINDOW_END=165;  WINDOW_LABEL='01:45-02:45' ;;
   evening) WINDOW_START=1200; WINDOW_END=165;  WINDOW_LABEL='20:00-02:45' ;;
   daytime) WINDOW_START=180;  WINDOW_END=1199; WINDOW_LABEL='03:00-19:59' ;;
@@ -84,8 +85,6 @@ case "$MODE" in
     ;;
 esac
 
-FAILURES=0
-SUCCESSES=0
 for DELIVERY_DATE in "$@"; do
   case "$DELIVERY_DATE" in
     ????-??-??) ;;
@@ -94,6 +93,16 @@ for DELIVERY_DATE in "$@"; do
       exit 29
       ;;
   esac
+done
+
+# A70 (owner, 2026-09-29: printing must never stop): a failed date (Partner API hiccup, a
+# deadlock with another sync writing the same tables, a busy lock) is retried instead of
+# leaving the day stale until the next scheduled run. Each attempt is a fresh dry-run + write.
+ATTEMPTS="${NUTREEZE_DAILY_ATTEMPTS:-3}"
+RETRY_SECONDS="${NUTREEZE_DAILY_RETRY_SECONDS:-90}"
+
+sync_one_date() {
+  DELIVERY_DATE="$1"
   COMPACT_DATE="$(printf '%s' "$DELIVERY_DATE" | tr -d '-')"
   HOST_MEMBERSHIP="$CONFIG_ROOT/driver-orders-$COMPACT_DATE.json"
   CONTAINER_MEMBERSHIP="$CONTAINER_CONFIG_ROOT/driver-orders-$COMPACT_DATE.json"
@@ -104,8 +113,7 @@ for DELIVERY_DATE in "$@"; do
   if ! "$RUNNER" "$@" > "$MANIFEST_LOG"; then
     sed -n '/"event":"fatal"/p' "$MANIFEST_LOG" >&2
     printf '%s\n' "{\"event\":\"horizon_date_failed\",\"delivery_date\":\"$DELIVERY_DATE\",\"stage\":\"dry_run\"}" >&2
-    FAILURES=$((FAILURES + 1))
-    continue
+    return 1
   fi
 
   SUMMARY="$(sed -n '/"event":"daily_source_summary"/p' "$MANIFEST_LOG" | tail -n 1)"
@@ -114,8 +122,7 @@ for DELIVERY_DATE in "$@"; do
   case "$COUNT" in
     ''|*[!0-9]*)
       printf '%s\n' "{\"event\":\"horizon_date_failed\",\"delivery_date\":\"$DELIVERY_DATE\",\"stage\":\"manifest\"}" >&2
-      FAILURES=$((FAILURES + 1))
-      continue
+      return 1
       ;;
   esac
 
@@ -124,8 +131,7 @@ for DELIVERY_DATE in "$@"; do
       # Nothing can be withdrawn from an empty day; never confirm-zero-day (that would
       # demand that no Fleetbase orders exist).
       printf '%s\n' "{\"event\":\"daytime_zero_day_skipped\",\"delivery_date\":\"$DELIVERY_DATE\"}"
-      SUCCESSES=$((SUCCESSES + 1))
-      continue
+      return 0
     fi
     set -- \
       "--delivery-date=$DELIVERY_DATE" \
@@ -153,11 +159,29 @@ for DELIVERY_DATE in "$@"; do
   fi
   fi
   if "$RUNNER" "$@"; then
-    SUCCESSES=$((SUCCESSES + 1))
-  else
-    printf '%s\n' "{\"event\":\"horizon_date_failed\",\"delivery_date\":\"$DELIVERY_DATE\",\"stage\":\"write\"}" >&2
-    FAILURES=$((FAILURES + 1))
+    return 0
   fi
+  printf '%s\n' "{\"event\":\"horizon_date_failed\",\"delivery_date\":\"$DELIVERY_DATE\",\"stage\":\"write\"}" >&2
+  return 1
+}
+
+FAILURES=0
+SUCCESSES=0
+for DELIVERY_DATE in "$@"; do
+  ATTEMPT=1
+  while :; do
+    if sync_one_date "$DELIVERY_DATE"; then
+      SUCCESSES=$((SUCCESSES + 1))
+      break
+    fi
+    if [ "$ATTEMPT" -ge "$ATTEMPTS" ]; then
+      FAILURES=$((FAILURES + 1))
+      break
+    fi
+    printf '%s\n' "{\"event\":\"horizon_date_retry\",\"delivery_date\":\"$DELIVERY_DATE\",\"attempt\":$ATTEMPT,\"next_in_seconds\":$RETRY_SECONDS}" >&2
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep "$RETRY_SECONDS"
+  done
 done
 
 find /var/tmp -maxdepth 1 -type f -name "$(basename "$MANIFEST_LOG")" -delete

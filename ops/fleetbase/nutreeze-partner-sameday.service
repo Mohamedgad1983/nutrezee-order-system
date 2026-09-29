@@ -13,7 +13,7 @@ UMask=0077
 Environment=NUTREEZE_DAILY_MODE=sameday
 ExecStartPre=/opt/fleetbase/integrations/nutreeze-orders/healthcheck.sh
 ExecStart=/opt/fleetbase/integrations/nutreeze-orders/daily-sync.sh
-TimeoutStartSec=45min
+TimeoutStartSec=100min
 NoNewPrivileges=true
 PrivateDevices=true
 ProtectHome=read-only
