@@ -344,27 +344,23 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
     expect(partnerMeals.mealsForOrder).not.toHaveBeenCalled();
   });
 
-  it('blocks render and direct print confirmation when configured Partner nutrition is incomplete', async () => {
-    const s = await seed('Blocked Partner Source', 'N-LBL-PARTNER-BLOCK');
+  it('A70: an unavailable Partner meal source never blocks the label or its print confirmation', async () => {
+    const s = await seed('Unavailable Partner Source', 'N-LBL-PARTNER-BLOCK');
     const partnerLabels = new LabelService(pool, audit, barcodes, {
       mealsForOrder: vi.fn(async () => {
         throw new PartnerLabelSourceError('nutrition_incomplete');
       }),
     });
 
-    await expect(partnerLabels.build(actor, s.orderId, DATE_A)).rejects.toMatchObject({
-      code: 'conflict',
-      detail: { reason: 'partner_label_source_nutrition_incomplete' },
-    });
-    await expect(partnerLabels.recordPrint(actor, s.orderId, DATE_A, { kind: 'print' }))
-      .rejects.toMatchObject({
-        code: 'conflict',
-        detail: { reason: 'partner_label_source_nutrition_incomplete' },
-      });
+    const doc = await partnerLabels.build(actor, s.orderId, DATE_A);
+    expect(doc.meal_source).toBe('no_dish_source');
+    expect(doc.meals).toEqual([]);
+    const printed = await partnerLabels.recordPrint(actor, s.orderId, DATE_A, { kind: 'print' });
+    expect(printed).toBeTruthy();
     const events = await pool.query(
       `SELECT count(*)::int AS n FROM label_print_event WHERE order_id=$1`, [s.orderId],
     );
-    expect(events.rows[0].n).toBe(0);
+    expect(events.rows[0].n).toBe(1);
   });
 });
 

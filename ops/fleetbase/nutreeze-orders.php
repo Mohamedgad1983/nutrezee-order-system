@@ -1117,19 +1117,137 @@ function normalizePartnerDriverId(mixed $value): ?string
 }
 
 /**
- * The endpoint is one row per delivery instance, while Fleetbase needs one job
- * per order. Duplicate instances are collapsed only under a fail-closed rule:
- * identical order/routing identity plus either identical delivery state/count
- * rows or one newest positive-meal row superseding zero-meal rows.
+ * A70 (owner, 2026-09-29: "مفيش حاجة اسمها ان الطباعة تقف"): one malformed Partner row must
+ * never stop a whole day. A row that fails the strict contract is repaired field by field with
+ * neutral values and validated again. Only field names and error codes are reported, never
+ * values. A row that cannot name its order (order_id / order_number) cannot be repaired.
+ *
+ * @return array{row: array, fields: list<string>}|null
  */
-function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate): array
+function repairDailyDeliveryRow(array $raw, string $deliveryDate): ?array
+{
+    $text = function (mixed $value, int $max): ?string {
+        if (!is_string($value) && !is_int($value) && !is_float($value)) {
+            return null;
+        }
+        $value = trim((string) $value);
+        return $value === '' ? null : mb_substr($value, 0, $max);
+    };
+    $object = fn (mixed $value): array => is_array($value) && !array_is_list($value) ? $value : [];
+    $orderNumber = $text($raw['order_number'] ?? null, 255);
+    if (!isset($raw['order_id']) || !is_int($raw['order_id']) || $raw['order_id'] <= 0 || $orderNumber === null) {
+        return null;
+    }
+    $row = $raw;
+    $row['order_number'] = $orderNumber;
+    if (!isset($row['delivery_id']) || !is_int($row['delivery_id']) || $row['delivery_id'] <= 0) {
+        $row['delivery_id'] = $raw['order_id'];
+    }
+    $row['delivery_date'] = $deliveryDate;
+    $customerRef = $text($row['customer_ref'] ?? null, 120);
+    $customerRef = $customerRef === null ? null : preg_replace('/[^A-Za-z0-9._-]/', '-', $customerRef);
+    $row['customer_ref'] = $customerRef ?: 'order-' . $raw['order_id'];
+    foreach (['is_cancelled', 'is_on_hold'] as $field) {
+        if (!is_bool($row[$field] ?? null)) {
+            $row[$field] = filter_var($row[$field] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        }
+    }
+    $row['order_status'] = $text($row['order_status'] ?? null, 32) ?? 'success';
+    $row['delivery_status'] = $text($row['delivery_status'] ?? null, 64) ?? 'ordered';
+    $row['hold_state'] = $text($row['hold_state'] ?? null, 64) ?? 'scheduled';
+    $meals = $row['meal_item_count'] ?? null;
+    $row['meal_item_count'] = is_int($meals) || (is_string($meals) && ctype_digit($meals))
+        ? max(0, min(1000000, (int) $meals))
+        : 0;
+    $customer = $object($row['customer'] ?? null);
+    $customer['name'] = $text($customer['name'] ?? null, 255) ?? ('Customer ' . $orderNumber);
+    $customer['phone'] = $text($customer['phone'] ?? null, 64) ?? '-';
+    $row['customer'] = $customer;
+    $address = $object($row['address'] ?? null);
+    foreach (['area_en', 'area_ar'] as $field) {
+        $address[$field] = $text($address[$field] ?? null, 255);
+    }
+    if ($address['area_en'] === null && $address['area_ar'] === null) {
+        $address['area_en'] = 'Unknown area';
+    }
+    $address['text'] = $text($address['text'] ?? null, 2000) ?? ($address['area_en'] ?? $address['area_ar']);
+    $row['address'] = $address;
+    $timeSlot = $object($row['time_slot'] ?? null);
+    foreach (['title' => 255, 'start' => 64, 'end' => 64] as $field => $max) {
+        $timeSlot[$field] = $text($timeSlot[$field] ?? null, $max);
+    }
+    $timeSlot['id'] = is_int($timeSlot['id'] ?? null) || is_string($timeSlot['id'] ?? null) ? $timeSlot['id'] : null;
+    $row['time_slot'] = $timeSlot;
+    $driver = $object($row['driver'] ?? null);
+    try {
+        normalizePartnerDriverId($driver['id'] ?? null);
+        $driver['id'] = $driver['id'] ?? null;
+    } catch (RuntimeException) {
+        $driver['id'] = null;
+    }
+    $driver['name'] = $text($driver['name'] ?? null, 255);
+    $row['driver'] = $driver;
+    $row['delivery_method'] = $text($row['delivery_method'] ?? null, 255);
+    $row['driver_instructions'] = $text($row['driver_instructions'] ?? null, 2000);
+    $pin = $row['location_pin'] ?? null;
+    $row['location_pin'] = is_string($pin) && trim($pin) !== '' ? $pin : null;
+    try {
+        parseTimestamp((string) ($row['updated_at'] ?? ''), 'daily_delivery_updated_at');
+    } catch (RuntimeException) {
+        // Deterministic (dry-run and write must produce the same digest): the day before, midnight.
+        $row['updated_at'] = (new DateTimeImmutable($deliveryDate . ' 00:00:00', new DateTimeZone('Asia/Kuwait')))
+            ->modify('-1 day')->format('Y-m-d\TH:i:s') . '+03:00';
+    }
+    $fields = [];
+    foreach ($row as $field => $value) {
+        if (!array_key_exists($field, $raw) || $raw[$field] !== $value) {
+            $fields[] = (string) $field;
+        }
+    }
+    return ['row' => $row, 'fields' => $fields];
+}
+
+/** Newest instance wins (updated_at, then delivery_id). */
+function newestDailyDeliveryMember(array $group): array
+{
+    usort($group, function (array $a, array $b): int {
+        $timeOrder = $a['_updated_time'] <=> $b['_updated_time'];
+        return $timeOrder !== 0 ? $timeOrder : ($a['delivery_id'] <=> $b['delivery_id']);
+    });
+    return $group[array_key_last($group)];
+}
+
+/**
+ * The endpoint is one row per delivery instance, while Fleetbase needs one job
+ * per order. Duplicate instances collapse under the original rules (identical
+ * state/count rows, one newest positive-meal row superseding zero-meal rows,
+ * A70 parallel instances). A70: any other duplicate shape no longer stops the
+ * day — the newest instance is used and the order is reported in $issues.
+ */
+function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate, array &$issues = []): array
 {
     $groups = [];
     foreach ($rawDeliveries as $raw) {
         if (!is_array($raw)) {
-            throw new RuntimeException('contract_daily_delivery_row_object');
+            $issues[] = ['order_number' => null, 'issue' => 'row_excluded', 'error' => 'contract_daily_delivery_row_object'];
+            continue;
         }
-        $row = validateDailyDeliveryRow($raw, $deliveryDate);
+        try {
+            $row = validateDailyDeliveryRow($raw, $deliveryDate);
+        } catch (RuntimeException $exception) {
+            $repair = repairDailyDeliveryRow($raw, $deliveryDate);
+            if ($repair === null) {
+                $issues[] = ['order_number' => null, 'issue' => 'row_excluded', 'error' => $exception->getMessage()];
+                continue;
+            }
+            $row = validateDailyDeliveryRow($repair['row'], $deliveryDate);
+            $issues[] = [
+                'order_number' => $row['order_number'],
+                'issue' => 'row_repaired',
+                'error' => $exception->getMessage(),
+                'fields' => $repair['fields'],
+            ];
+        }
         $groups[(string) $row['order_id']][] = $row;
     }
 
@@ -1137,13 +1255,21 @@ function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate): arr
     $seenNumbers = [];
     foreach ($groups as $group) {
         $first = $group[0];
+        $identityConflict = false;
         foreach ($group as $member) {
             if ($member['_identity_hash'] !== $first['_identity_hash']) {
-                throw new RuntimeException('contract_daily_delivery_group_conflict');
+                $identityConflict = true;
             }
         }
         $selected = $first;
-        if (count($group) > 1) {
+        if ($identityConflict) {
+            $selected = newestDailyDeliveryMember($group);
+            $issues[] = [
+                'order_number' => $selected['order_number'],
+                'issue' => 'duplicate_newest_used',
+                'error' => 'contract_daily_delivery_group_conflict',
+            ];
+        } elseif (count($group) > 1) {
             $positive = array_values(array_filter(
                 $group,
                 fn (array $member): bool => $member['meal_item_count'] > 0,
@@ -1155,27 +1281,49 @@ function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate): arr
                 }
             }
             $materialStates = [];
+            $mealStatuses = [];
+            $updatedTimes = [];
             foreach ($group as $member) {
                 $materialStates[$member['meal_status'] . "\0" . $member['meal_item_count']] = true;
+                $mealStatuses[(string) $member['meal_status']] = true;
+                $updatedTimes[$member['_updated_time']->format('U.u')] = true;
             }
-            if (count($materialStates) === 1) {
+            // A70: parallel instances written together (one status, one timestamp,
+            // every row carrying meals) are one drop for the same order; keep all meals.
+            $parallelInstances = count($materialStates) > 1
+                && count($positive) === count($group)
+                && count($mealStatuses) === 1
+                && count($updatedTimes) === 1;
+            if ($parallelInstances) {
+                usort($group, fn (array $a, array $b): int => $a['delivery_id'] <=> $b['delivery_id']);
+                $selected = $group[array_key_last($group)];
+                $selected['meal_item_count'] = array_sum(array_column($group, 'meal_item_count'));
+            } elseif (count($materialStates) === 1) {
                 usort($group, function (array $a, array $b): int {
                     $timeOrder = $a['_updated_time'] <=> $b['_updated_time'];
                     return $timeOrder !== 0 ? $timeOrder : ($a['delivery_id'] <=> $b['delivery_id']);
                 });
                 $selected = $group[array_key_last($group)];
-            } elseif (count($positive) === 1) {
+            } elseif (count($positive) === 1 && $positive[0]['_updated_time'] == $latest) {
                 $selected = $positive[0];
-                if ($selected['_updated_time'] != $latest) {
-                    throw new RuntimeException('contract_daily_delivery_duplicate_stale_meal_row');
-                }
             } else {
-                throw new RuntimeException('contract_daily_delivery_duplicate_ambiguous');
+                $selected = newestDailyDeliveryMember($group);
+                $issues[] = [
+                    'order_number' => $selected['order_number'],
+                    'issue' => 'duplicate_newest_used',
+                    'error' => count($positive) === 1
+                        ? 'contract_daily_delivery_duplicate_stale_meal_row'
+                        : 'contract_daily_delivery_duplicate_ambiguous',
+                ];
             }
         }
         $number = $selected['order_number'];
         if (isset($seenNumbers[$number]) && $seenNumbers[$number] !== $selected['order_id']) {
-            throw new RuntimeException('contract_daily_order_number_not_unique');
+            $issues[] = [
+                'order_number' => $number,
+                'issue' => 'order_number_shared',
+                'error' => 'contract_daily_order_number_not_unique',
+            ];
         }
         $seenNumbers[$number] = $selected['order_id'];
         $deliveryIds = array_column($group, 'delivery_id');
@@ -1728,6 +1876,138 @@ function applyDriverOrdersMembershipManifest(array $dailyRows, array $manifest, 
 }
 
 /**
+ * A70.3 (owner, 2026-09-29): the legacy admin screen "Orders Driver Wise" is the reference —
+ * it has run the operation for three years. The host runner reads it for the delivery day and
+ * writes this root-only manifest: order numbers plus the legacy driver id shown for each order
+ * (the same id space as Partner driver.id). No names of customers, phones or addresses.
+ */
+function loadLegacyScreenManifest(string $path, string $deliveryDate): array
+{
+    return validateLegacyScreenManifest(loadLockedJson($path, 'legacy_screen_manifest'), $deliveryDate);
+}
+
+function validateLegacyScreenManifest(array $manifest, string $deliveryDate): array
+{
+    if (($manifest['schema_version'] ?? null) !== 2
+        || ($manifest['source'] ?? null) !== 'legacy_driver_orders_screen_v2'
+        || ($manifest['delivery_date'] ?? null) !== $deliveryDate
+        || !is_int($manifest['expected_count'] ?? null)
+        || $manifest['expected_count'] < 1
+        || !is_array($manifest['order_numbers'] ?? null)
+        || !is_array($manifest['drivers'] ?? null)
+        || !is_string($manifest['order_number_digest'] ?? null)) {
+        throw new RuntimeException('legacy_screen_manifest_shape');
+    }
+    $numbers = [];
+    foreach ($manifest['order_numbers'] as $number) {
+        if (!is_string($number) || !preg_match('/^[A-Za-z0-9._-]{1,255}$/', $number) || isset($numbers[$number])) {
+            throw new RuntimeException('legacy_screen_manifest_order_number');
+        }
+        $numbers[$number] = true;
+    }
+    if (count($numbers) !== $manifest['expected_count']) {
+        throw new RuntimeException('legacy_screen_manifest_count');
+    }
+    $sorted = array_keys($numbers);
+    sort($sorted, SORT_STRING);
+    if (!hash_equals(hash('sha256', implode("\n", $sorted) . "\n"), $manifest['order_number_digest'])) {
+        throw new RuntimeException('legacy_screen_manifest_digest');
+    }
+    $drivers = [];
+    foreach ($manifest['drivers'] as $number => $driverId) {
+        $number = (string) $number;
+        if (!isset($numbers[$number]) || !is_string($driverId)) {
+            throw new RuntimeException('legacy_screen_manifest_driver');
+        }
+        $drivers[$number] = normalizePartnerDriverId($driverId)
+            ?? throw new RuntimeException('legacy_screen_manifest_driver');
+    }
+    $names = [];
+    foreach (($manifest['driver_names'] ?? []) as $driverId => $name) {
+        if (is_string($name) && mb_strlen($name) <= 255) {
+            $names[(string) $driverId] = trim($name);
+        }
+    }
+    return ['numbers' => $numbers, 'drivers' => $drivers, 'names' => $names];
+}
+
+/**
+ * Before contract validation: every raw Partner row of an order that is on the legacy screen takes
+ * the screen's driver, and is delivered (not on hold / not cancelled) because the screen lists it.
+ * An order the screen shows without a driver keeps Partner's value.
+ */
+function applyLegacyScreenOverrides(array $rawRows, array $screen): array
+{
+    $reassigned = [];
+    $unheld = [];
+    $uncancelled = [];
+    foreach ($rawRows as $index => $raw) {
+        if (!is_array($raw) || !is_string($raw['order_number'] ?? null)) {
+            continue;
+        }
+        $number = trim($raw['order_number']);
+        if (!isset($screen['numbers'][$number])) {
+            continue;
+        }
+        $screenDriver = $screen['drivers'][$number] ?? null;
+        if ($screenDriver !== null) {
+            try {
+                $current = normalizePartnerDriverId(is_array($raw['driver'] ?? null) ? ($raw['driver']['id'] ?? null) : null);
+            } catch (RuntimeException) {
+                $current = null;
+            }
+            if ($current !== $screenDriver) {
+                $raw['driver'] = ['id' => $screenDriver, 'name' => $screen['names'][$screenDriver] ?? null];
+                $reassigned[$number] = true;
+            }
+        }
+        if (($raw['is_on_hold'] ?? false) !== false) {
+            $raw['is_on_hold'] = false;
+            $raw['hold_state'] = 'scheduled';
+            $unheld[$number] = true;
+        }
+        if (($raw['is_cancelled'] ?? false) !== false || ($raw['order_status'] ?? null) === 'cancel') {
+            $raw['is_cancelled'] = false;
+            $raw['order_status'] = 'success';
+            $uncancelled[$number] = true;
+        }
+        $rawRows[$index] = $raw;
+    }
+    return [
+        'rows' => $rawRows,
+        'reassigned' => array_map('strval', array_keys($reassigned)),
+        'unheld' => array_map('strval', array_keys($unheld)),
+        'uncancelled' => array_map('strval', array_keys($uncancelled)),
+    ];
+}
+
+/**
+ * After validation: only orders on the legacy screen stay in the day. Partner-only orders drop out
+ * (the writer holds them as source-missing; nothing is deleted). A screen order that Partner does
+ * not return at all cannot be created from the screen and is reported.
+ */
+function applyLegacyScreenMembership(array $dailyRows, array $screen): array
+{
+    $selected = [];
+    $partnerOnly = [];
+    $seen = [];
+    foreach ($dailyRows as $row) {
+        $number = (string) $row['order_number'];
+        if (isset($screen['numbers'][$number])) {
+            $selected[] = $row;
+            $seen[$number] = true;
+        } else {
+            $partnerOnly[] = $number;
+        }
+    }
+    return [
+        'rows' => $selected,
+        'partner_only_held' => $partnerOnly,
+        'screen_only_missing' => array_map('strval', array_keys(array_diff_key($screen['numbers'], $seen))),
+    ];
+}
+
+/**
  * Freeze a started job, but allow the transactional writer to reconcile an
  * integration-owned job that has not started yet. Partner may legitimately
  * advance an allowed lifecycle status or refresh updated_at after Fleetbase has
@@ -2116,11 +2396,9 @@ final class VendorClient
             ['delivery_date' => $deliveryDate],
             $limit,
             function (mixed $raw) use ($deliveryDate): ?array {
-                if (!is_array($raw)) {
-                    throw new RuntimeException('contract_daily_delivery_row_object');
-                }
-                validateDailyDeliveryRow($raw, $deliveryDate);
-                return $raw;
+                // A70: rows are validated (and repaired when needed) in buildDailyDeliveryRows,
+                // so one malformed row can no longer reject the whole day at fetch time.
+                return is_array($raw) ? $raw : null;
             },
             100,
         );
@@ -4964,21 +5242,21 @@ function runSelfTest(): array
         || $dailyDeliveryRows[0]['source_selector'] !== DAILY_SOURCE_SELECTOR) {
         throw new RuntimeException('self_test_daily_delivery_canonicalization');
     }
-    $duplicateConflictRejected = false;
-    try {
-        buildDailyDeliveryRows([
-            $deliveryBase,
-            array_replace($deliveryBase, [
-                'delivery_id' => 502,
-                'meal_item_count' => 1,
-                'updated_at' => '2026-08-11T11:00:00+03:00',
-                'address' => array_replace($deliveryBase['address'], ['text' => 'Different Address']),
-            ]),
-        ], '2026-08-12');
-    } catch (RuntimeException $exception) {
-        $duplicateConflictRejected = $exception->getMessage() === 'contract_daily_delivery_group_conflict';
-    }
-    if (!$duplicateConflictRejected) {
+    // A70: a conflicting duplicate no longer stops the day; the newest instance is used and reported.
+    $conflictIssues = [];
+    $conflictRows = buildDailyDeliveryRows([
+        $deliveryBase,
+        array_replace($deliveryBase, [
+            'delivery_id' => 502,
+            'meal_item_count' => 1,
+            'updated_at' => '2026-08-11T11:00:00+03:00',
+            'address' => array_replace($deliveryBase['address'], ['text' => 'Different Address']),
+        ]),
+    ], '2026-08-12', $conflictIssues);
+    if (count($conflictRows) !== 1
+        || $conflictRows[0]['address_text'] !== 'Different Address'
+        || $conflictRows[0]['source_delivery_ids'] !== [501, 502]
+        || ($conflictIssues[0]['error'] ?? null) !== 'contract_daily_delivery_group_conflict') {
         throw new RuntimeException('self_test_daily_delivery_conflict');
     }
     $identicalDuplicateRows = buildDailyDeliveryRows([
@@ -4993,6 +5271,57 @@ function runSelfTest(): array
         || $identicalDuplicateRows[0]['meal_item_count'] !== 3
         || $identicalDuplicateRows[0]['updated_at'] !== '2026-08-11T11:00:00+03:00') {
         throw new RuntimeException('self_test_daily_delivery_identical_duplicate');
+    }
+    $parallelInstanceRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['delivery_status' => 'ordered', 'meal_item_count' => 8]),
+        array_replace($deliveryBase, ['delivery_id' => 502, 'delivery_status' => 'ordered', 'meal_item_count' => 4]),
+        array_replace($deliveryBase, ['delivery_id' => 503, 'delivery_status' => 'ordered', 'meal_item_count' => 4]),
+    ], '2026-08-12');
+    if (count($parallelInstanceRows) !== 1
+        || $parallelInstanceRows[0]['meal_item_count'] !== 16
+        || $parallelInstanceRows[0]['source_delivery_ids'] !== [501, 502, 503]
+        || $parallelInstanceRows[0]['source_delivery_row_count'] !== 3) {
+        throw new RuntimeException('self_test_daily_delivery_parallel_instances');
+    }
+    $screenNumbers = ['DELIVERY-31', 'DELIVERY-33'];
+    sort($screenNumbers, SORT_STRING);
+    $screen = validateLegacyScreenManifest([
+        'schema_version' => 2,
+        'source' => 'legacy_driver_orders_screen_v2',
+        'delivery_date' => '2026-08-12',
+        'expected_count' => 2,
+        'order_numbers' => $screenNumbers,
+        'order_number_digest' => hash('sha256', implode("\n", $screenNumbers) . "\n"),
+        'drivers' => ['DELIVERY-31' => '125'],
+        'driver_names' => ['125' => 'Screen Driver'],
+    ], '2026-08-12');
+    $screenOverrides = applyLegacyScreenOverrides([
+        array_replace($deliveryBase, ['is_on_hold' => true, 'hold_state' => 'on_hold', 'meal_item_count' => 2,
+            'driver' => ['id' => 9, 'name' => 'Partner Driver']]),
+        array_replace($deliveryBase, ['delivery_id' => 503, 'order_id' => 32, 'order_number' => 'DELIVERY-32',
+            'meal_item_count' => 2]),
+    ], $screen);
+    $screenRows = buildDailyDeliveryRows($screenOverrides['rows'], '2026-08-12');
+    $screenMembership = applyLegacyScreenMembership($screenRows, $screen);
+    if ($screenOverrides['reassigned'] !== ['DELIVERY-31']
+        || $screenOverrides['unheld'] !== ['DELIVERY-31']
+        || count($screenMembership['rows']) !== 1
+        || $screenMembership['rows'][0]['partner_driver_id'] !== '125'
+        || $screenMembership['rows'][0]['meal_status'] === 'on_hold'
+        || $screenMembership['partner_only_held'] !== ['DELIVERY-32']
+        || $screenMembership['screen_only_missing'] !== ['DELIVERY-33']) {
+        throw new RuntimeException('self_test_legacy_screen_reference');
+    }
+    try {
+        validateLegacyScreenManifest(array_replace([
+            'schema_version' => 2, 'source' => 'legacy_driver_orders_screen_v2', 'delivery_date' => '2026-08-12',
+            'expected_count' => 2, 'order_numbers' => $screenNumbers, 'drivers' => [],
+        ], ['order_number_digest' => str_repeat('0', 64)]), '2026-08-12');
+        throw new RuntimeException('self_test_legacy_screen_digest_not_rejected');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'legacy_screen_manifest_digest') {
+            throw $exception;
+        }
     }
     foreach ([
         [
@@ -5012,13 +5341,14 @@ function runSelfTest(): array
             'contract_daily_delivery_duplicate_stale_meal_row',
         ],
     ] as [$candidate, $expectedError]) {
-        try {
-            buildDailyDeliveryRows([$deliveryBase, $candidate], '2026-08-12');
-            throw new RuntimeException('self_test_daily_delivery_duplicate_not_rejected');
-        } catch (RuntimeException $exception) {
-            if ($exception->getMessage() !== $expectedError) {
-                throw $exception;
-            }
+        $duplicateIssues = [];
+        $duplicateRows = buildDailyDeliveryRows([$deliveryBase, $candidate], '2026-08-12', $duplicateIssues);
+        $expectedTime = max($candidate['updated_at'], $deliveryBase['updated_at']);
+        if (count($duplicateRows) !== 1
+            || $duplicateRows[0]['updated_at'] !== $expectedTime
+            || ($duplicateIssues[0]['error'] ?? null) !== $expectedError
+            || ($duplicateIssues[0]['issue'] ?? null) !== 'duplicate_newest_used') {
+            throw new RuntimeException('self_test_daily_delivery_duplicate_newest');
         }
     }
     $singleDeliveryRows = buildDailyDeliveryRows([
@@ -5045,21 +5375,19 @@ function runSelfTest(): array
         ], '2026-08-12')[0]['_source_hash']) {
         throw new RuntimeException('self_test_daily_delivery_partner_driver');
     }
-    try {
-        buildDailyDeliveryRows([
-            array_replace($deliveryBase, ['driver' => ['id' => 9, 'name' => null]]),
-            array_replace($deliveryBase, [
-                'delivery_id' => 502,
-                'meal_item_count' => 1,
-                'updated_at' => '2026-08-11T11:00:00+03:00',
-                'driver' => ['id' => 7, 'name' => null],
-            ]),
-        ], '2026-08-12');
-        throw new RuntimeException('self_test_daily_delivery_driver_conflict_not_rejected');
-    } catch (RuntimeException $exception) {
-        if ($exception->getMessage() !== 'contract_daily_delivery_group_conflict') {
-            throw $exception;
-        }
+    $driverConflictIssues = [];
+    $driverConflictRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['driver' => ['id' => 9, 'name' => null]]),
+        array_replace($deliveryBase, [
+            'delivery_id' => 502,
+            'meal_item_count' => 1,
+            'updated_at' => '2026-08-11T11:00:00+03:00',
+            'driver' => ['id' => 7, 'name' => null],
+        ]),
+    ], '2026-08-12', $driverConflictIssues);
+    if ($driverConflictRows[0]['partner_driver_id'] !== '7'
+        || ($driverConflictIssues[0]['error'] ?? null) !== 'contract_daily_delivery_group_conflict') {
+        throw new RuntimeException('self_test_daily_delivery_driver_conflict_newest');
     }
     $emptyTimeSlotRows = buildDailyDeliveryRows([
         array_replace($deliveryBase, [
@@ -5069,17 +5397,50 @@ function runSelfTest(): array
     if (count($emptyTimeSlotRows) !== 1) {
         throw new RuntimeException('self_test_daily_delivery_empty_time_slot');
     }
-    try {
-        buildDailyDeliveryRows([
-            array_replace($deliveryBase, [
-                'time_slot' => array_replace($deliveryBase['time_slot'], ['title' => ['invalid']]),
-            ]),
-        ], '2026-08-12');
-        throw new RuntimeException('self_test_daily_delivery_invalid_time_slot_title_not_rejected');
-    } catch (RuntimeException $exception) {
-        if ($exception->getMessage() !== 'contract_string_title') {
-            throw $exception;
+    $titleIssues = [];
+    $titleRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, [
+            'time_slot' => array_replace($deliveryBase['time_slot'], ['title' => ['invalid']]),
+        ]),
+    ], '2026-08-12', $titleIssues);
+    if (count($titleRows) !== 1
+        || ($titleIssues[0]['issue'] ?? null) !== 'row_repaired'
+        || ($titleIssues[0]['error'] ?? null) !== 'contract_string_title') {
+        throw new RuntimeException('self_test_daily_delivery_invalid_time_slot_title_repaired');
+    }
+    // A70: every contract field broken on its own still yields the order (repaired), deterministically.
+    $brokenValues = [
+        'delivery_id' => 'x', 'delivery_date' => '2026-13-40', 'customer_ref' => 'bad ref!',
+        'is_cancelled' => 'no', 'is_on_hold' => null, 'order_status' => null, 'delivery_status' => [],
+        'hold_state' => '', 'meal_item_count' => -3, 'customer' => 'x', 'address' => [],
+        'time_slot' => null, 'driver' => ['id' => 'bad id!'], 'delivery_method' => ['x'],
+        'driver_instructions' => 5.5, 'location_pin' => 7, 'updated_at' => 'yesterday',
+    ];
+    foreach ($brokenValues as $field => $value) {
+        $fuzzIssues = [];
+        $fuzzRaw = array_replace($deliveryBase, ['meal_item_count' => 2, $field => $value]);
+        $fuzzRows = buildDailyDeliveryRows([$fuzzRaw], '2026-08-12', $fuzzIssues);
+        $fuzzAgain = buildDailyDeliveryRows([$fuzzRaw], '2026-08-12');
+        if (count($fuzzRows) !== 1
+            || $fuzzRows[0]['order_number'] !== 'DELIVERY-31'
+            || ($fuzzIssues[0]['issue'] ?? null) !== 'row_repaired'
+            || dailySourceDigest($fuzzRows) !== dailySourceDigest($fuzzAgain)) {
+            throw new RuntimeException('self_test_daily_delivery_repair_' . $field);
         }
+    }
+    $noAreaRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['address' => ['area_en' => null, 'area_ar' => null, 'text' => 'Somewhere']]),
+    ], '2026-08-12');
+    if ($noAreaRows[0]['routing_area'] !== 'Unknown area' || $noAreaRows[0]['address_text'] !== 'Somewhere') {
+        throw new RuntimeException('self_test_daily_delivery_repair_routing_area');
+    }
+    $unnamedIssues = [];
+    $unnamedRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['order_number' => null]),
+        array_replace($deliveryBase, ['delivery_id' => 503, 'order_id' => 32, 'order_number' => 'DELIVERY-32']),
+    ], '2026-08-12', $unnamedIssues);
+    if (count($unnamedRows) !== 1 || ($unnamedIssues[0]['issue'] ?? null) !== 'row_excluded') {
+        throw new RuntimeException('self_test_daily_delivery_unnamed_excluded');
     }
     // A pre-dispatched but unstarted job remains safe to reconcile inside the
     // existing transaction even when Partner advances ordered -> driver_assigned,
@@ -5225,7 +5586,7 @@ try {
         'delivery-date:', 'meal-since:', 'driver-roster:', 'pickup-config:',
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
-        'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:',
+        'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:', 'legacy-screen-manifest:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -5251,6 +5612,10 @@ try {
     }
     if (isset($options['driver-orders-manifest']) && $deliveryDate === null) {
         throw new RuntimeException('driver_orders_manifest_daily_only');
+    }
+    if (isset($options['legacy-screen-manifest'])
+        && ($deliveryDate === null || isset($options['driver-orders-manifest']) || isset($options['cancel-only']))) {
+        throw new RuntimeException('legacy_screen_manifest_full_daily_only');
     }
     if (isset($options['partner-driver-map']) && $deliveryDate === null) {
         throw new RuntimeException('partner_driver_map_daily_only');
@@ -5374,10 +5739,48 @@ try {
         putenv('NUTREEZE_API_KEY');
 
         $stage = 'daily_contract_validation';
-        $dailyRows = buildDailyDeliveryRows($fetched['delivery_rows'], $deliveryDate);
+        $legacyScreen = null;
+        $screenOverrides = null;
+        if (isset($options['legacy-screen-manifest'])) {
+            $legacyScreen = loadLegacyScreenManifest((string) $options['legacy-screen-manifest'], $deliveryDate);
+            $screenOverrides = applyLegacyScreenOverrides($fetched['delivery_rows'], $legacyScreen);
+            $fetched['delivery_rows'] = $screenOverrides['rows'];
+        }
+        $contractIssues = [];
+        $dailyRows = buildDailyDeliveryRows($fetched['delivery_rows'], $deliveryDate, $contractIssues);
         $sourceDeclaredOrders = $fetched['daily_completeness']['distinct_orders'];
-        if (count($dailyRows) !== $sourceDeclaredOrders) {
+        $excludedRows = count(array_filter(
+            $contractIssues,
+            fn (array $issue): bool => $issue['issue'] === 'row_excluded',
+        ));
+        if ($contractIssues !== []) {
+            // A70: order numbers, field names and error codes only — never customer data.
+            safeLog('daily_contract_issues', [
+                'delivery_date' => $deliveryDate,
+                'count' => count($contractIssues),
+                'rows_excluded' => $excludedRows,
+                'issues' => array_slice($contractIssues, 0, 200),
+            ]);
+        }
+        if (count($dailyRows) !== $sourceDeclaredOrders
+            && !($excludedRows > 0 && count($dailyRows) + $excludedRows >= $sourceDeclaredOrders)) {
             throw new RuntimeException('vendor_daily_distinct_order_mismatch');
+        }
+        if ($legacyScreen !== null) {
+            $screenMembership = applyLegacyScreenMembership($dailyRows, $legacyScreen);
+            $dailyRows = $screenMembership['rows'];
+            // Order numbers only.
+            safeLog('legacy_screen_applied', [
+                'delivery_date' => $deliveryDate,
+                'screen_orders' => count($legacyScreen['numbers']),
+                'screen_orders_with_driver' => count($legacyScreen['drivers']),
+                'orders_following_screen' => count($dailyRows),
+                'drivers_changed_to_screen' => $screenOverrides['reassigned'],
+                'on_hold_released_by_screen' => $screenOverrides['unheld'],
+                'cancel_released_by_screen' => $screenOverrides['uncancelled'],
+                'partner_only_held' => $screenMembership['partner_only_held'],
+                'screen_only_not_in_partner' => $screenMembership['screen_only_missing'],
+            ]);
         }
         $driverOrdersMembership = null;
         if (isset($options['driver-orders-manifest'])) {
@@ -5389,11 +5792,19 @@ try {
             $dailyRows = $driverOrdersMembership['rows'];
         }
         $futureLimit = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kuwait')))->modify('+5 minutes');
+        $futureTimestampOrders = [];
         foreach ($dailyRows as $dailyRow) {
             if (parseTimestamp($dailyRow['updated_at'], 'updated_at') > $futureLimit
                 || parseTimestamp($dailyRow['meal_updated_at'], 'meal_updated_at') > $futureLimit) {
-                throw new RuntimeException('vendor_future_timestamp');
+                $futureTimestampOrders[] = $dailyRow['order_number'];
             }
+        }
+        if ($futureTimestampOrders !== []) {
+            // A70: a clock skew on a few Partner rows is reported, not a reason to skip the day.
+            safeLog('daily_future_timestamp_orders', [
+                'delivery_date' => $deliveryDate,
+                'orders' => array_slice($futureTimestampOrders, 0, 200),
+            ]);
         }
         // The manifest digest remains Partner-only. A capture or anchor change must never be
         // misrepresented as a changed Partner snapshot.

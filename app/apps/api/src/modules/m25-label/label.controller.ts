@@ -441,7 +441,9 @@ function batchOptionsResponse(
     source_total: sourceTotal,
     total: candidates.length,
     unmapped,
-    ready: sourceTotal > 0 && unmapped === 0,
+    // A70: every mapped label is printable even while a few orders are still unmapped; the
+    // summary keeps showing source_total vs total so the gap stays visible.
+    ready: sourceTotal > 0 && candidates.length > 0,
     drivers: [...driverMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
     areas: [...areaMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
     orders: candidates.map((candidate) => ({
@@ -455,16 +457,9 @@ function batchOptionsResponse(
   };
 }
 
+/** A70: only an empty day blocks; unmapped orders no longer block the mapped ones. */
 function assertCompleteBatch(sourceTotal: number, printableTotal: number): void {
-  if (sourceTotal === 0) {
+  if (sourceTotal === 0 || printableTotal === 0) {
     throw new LabelError('conflict', { reason: 'daily_fleetbase_set_not_ready' });
-  }
-  if (sourceTotal !== printableTotal) {
-    throw new LabelError('conflict', {
-      reason: 'daily_order_mapping_incomplete',
-      source_total: sourceTotal,
-      printable_total: printableTotal,
-      unmapped: sourceTotal - printableTotal,
-    });
   }
 }

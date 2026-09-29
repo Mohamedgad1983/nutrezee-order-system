@@ -12,7 +12,7 @@ import { newId } from '../../platform/ids';
 import { BarcodeService } from './barcode.service';
 import type { FleetbaseOrderProjection } from './fleetbase-identity.service';
 import {
-  PartnerLabelSourceError, type PartnerLabelMealSourceGateway,
+  type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
@@ -243,8 +243,9 @@ export class LabelService {
   /**
    * Resolve the current Fleetbase assignment into the operational box identity. Names are
    * display-only: the driver unit owns the color (A49: stable by Fleetbase creation order among
-   * plated drivers). The header shows the current name, phone and plate. Incomplete operational
-   * identity fails closed instead of printing a misleading box.
+   * plated drivers). The header shows the current name, phone and plate. A70 (owner, 2026-09-29:
+   * printing must never stop): an assigned driver with a missing phone, plate or color prints with
+   * that field empty instead of blocking every label of the day.
    */
   fleetbaseDriverSource(order: FleetbaseOrderProjection): FleetbaseDriverLabelSource {
     const driver = order.driver_assigned;
@@ -255,18 +256,6 @@ export class LabelService {
     const driverPhone = driver.phone?.trim() || null;
     const vehicleNumber = driver.vehicle?.plate_number?.trim() || null;
     const driverColor = driver.label_color ?? null;
-    const missing = [
-      !driverRef && 'driver_public_id',
-      !driverPhone && 'driver_phone',
-      !vehicleNumber && 'vehicle_number',
-      !driverColor && 'driver_color',
-    ].filter(Boolean);
-    if (missing.length > 0) {
-      throw new LabelError('conflict', {
-        reason: 'fleetbase_driver_label_identity_incomplete',
-        missing,
-      });
-    }
     return { driverRef, driverName: driver.name?.trim() || null, driverPhone, vehicleNumber, driverColor };
   }
 
@@ -651,8 +640,10 @@ export class LabelService {
 
   /**
    * The label's meal rows for this order+date. Deleted dish rows are excluded. Returns
-   * `no_dish_source` only when neither a local authoritative row nor a configured Partner source
-   * exists. A configured Partner source fails closed on missing/incomplete rows.
+   * `no_dish_source` when neither a local authoritative row nor usable Partner rows exist.
+   * A70: a Partner source that is unavailable or has no rows for this order no longer blocks the
+   * label (or the batch around it) — it prints with the explicit "No dish detail recorded" table.
+   * Partner rows with incomplete nutrition print as-is; the totals carry `complete: false`.
    */
   private async mealRows(
     orderId: string,
@@ -686,14 +677,9 @@ export class LabelService {
 
     try {
       const meals = await this.partnerMeals.mealsForOrder(orderNumber, deliveryDate);
-      if (meals.length === 0) throw new PartnerLabelSourceError('order_items_missing');
-      if (!totalsOf(meals).complete) {
-        throw new PartnerLabelSourceError('nutrition_incomplete');
-      }
-      return [meals, 'partner_api_v2'];
-    } catch (error) {
-      const code = error instanceof PartnerLabelSourceError ? error.code : 'unavailable';
-      throw new LabelError('conflict', { reason: `partner_label_source_${code}` });
+      return meals.length > 0 ? [meals, 'partner_api_v2'] : [[], 'no_dish_source'];
+    } catch {
+      return [[], 'no_dish_source'];
     }
   }
 
