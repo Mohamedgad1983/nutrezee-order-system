@@ -89,9 +89,9 @@ def main():
         wrong = sorted(n for n in numbers if n in drivers and n in dispatched and fb[n]['driver'] != drivers[n])
         extra = sorted(n for n in dispatched if n not in numbers)
         lines.append(f"Legacy screen / شاشة السيستم القديم: {len(numbers)} orders, {len(drivers)} with driver, "
-                     f"{len(waiting)} without driver (read {age_min} min ago)")
+                     f"{len(waiting)} with no driver even on the legacy sticker (read {age_min} min ago)")
         if waiting:
-            problems.append(f'{len(waiting)} orders have no driver on the legacy screen')
+            problems.append(f'{len(waiting)} orders have no driver in the legacy admin itself')
         if missing:
             problems.append(f'{len(missing)} screen orders not dispatched in Fleetbase')
         if wrong:
@@ -124,7 +124,7 @@ def main():
                 lines.append(f'  {label}: {short(applied[key])}')
         if applied.get('screen_only_not_in_partner'):
             problems.append(f"{len(applied['screen_only_not_in_partner'])} screen orders missing from Partner")
-    for title, numbers in (('No driver on screen yet', waiting), ('Not dispatched', missing),
+    for title, numbers in (('No driver in legacy (screen + sticker checked) / مالوش سواق في السيستم القديم نفسه', waiting), ('Not dispatched', missing),
                            ('Different driver', wrong), ('Not on screen', extra), ('Not in label DB', unmapped)):
         if numbers:
             lines.append(f'{title}: {short(numbers)}')
@@ -133,10 +133,10 @@ def main():
     ok = matches and complete_ok and not unmapped
     if screen is not None:
         head = (f"Fleetbase {'matches' if matches else 'differs from'} legacy screen — "
-                f"{len(screen['order_numbers'])} orders ({len(dispatched)} with driver, {len(waiting)} no driver yet)")
+                f"{len(screen['order_numbers'])} orders ({len(dispatched)} with driver, {len(waiting)} without driver in legacy)")
     else:
         head = f'no legacy screen reading — {len(dispatched)} orders with driver'
-    extras = [p for p in problems if 'no driver on the legacy screen' not in p]
+    extras = [p for p in problems if 'no driver in the legacy admin itself' not in p]
     subject = f"[{'OK' if ok else 'CHECK'}] Labels {day}: {head}" + (f"; {'; '.join(extras)}" if extras else '')
     note = os.environ.get('PRINT_STATUS_NOTE')
     if note:

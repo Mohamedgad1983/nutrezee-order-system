@@ -130,6 +130,10 @@ async function readTable(page) {
     const headers = [...t.querySelectorAll('thead th')].map((th) => th.textContent.replace(/\s+/g, ' ').trim());
     const idCol = headers.findIndex((h) => /^Order ID/i.test(h));
     if (idCol < 0) return null;
+    // A70.4: the "Driver" column holds the row's links; the Delivery Sticker link is kept so an order that is
+    // under no driver filter can be looked up directly (owner: an order never stays without a driver).
+    const drvCol = headers.findIndex((h) => /driver/i.test(h));
+    const stickerById = {};
     const drawPage = (p) => new Promise((resolve) => {
       const timer = setTimeout(resolve, 45000);
       $(t).one('draw.dt', () => { clearTimeout(timer); setTimeout(resolve, 150); });
@@ -169,7 +173,16 @@ async function readTable(page) {
             const json = await $.ajax({ url: diag.ajax, type: diag.ajax_type || 'GET', dataType: 'json',
               data: Object.assign({}, sorted, { start, length: size, draw: 1 }) });
             const rows = json.data || json.aaData || [];
-            rows.map((r) => clean(cellOf(r))).filter((v) => /^\d+$/.test(v)).forEach((id) => ids.add(id));
+            for (const r of rows) {
+              const id = clean(cellOf(r));
+              if (!/^\d+$/.test(id)) continue;
+              ids.add(id);
+              if (drvCol >= 0) {
+                const cell = String(Array.isArray(r) ? r[drvCol] : '');
+                const link = /href=["'](\/printDeliverySticker\/[^"']+)["']/.exec(cell);
+                if (link) stickerById[id] = link[1];
+              }
+            }
             if (rows.length === 0) break;
           }
           diag.ajax_tries.push({ size, ids: ids.size });
@@ -191,7 +204,7 @@ async function readTable(page) {
       }
       await drawPage(0);
     }
-    return { total: dt.page.info().recordsDisplay, ids: [...ids], pages: info0.pages, diag };
+    return { total: dt.page.info().recordsDisplay, ids: [...ids], pages: info0.pages, diag, stickerById };
   } catch (e) { return { total: null, ids: [], pages: null, diag: { api_error: String(e && e.message || e).slice(0, 160) } }; } }).catch((e) => ({ total: null, ids: [], pages: null, diag: { eval_error: String(e.message).slice(0, 160) } }));
   // the count must agree before and after reading the ids; a disagreement is reported, never guessed
   await waitTableSettled(page);
@@ -202,6 +215,7 @@ async function readTable(page) {
   }
   const ids = viaApi && viaApi.ids.length ? viaApi.ids : first.ids;
   return { total, ids, info: first.info, pages: viaApi?.pages ?? null, diag: viaApi?.diag ?? { api: 'unavailable' },
+    stickerById: viaApi?.stickerById ?? {},
     complete: total === null ? false : ids.length === total };
 }
 
@@ -245,6 +259,20 @@ async function main() {
       // A70: the option value is the legacy driver id (same id space as Partner driver.id).
       result.drivers.push({ id: d.value, name: d.name, count: t.total, order_ids: t.ids, ids_complete: t.complete });
       if (!t.complete) result.errors.push(`driver_ids_incomplete: ${d.name} ${t.ids.length} of ${t.total}`);
+    }
+    // A70.4: every screen order under no driver filter is looked up on its own Delivery Sticker
+    // ("Driver ID A7"); "-" or no sticker means the legacy admin itself has no driver for it.
+    const assigned = new Set(result.drivers.flatMap((d) => d.order_ids));
+    result.sticker_drivers = {};
+    for (const id of result.order_ids.filter((n) => !assigned.has(n))) {
+      const href = all.stickerById[id];
+      let code = null;
+      if (href) {
+        const text = await page.evaluate(async (u) => (await fetch(u, { credentials: 'include' })).text(), href);
+        const m = /Driver ID\s*([A-Za-z0-9._-]+)/.exec(text.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' '));
+        code = m && m[1] !== '-' ? m[1] : null;
+      }
+      result.sticker_drivers[id] = code;
     }
   } catch (e) {
     result.errors.push(String(e.message ?? e).slice(0, 200));

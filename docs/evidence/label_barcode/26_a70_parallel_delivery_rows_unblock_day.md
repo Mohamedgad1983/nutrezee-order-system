@@ -121,3 +121,16 @@ short status email to it@nutreeze.com only.
 daily-sync.sh}`, `nutreeze-orders.php`, `/etc/systemd/system/nutreeze-print-status.{service,timer}` (enabled). Screen runner
 script updated to record the driver id. Rollback: `/root/a70/bak-20260929T050201Z/`; disable `nutreeze-print-status.timer`;
 delete `config/legacy-screen-*.json` (the sync then follows Partner alone).
+
+## A70.4 — an order never stays "without a driver" without asking the legacy admin (owner, same day)
+Owner: "مفيش حاجه اسمها اورد بدون سواق لما تلاقي كده حدث الاورد مباشره من legacy web".
+- Verified on the legacy screen: the table's "Driver" column holds only row links (Meals / Delivery Sticker / Meal
+  Sticker), no driver name; the driver appears only through the driver filter. The **Delivery Sticker** of an order prints
+  `Driver ID <code>` (e.g. `A7` = Arsad Ali; the A-codes are already in the partner-driver map).
+- The screen runner now keeps each order's Delivery Sticker link and, for every order under no driver filter, opens its
+  sticker (same read-only session) and records the code (`sticker_drivers`). The manifest uses that code as the order's
+  driver; only an order whose own legacy sticker shows `Driver ID -` stays without one (`no_driver_in_legacy`).
+- 2026-10-01 at 08:21 Kuwait: screen 844, 843 with driver. The one left, **29384**, is customer "Testing do not deliver"
+  in the legacy admin: no driver on its order page ("Select Driver") and `Driver ID -` on its sticker → a legacy test order,
+  nothing to take. The status email names such orders as "no driver in the legacy admin itself".
+- Oct 1 re-synced from the 08:21 screen (Partner had caught up: 0 driver changes needed).

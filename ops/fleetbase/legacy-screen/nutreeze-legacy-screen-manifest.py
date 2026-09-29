@@ -57,6 +57,13 @@ def build_manifest(day, reading):
                 drivers[n] = driver_id
     for n in seen_twice:  # listed under two drivers: follow Partner for that order
         drivers.pop(n, None)
+    # A70.4: an order under no driver filter takes the driver printed on its own legacy Delivery Sticker.
+    from_sticker = []
+    for n, code in (reading.get('sticker_drivers') or {}).items():
+        n = str(n).strip()
+        if n in on_screen and n not in drivers and isinstance(code, str) and NUMBER.match(code):
+            drivers[n] = code
+            from_sticker.append(n)
     if problems:
         return None, sorted(set(problems))
     ordered = sorted(on_screen)
@@ -70,6 +77,8 @@ def build_manifest(day, reading):
         'order_number_digest': hashlib.sha256(('\n'.join(ordered) + '\n').encode()).hexdigest(),
         'drivers': dict(sorted(drivers.items())),
         'driver_names': names,
+        'drivers_from_sticker': sorted(from_sticker),
+        'no_driver_in_legacy': sorted(on_screen - set(drivers)),
     }, []
 
 
@@ -100,7 +109,8 @@ def main():
     os.chmod(tmp, 0o600)
     os.replace(tmp, target)
     log('legacy_screen_manifest_written', delivery_date=day, screen_orders=manifest['expected_count'],
-        with_driver=len(manifest['drivers']), bytes=os.path.getsize(target))
+        with_driver=len(manifest['drivers']), from_sticker=manifest['drivers_from_sticker'],
+        no_driver_in_legacy=manifest['no_driver_in_legacy'], bytes=os.path.getsize(target))
     return 0
 
 
