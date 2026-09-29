@@ -1155,10 +1155,24 @@ function buildDailyDeliveryRows(array $rawDeliveries, string $deliveryDate): arr
                 }
             }
             $materialStates = [];
+            $mealStatuses = [];
+            $updatedTimes = [];
             foreach ($group as $member) {
                 $materialStates[$member['meal_status'] . "\0" . $member['meal_item_count']] = true;
+                $mealStatuses[(string) $member['meal_status']] = true;
+                $updatedTimes[$member['_updated_time']->format('U.u')] = true;
             }
-            if (count($materialStates) === 1) {
+            // A70: parallel instances written together (one status, one timestamp,
+            // every row carrying meals) are one drop for the same order; keep all meals.
+            $parallelInstances = count($materialStates) > 1
+                && count($positive) === count($group)
+                && count($mealStatuses) === 1
+                && count($updatedTimes) === 1;
+            if ($parallelInstances) {
+                usort($group, fn (array $a, array $b): int => $a['delivery_id'] <=> $b['delivery_id']);
+                $selected = $group[array_key_last($group)];
+                $selected['meal_item_count'] = array_sum(array_column($group, 'meal_item_count'));
+            } elseif (count($materialStates) === 1) {
                 usort($group, function (array $a, array $b): int {
                     $timeOrder = $a['_updated_time'] <=> $b['_updated_time'];
                     return $timeOrder !== 0 ? $timeOrder : ($a['delivery_id'] <=> $b['delivery_id']);
@@ -4993,6 +5007,17 @@ function runSelfTest(): array
         || $identicalDuplicateRows[0]['meal_item_count'] !== 3
         || $identicalDuplicateRows[0]['updated_at'] !== '2026-08-11T11:00:00+03:00') {
         throw new RuntimeException('self_test_daily_delivery_identical_duplicate');
+    }
+    $parallelInstanceRows = buildDailyDeliveryRows([
+        array_replace($deliveryBase, ['delivery_status' => 'ordered', 'meal_item_count' => 8]),
+        array_replace($deliveryBase, ['delivery_id' => 502, 'delivery_status' => 'ordered', 'meal_item_count' => 4]),
+        array_replace($deliveryBase, ['delivery_id' => 503, 'delivery_status' => 'ordered', 'meal_item_count' => 4]),
+    ], '2026-08-12');
+    if (count($parallelInstanceRows) !== 1
+        || $parallelInstanceRows[0]['meal_item_count'] !== 16
+        || $parallelInstanceRows[0]['source_delivery_ids'] !== [501, 502, 503]
+        || $parallelInstanceRows[0]['source_delivery_row_count'] !== 3) {
+        throw new RuntimeException('self_test_daily_delivery_parallel_instances');
     }
     foreach ([
         [
