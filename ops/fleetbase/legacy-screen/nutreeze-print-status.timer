@@ -1,8 +1,8 @@
 [Unit]
-Description=A70.3 night print status at 00:52 Kuwait (after the 00:25 legacy-screen sync)
+Description=A70.6 print guard at 00:45 Kuwait (after the 00:25 legacy-screen sync, before the 01:00 print)
 
 [Timer]
-OnCalendar=*-*-* 21:52:00 UTC
+OnCalendar=*-*-* 21:45:00 UTC
 Persistent=false
 
 [Install]

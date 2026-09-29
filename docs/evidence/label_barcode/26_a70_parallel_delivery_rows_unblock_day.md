@@ -140,3 +140,18 @@ Owner: "مفيش حاجه اسمها اورد بدون سواق لما تلاق�
   (only order numbers leave the browser). The manifest drops them from the day (`test_orders_excluded`); the sync then holds
   them like any order not on the screen (unassigned, not dispatched), and Batch Labels already skips held orders.
 - 2026-10-01: **29384** ("Testing do not deliver") removed. The status email lists removed test orders.
+
+## A70.6 — zero-difference print guard (owner: "انت اللي تتأكد … نسبة الخطأ تكون zero")
+- **00:45 Kuwait** `nutreeze-print-status.timer` (moved from 00:52) waits until no Partner sync is writing, then computes
+  what the Batch Labels page will offer for tomorrow **with the page's own compiled code** (`LabelService.batchCandidates`
+  inside `nutrezee-api`, `batch-labels-count.js`), fed the same Fleetbase rows the page reads (DB instead of the operator's
+  API token; the day/held/cancelled filters are the page's `fleetbaseOrderDate`/`isHeldOrCancelled`).
+- Compares order by order with the legacy screen: on screen without label, label not on screen, driver ≠ screen driver.
+- Any difference → automatic repair (up to 2 rounds): read the screen again + re-sync the day to it; run the Partner label
+  feed for the day (fills orders missing from the label database). Then check again and email it@ only:
+  `[OK] Labels <day>: Batch Labels N = legacy screen N` or `[CHECK] … <k> difference(s)` with the order numbers.
+- 2026-10-01: before → page 843 orders / **810 labels** (33 orders not yet in the label DB, fed only from midnight); label
+  feed applied for 10-01 now (created 33, error 0) → **Batch Labels 843 = legacy screen 843, difference 0**. Full guard run
+  (with repair enabled, nothing to repair) sent the email to it@.
+- Not verified yet: a repair round on a real difference (runs the same commands used manually today). The literal browser
+  page needs a Fleetbase operator login; this guard uses its code without one.
