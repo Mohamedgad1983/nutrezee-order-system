@@ -171,3 +171,7 @@ the guard's own repair and 20 min after the 01:00 print. Journal:
    feed prints `partner_daily_applied` only when it adds something, so "complete, nothing to add" was reported as FAILED.
    Fix: success = `partner_daily_complete` with 0 failures; the guard now always completes the label database first.
    A failed screen reading now keeps the last good file (used only while < 6 h old) instead of deleting it.
+- **Rehearsal 2026-09-30 10:50–11:09 Kuwait** (`systemd-run` with the sync units' exact sandbox, rolling targets 10-01/10-02):
+  screen read inside the sync (836 orders, all with driver, test order 29384 removed) → 10-01 synced to the screen
+  (836 = 836, verified, no retry) → 10-02 zero-day OK → `horizon_complete 2/0`, 18 min. Guard afterwards: **14 s**,
+  label database already complete, `[OK] Labels 2026-10-01: Batch Labels 836 = legacy screen 836`, email to it@.
