@@ -6,8 +6,8 @@ Reads "Orders Driver Wise" for one delivery day with the owner-installed Playwri
 that nutreeze-orders.php --legacy-screen-manifest follows: every order number on the screen and
 the legacy driver id the screen shows for it. No customer names, phones or addresses.
 
-A manifest is written only from a complete, error-free reading; otherwise the previous file is
-removed so the sync falls back to Partner alone (never a partial screen).
+A manifest is written only from a complete, error-free reading (never a partial screen); a failed
+reading keeps the last good file, which the sync uses only while it is under 6 hours old.
 Usage: nutreeze-legacy-screen-manifest.py YYYY-MM-DD
 """
 import datetime
@@ -106,8 +106,7 @@ def main():
         reading = None
     manifest, problems = (None, ['no_fresh_reading']) if reading is None else build_manifest(day, reading)
     if manifest is None:
-        if os.path.exists(target):
-            os.remove(target)
+        # A70.7: keep the last good reading; daily-sync.sh uses it only while it is under 6 h old.
         log('legacy_screen_manifest_skipped', delivery_date=day, runner_exit=run.returncode, problems=problems)
         return 3
     tmp = target + '.tmp'

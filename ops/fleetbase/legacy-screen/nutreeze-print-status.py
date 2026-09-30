@@ -139,8 +139,14 @@ def resync(day, log):
 def feed_labels(day, log):
     out = sh(['/opt/nutrezee/sync/run-partner-daily-feed.sh'], timeout=900,
              env={'FEED_MODE': 'apply', 'ALLOW_APPLY': 'yes', 'FEED_DATES': day})
-    applied = [json.loads(l[l.index('{'):]) for l in out.splitlines() if '"partner_daily_applied"' in l]
-    log.append('  label database filled: ' + (json.dumps(applied[-1].get('counts')) if applied else 'FAILED'))
+    events = [json.loads(l[l.index('{'):]) for l in out.splitlines() if '"event":"partner_daily_' in l]
+    applied = [e for e in events if e.get('event') == 'partner_daily_applied']
+    done = [e for e in events if e.get('event') == 'partner_daily_complete']
+    ok = bool(done) and done[-1].get('failures') == 0
+    # "applied" appears only when something was created/updated; a complete run with nothing to add is success.
+    log.append('  label database: ' + ('FAILED' if not ok else
+               (f"filled {json.dumps(applied[-1].get('counts'))}" if applied else 'already complete')))
+    return ok
 
 
 def send(subject, body):
@@ -165,6 +171,8 @@ def main():
 
     screen = load_screen(day)
     fix_log = []
+    if fix:
+        feed_labels(day, fix_log)  # A70.7: always complete the label database first (≈15 s)
     if fix and screen is None:
         fix_log.append('No screen reading found → reading the legacy screen now')
         resync(day, fix_log)

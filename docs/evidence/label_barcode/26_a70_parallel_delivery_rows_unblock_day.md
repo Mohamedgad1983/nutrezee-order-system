@@ -155,3 +155,23 @@ Owner: "مفيش حاجه اسمها اورد بدون سواق لما تلاق�
   (with repair enabled, nothing to repair) sent the email to it@.
 - Not verified yet: a repair round on a real difference (runs the same commands used manually today). The literal browser
   page needs a Fleetbase operator login; this guard uses its code without one.
+
+## A70.7 — first real night (2026-09-29 → 09-30): three defects found and fixed
+Guard email at **01:20** Kuwait: `[OK] Labels 2026-10-01: Batch Labels 836 = legacy screen 836` — correct, but only through
+the guard's own repair and 20 min after the 01:00 print. Journal:
+1. **Screen reading failed inside the sync** (`legacy_screen_manifest_skipped … no_fresh_reading`, runner exit 1 at 00:26,
+   01:00 and 02:00): `run-legacy-check.sh` ran `chmod` on the credential file, and the sync units have `ProtectHome=read-only`.
+   Fix: check the mode instead of changing it. Verified with `systemd-run` using the units' sandbox: success in 1 min 18 s.
+2. **Partner fallback then stopped 10-01** (`daily_operational_state_guard`, all 3 attempts at 00:26, 01:00, 02:00): the orders
+   held the day before because they were not on the screen (source-missing tombstones, e.g. 29384 and 9 others) were back
+   in the Partner-only source, and a `canceled` tombstone could never become active again. Fix
+   `isReactivatableMissingTombstone`: a `canceled` order with `hold_reason=source_row_missing`, never dispatched or started,
+   may be dispatched again (pre-check + writer). Self-test 43/43 (+ reactivation unit check).
+3. **Guard timing / false "FAILED"**: with no screen file the guard re-read and re-synced twice (00:45 → 01:20). The label
+   feed prints `partner_daily_applied` only when it adds something, so "complete, nothing to add" was reported as FAILED.
+   Fix: success = `partner_daily_complete` with 0 failures; the guard now always completes the label database first.
+   A failed screen reading now keeps the last good file (used only while < 6 h old) instead of deleting it.
+- **Rehearsal 2026-09-30 10:50–11:09 Kuwait** (`systemd-run` with the sync units' exact sandbox, rolling targets 10-01/10-02):
+  screen read inside the sync (836 orders, all with driver, test order 29384 removed) → 10-01 synced to the screen
+  (836 = 836, verified, no retry) → 10-02 zero-day OK → `horizon_complete 2/0`, 18 min. Guard afterwards: **14 s**,
+  label database already complete, `[OK] Labels 2026-10-01: Batch Labels 836 = legacy screen 836`, email to it@.
