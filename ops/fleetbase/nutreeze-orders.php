@@ -2007,6 +2007,17 @@ function applyLegacyScreenMembership(array $dailyRows, array $screen): array
     ];
 }
 
+/** A70.7: a source-missing tombstone that never entered the operational lifecycle. */
+function isReactivatableMissingTombstone(object $order): bool
+{
+    $meta = metaArray($order->meta);
+    return (string) $order->status === 'canceled'
+        && !(bool) $order->dispatched
+        && !(bool) $order->started
+        && $order->started_at === null
+        && ($meta['hold_reason'] ?? null) === 'source_row_missing';
+}
+
 /**
  * Freeze a started job, but allow the transactional writer to reconcile an
  * integration-owned job that has not started yet. Partner may legitimately
@@ -2121,6 +2132,12 @@ function guardDailyOperationalRows(
             && dailyHoldReason($row) === 'source_order_canceled') {
             // An explicit source cancellation is an idempotent terminal
             // tombstone. It is never silently reactivated.
+            continue;
+        }
+        if (isReactivatableMissingTombstone($order)) {
+            // A70.7: an order held only because it was absent from the day's source (Partner or the
+            // legacy screen) and never dispatched or started is back in the source: the writer may
+            // dispatch it again. Before A70.7 this stopped the whole day.
             continue;
         }
         if ((string) $order->status !== 'dispatched' || !(bool) $order->dispatched) {
@@ -4187,7 +4204,7 @@ final class DailyDispatchWriter
         $effectivePin = resolveEffectivePin($row);
         $holdReason = $routable ? null : $sourceHoldReason;
         $allowedStates = ['created', 'dispatched'];
-        if ($sourceHoldReason === 'source_order_canceled') {
+        if ($sourceHoldReason === 'source_order_canceled' || isReactivatableMissingTombstone($order)) {
             $allowedStates[] = 'canceled';
         }
         if (!in_array((string) $order->status, $allowedStates, true)) {
@@ -5282,6 +5299,13 @@ function runSelfTest(): array
         || $parallelInstanceRows[0]['source_delivery_ids'] !== [501, 502, 503]
         || $parallelInstanceRows[0]['source_delivery_row_count'] !== 3) {
         throw new RuntimeException('self_test_daily_delivery_parallel_instances');
+    }
+    $tombstone = (object) ['status' => 'canceled', 'dispatched' => false, 'started' => false, 'started_at' => null,
+        'meta' => ['hold_reason' => 'source_row_missing']];
+    if (!isReactivatableMissingTombstone($tombstone)
+        || isReactivatableMissingTombstone((object) array_replace((array) $tombstone, ['started' => true]))
+        || isReactivatableMissingTombstone((object) array_replace((array) $tombstone, ['meta' => ['hold_reason' => 'source_order_canceled']]))) {
+        throw new RuntimeException('self_test_missing_tombstone_reactivation');
     }
     $screenNumbers = ['DELIVERY-31', 'DELIVERY-33'];
     sort($screenNumbers, SORT_STRING);
