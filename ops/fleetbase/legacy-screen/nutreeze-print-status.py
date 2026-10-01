@@ -22,6 +22,7 @@ KW = zoneinfo.ZoneInfo('Asia/Kuwait')
 TO = ['it@nutreeze.com']
 INTEGRATION = '/opt/fleetbase/integrations/nutreeze-orders'
 CONFIG_ROOT = '/opt/fleetbase/api/storage/app/integrations/config'
+READING_DIR = '/root/a68'
 CONTAINER_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config'
 COMPANY = '2db920aa-d0d4-42a7-a0a3-c9d4c6dd487c'
 FIX_ROUNDS = 2
@@ -50,6 +51,37 @@ def load_screen(day):
         screen = json.load(fh)
     screen['_age_min'] = int((time.time() - os.path.getmtime(path)) / 60)
     return screen
+
+
+def load_empty_screen(day):
+    """A70.8 — a day the legacy screen itself shows as empty (e.g. Friday, no deliveries).
+
+    The manifest writer never writes an empty manifest (an empty reading must never empty a day in
+    Fleetbase), so the guard reads the raw screen reading: fresh, no errors, "0 of 0 entries" and
+    every driver filter empty. The sync then follows Partner; the guard only compares."""
+    path = os.path.join(READING_DIR, f'legacy-ui-{day}.json')
+    try:
+        age_min = int((time.time() - os.path.getmtime(path)) / 60)
+        with open(path) as fh:
+            r = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    drivers = r.get('drivers') or []
+    if (age_min > 360 or r.get('day') != day or r.get('errors') or r.get('total') != 0 or r.get('order_ids')
+            or not r.get('ids_complete') or not str(r.get('table_info') or '').endswith(' of 0 entries')
+            or not drivers or any(d.get('count') != 0 or d.get('order_ids') or not d.get('ids_complete') for d in drivers)):
+        return None
+    return {'order_numbers': [], 'drivers': {}, 'test_orders_excluded': [], '_age_min': age_min, '_empty_day': True,
+            '_mtime': os.path.getmtime(path)}
+
+
+def current_screen(day):
+    """The newest valid reading of the screen for the day: the manifest, or an empty-day reading."""
+    screen, empty = load_screen(day), load_empty_screen(day)
+    if screen is not None and empty is not None:
+        manifest = os.path.join(CONFIG_ROOT, f"legacy-screen-{day.replace('-', '')}.json")
+        return empty if empty['_mtime'] > os.path.getmtime(manifest) else screen
+    return screen if screen is not None else empty
 
 
 def fleetbase_state(day):
@@ -118,9 +150,14 @@ def resync(day, log):
     """Read the legacy screen again and re-sync the day to it (same two-step flow as daily-sync.sh)."""
     out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
     log.append('  screen read again: ' + (out.strip().splitlines() or ['?'])[-1][:160])
-    manifest = f"--legacy-screen-manifest={CONTAINER_CONFIG_ROOT}/legacy-screen-{day.replace('-', '')}.json"
-    if not os.path.exists(os.path.join(CONFIG_ROOT, f"legacy-screen-{day.replace('-', '')}.json")):
+    compact = day.replace('-', '')
+    manifest = f"--legacy-screen-manifest={CONTAINER_CONFIG_ROOT}/legacy-screen-{compact}.json"
+    if not os.path.exists(os.path.join(CONFIG_ROOT, f"legacy-screen-{compact}.json")):
         manifest = None
+        # Same fallback as daily-sync.sh when there is no screen manifest.
+        membership = os.path.join(CONFIG_ROOT, f'driver-orders-{compact}.json')
+        if os.path.isfile(membership) and not os.path.islink(membership):
+            manifest = f'--driver-orders-manifest={CONTAINER_CONFIG_ROOT}/driver-orders-{compact}.json'
     base = [f'{INTEGRATION}/run.sh', f'--delivery-date={day}', '--limit=1000']
     dry = sh(base + ['--dry-run'] + ([manifest] if manifest else []), timeout=1800)
     summary = [json.loads(l) for l in dry.splitlines() if '"event":"daily_source_summary"' in l]
@@ -129,7 +166,8 @@ def resync(day, log):
         return False
     s = summary[-1]
     write = sh(base + [f"--expected-count={s['daily_orders']}", f"--expected-digest={s['source_digest']}", '--verify',
-                       f'--confirm-daily-sync={day}', f'--confirm-address-call-dispatch={day}'] + ([manifest] if manifest else []),
+                       f'--confirm-daily-sync={day}', f'--confirm-address-call-dispatch={day}'] + ([manifest] if manifest else [])
+               + ([f'--confirm-zero-day={day}'] if s['daily_orders'] == 0 else []),  # A70.8: same as daily-sync.sh
                timeout=3000)
     ok = '"event":"complete"' in write and '"verified":true' in write
     log.append(f"  Fleetbase re-synced to the screen: {'done' if ok else 'FAILED'}")
@@ -137,12 +175,17 @@ def resync(day, log):
 
 
 def feed_labels(day, log):
-    out = sh(['/opt/nutrezee/sync/run-partner-daily-feed.sh'], timeout=900,
-             env={'FEED_MODE': 'apply', 'ALLOW_APPLY': 'yes', 'FEED_DATES': day})
-    events = [json.loads(l[l.index('{'):]) for l in out.splitlines() if '"event":"partner_daily_' in l]
-    applied = [e for e in events if e.get('event') == 'partner_daily_applied']
-    done = [e for e in events if e.get('event') == 'partner_daily_complete']
-    ok = bool(done) and done[-1].get('failures') == 0
+    for attempt in range(3):  # A70.8: Partner sometimes answers one call with 400 "window"; the next call works
+        if attempt:
+            time.sleep(30)
+        out = sh(['/opt/nutrezee/sync/run-partner-daily-feed.sh'], timeout=900,
+                 env={'FEED_MODE': 'apply', 'ALLOW_APPLY': 'yes', 'FEED_DATES': day})
+        events = [json.loads(l[l.index('{'):]) for l in out.splitlines() if '"event":"partner_daily_' in l]
+        applied = [e for e in events if e.get('event') == 'partner_daily_applied']
+        done = [e for e in events if e.get('event') == 'partner_daily_complete']
+        ok = bool(done) and done[-1].get('failures') == 0
+        if ok:
+            break
     # "applied" appears only when something was created/updated; a complete run with nothing to add is success.
     log.append('  label database: ' + ('FAILED' if not ok else
                (f"filled {json.dumps(applied[-1].get('counts'))}" if applied else 'already complete')))
@@ -169,14 +212,14 @@ def main():
     if fix:
         wait_for_scheduled_sync()
 
-    screen = load_screen(day)
+    screen = current_screen(day)
     fix_log = []
     if fix:
         feed_labels(day, fix_log)  # A70.7: always complete the label database first (≈15 s)
     if fix and screen is None:
         fix_log.append('No screen reading found → reading the legacy screen now')
         resync(day, fix_log)
-        screen = load_screen(day)
+        screen = current_screen(day)
     d = evaluate(day, screen)
     for round_no in range(1, FIX_ROUNDS + 1):
         if not fix or (d['diff'] is None and screen is not None):
@@ -186,7 +229,7 @@ def main():
         fix_log.append(f'Repair round {round_no}:')
         if d['diff'] is None or d['diff'] > 0:
             resync(day, fix_log)
-            screen = load_screen(day)
+            screen = current_screen(day)
         feed_labels(day, fix_log)
         d = evaluate(day, screen)
 
@@ -206,6 +249,8 @@ def main():
             f"Batch Labels page / صفحة الطباعة: {page['labels']} labels",
             f"Difference / الفرق: {d['diff']}",
         ]
+        if screen.get('_empty_day'):
+            lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
         if screen.get('test_orders_excluded'):
             lines.append(f"Test orders removed / طلبات تجربة اتشالت: {short(screen['test_orders_excluded'])}")
         for title, key in (('On the screen, no label / على الشاشة ومالهاش ملصق', 'no_label'),
