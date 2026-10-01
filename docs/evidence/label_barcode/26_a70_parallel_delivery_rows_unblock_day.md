@@ -175,3 +175,25 @@ the guard's own repair and 20 min after the 01:00 print. Journal:
   screen read inside the sync (836 orders, all with driver, test order 29384 removed) → 10-01 synced to the screen
   (836 = 836, verified, no retry) → 10-02 zero-day OK → `horizon_complete 2/0`, 18 min. Guard afterwards: **14 s**,
   label database already complete, `[OK] Labels 2026-10-01: Batch Labels 836 = legacy screen 836`, email to it@.
+
+## A70.8 — first counted night (Wed 30 Sep → print 01:00 Thu 1 Oct, labels for Fri 2 Oct)
+
+**Result: [CHECK], a false alarm. Fri 2 Oct is a no-delivery day. No label was missing.** (Verified)
+
+- 00:25 rolling run: the legacy screen for 02-10-2026 read cleanly. It showed "Showing 0 to 0 of 0 entries", no errors, and 0 orders under every one of the 9 driver filters.
+  - The manifest writer refused it (`screen_total_incomplete`, because it never writes an empty manifest), so the sync followed Partner.
+  - Partner also had 0 orders. Both days completed and verified (10-02: 0, 10-03: 741).
+- 00:45 guard: there was no manifest, so it reported "could not compare — no legacy screen reading".
+- Two more causes, both fixed:
+  - **Label feed "FAILED".** The first feed call got a Partner `400 partner_daily_response_invalid / window`. The calls 2 min later succeeded. The guard now retries the feed up to 3 times, 30 s apart.
+  - **"Re-sync FAILED".** The guard's re-sync left out `--confirm-zero-day`, which `daily-sync.sh` adds for a 0-order day. It now adds it. It also uses the same `driver-orders` fallback as `daily-sync.sh` when there is no screen manifest.
+- **The empty-day fix**
+  - `legacy-screen-manifest.py` now reports an empty screen as `screen_empty_day` instead of "incomplete". It still writes no manifest, so an empty reading can never empty a day in Fleetbase.
+  - `print-status.py` gained `load_empty_screen`. It accepts a fresh (≤ 6 h) raw reading for the day that has no errors, ends with "of 0 entries", and has every driver filter at 0. The guard then compares 0 with the Batch Labels page and reports `[OK] … Batch Labels 0 = legacy screen 0` with "No deliveries on this day".
+  - If the screen is empty but the page has labels, those labels are counted as `extra_label`, giving [CHECK] with a difference.
+- **Re-tested on the VPS 08:01 Kuwait:**
+  - `[OK] Labels 2026-10-02: Batch Labels 0 = legacy screen 0` in 2.4 s.
+  - The zero-day re-sync now returns `done`.
+  - The 10-01 regression run still compares order by order. Its 4 differences (29376, 29882, 30141, 30173) are orders Partner dropped at 18:18 Kuwait on 30 Sep, after that day's print. That is expected.
+- **Count:** night 1 had no wrong label, but the guard did not give [OK] at the time. The 3-night count therefore starts with Thu night (print 01:00 Fri, labels for Sat 3 Oct).
+  - Reliance moves one night later, to 01:00 Mon 5 Oct, unless the owner counts the empty Friday.

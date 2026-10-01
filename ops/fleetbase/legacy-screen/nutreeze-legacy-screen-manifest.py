@@ -35,7 +35,9 @@ def build_manifest(day, reading):
     if reading.get('errors'):
         problems.append('reading_errors')
     numbers = [str(n).strip() for n in reading.get('order_ids') or []]
-    if not numbers or not reading.get('ids_complete') or reading.get('total') != len(numbers):
+    if not numbers and reading.get('total') == 0 and str(reading.get('table_info') or '').endswith(' of 0 entries'):
+        problems.append('screen_empty_day')  # A70.8: no manifest; the sync follows Partner, the guard compares 0 = 0
+    elif not numbers or not reading.get('ids_complete') or reading.get('total') != len(numbers):
         problems.append('screen_total_incomplete')
     if len(set(numbers)) != len(numbers) or not all(NUMBER.match(n) for n in numbers):
         problems.append('screen_order_numbers_invalid')
