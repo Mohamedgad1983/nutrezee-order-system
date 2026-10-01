@@ -259,4 +259,16 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 | A65 | 2026-09-23 | Driver APK distributed from a static page on the Fleetbase console host (`/driver-app/`) instead of per-phone sideload; Caddy route added on the VPS-only `Caddyfile.active`. | Owner directive 2026-09-23 ("اعمل كده دلوقتي"); `docs/evidence/driver_app_rollout/07_a65_driver_app_download_page.md` |
 | A67 | 2026-09-27 | Fleetbase latency remediation (driver-app repo A35): host-wide TCP BBR + fq on the VPS (owner-approved; affects all services, new connections only), MySQL InnoDB buffer pool 1 GB, Fleetbase list-query cache TTL 1800 s, OPcache/JIT on the API container. Config only; no vendor/app source change. A66 was used as the MDM-runbook work id without an amendment row. | Owner directive 2026-09-27 ("صلح البطء الشديد fleetbase", BBR approved "موافق، طبّق BBR"); `docs/evidence/label_barcode/23_a67_fleetbase_latency_bbr.md` |
 | A70 | 2026-09-29 | Printing must never stop (owner). Supersedes the fail-closed rules of the Partner daily contract (A46/A50) and of Batch Labels (A29/A54): malformed Partner rows are repaired and logged instead of rejecting the day; any duplicate shape uses the newest instance (parallel rows summed); failed dates retry 3×; Batch Labels prints every mapped label even when some orders are unmapped, a driver lacks phone/plate, or Partner meals are unavailable (empty meal table). Still fail-closed: an incomplete Partner page set. A70.3: for the print day the legacy admin screen *Orders Driver Wise* is the reference over Partner (membership, driver, hold/cancel), read-only. A68/A69 ids are used by open PRs #82/#83. | Owner directive 2026-09-29 ("انا عايزهم يشتغلوا"); `docs/evidence/label_barcode/26_a70_parallel_delivery_rows_unblock_day.md` |
-| *next: A68* | | | |
+| A71 | 2026-10-01 | Owner requested WAHA as the replacement for `/opt/evolution`. Authorizes an isolated `/opt/waha` gateway and replacement of only the existing WhatsApp HTTPS route, preserving Evolution data/backups and unrelated running services. Existing credentials reused; no secret generation, session creation, pairing, message sends, Fleetbase/vendor edits or unrelated restart. | Owner directive; `ops/waha/PLAN.md` |
+| *next: A72* | | | |
+
+## OPS-WAHA deployment session — 2026-10-01
+
+Deployment gate: owner-requested gateway replacement; no app/legacy mutations.
+Verified WAHA 2026.9.1 CORE/GOWS is installed and the existing `wa.*` HTTPS route
+serves its protected dashboard/API. Configuration acceptance and negative-auth
+checks passed; no session created or message sent. Evolution backup/data retained
+and original services left running for rollback. `ops/waha/PLAN.md` records
+exact image, credentials policy, isolation, persistence, proxy-inode remediation,
+and unverified pairing/delivery limits. Repository CI/merge tracked by the
+OPS-WAHA PR. General engineering queue was not advanced by this side task.

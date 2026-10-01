@@ -1,0 +1,34 @@
+name: waha
+services:
+  waha:
+    image: devlikeapro/waha@sha256:41283bd89922ec3f722e5a772b844c451634d4aa72e9c34043c3480184f970fe
+    container_name: waha-api
+    restart: unless-stopped
+    env_file: .env
+    # HTTPS is handled by the existing Caddy; no host ports are published.
+    networks:
+      - nutrezee_default
+    volumes:
+      - ./sessions:/app/.sessions
+      - ./media:/app/.media
+    mem_limit: 2g
+    cpus: 2
+    shm_size: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/sessions',{headers:{'X-Api-Key':process.env.WAHA_API_KEY_PLAIN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+networks:
+  nutrezee_default:
+    external: true
