@@ -270,5 +270,10 @@ serves its protected dashboard/API. Configuration acceptance and negative-auth
 checks passed; no session created or message sent. Evolution backup/data retained
 and original services left running for rollback. `ops/waha/PLAN.md` records
 exact image, credentials policy, isolation, persistence, proxy-inode remediation,
-and unverified pairing/delivery limits. Repository CI/merge tracked by the
-OPS-WAHA PR. General engineering queue was not advanced by this side task.
+and unverified pairing/delivery limits. DONE server deployment: PR #87 merge `e16cf90`, implementation `55e807c`.
+CI push run `36901002326` and PR run `36901027870` both passed 14/14.
+All existing container start/restart metadata unchanged; Fleet-Ops, admin and app
+health HTTPS endpoints returned 200. Initial backup is readable/protected;
+manager redirect passed. Owner QR pairing and message delivery verification remain
+open; no blocker to the installed server. General engineering queue was not
+advanced by this side task.

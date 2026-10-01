@@ -50,3 +50,11 @@ internally as rollback capacity; its original HTTPS route now serves WAHA.
 
 Remaining owner step: create/pair a WAHA session with the selected phone QR.
 Message delivery and a paired-session restore drill are not verified.
+
+Final acceptance: WAHA healthy; missing/wrong key and missing dashboard/Swagger
+auth fail closed; authenticated HTTPS works; `/manager` redirects 302 to
+`/dashboard/`; `.env` mode 0600. All pre-existing container start times and
+restart counts unchanged. Fleet-Ops/admin/app-health HTTPS returned 200.
+Final initial backup: `/opt/waha/backups/waha-20261001T173930Z.tar.gz`.
+PR #87 merged as `e16cf90`; push CI `36901002326` and PR CI `36901027870` passed
+14/14 each. Server deployment complete; pairing and actual delivery remain open.
