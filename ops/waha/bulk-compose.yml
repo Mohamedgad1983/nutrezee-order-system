@@ -1,0 +1,43 @@
+name: waha-bulk
+services:
+  bulk:
+    image: python@sha256:2dd78ad5cf13a0b68f5134dc49aa9950203a8cf4b7463431b9f3b398287c5059
+    container_name: waha-bulk
+    restart: unless-stopped
+    init: true
+    user: '10001:10001'
+    command: ['python', '/app/bulk_server.py']
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    tmpfs: ['/tmp:size=16m,mode=1777']
+    environment:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUNBUFFERED: '1'
+      BULK_USERNAME: ${WAHA_DASHBOARD_USERNAME:?Set dashboard username}
+      BULK_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:?Set dashboard password}
+      WAHA_API_KEY: ${WAHA_API_KEY_PLAIN:?Set existing WAHA API key}
+      WAHA_URL: http://waha-api:3000
+      BULK_ORIGIN: https://wa.13-140-159-201.sslip.io
+      BULK_DB: /data/campaigns.sqlite3
+    volumes:
+      - ./bulk:/app:ro
+      - ./bulk-data:/data
+    networks: [nutrezee_default]
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+networks:
+  nutrezee_default:
+    external: true

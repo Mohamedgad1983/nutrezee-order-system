@@ -65,3 +65,70 @@ for validation/reload and change only the required route. The host
 container recreation. Do not reload `/etc/caddy/Caddyfile`; it still points to
 Evolution. For rollback, patch the WhatsApp block in both current host and
 runtime copies, validate and reload the runtime copy. Preserve unrelated routes.
+
+## Paced bulk campaigns — OPS-WAHA-BULK
+
+URL: `https://wa.13-140-159-201.sslip.io/bulk/`. Uses the CURRENT dashboard
+username/password from `/opt/waha/.env`, not the API key as the login password.
+Owner simplified the dashboard password on 2026-10-02; no credential values are
+stored in this repository. The API key remains server-held and separate.
+
+Paste one phone per line or load UTF-8 CSV/TXT with one number column. Local
+8-digit numbers explicitly mean Kuwait; international numbers accept `+` or
+`00`. Duplicate normalized numbers are removed. Supported output is plain text
+with identical content for each recipient. Maximum: 10000 rows and 4000 message
+characters. A saved campaign is a draft and NEVER starts sending on its own.
+Review the message, recipients and unique count, then explicitly start.
+
+A single worker sends on the fixed existing `nutreeze` session. The global
+SQLite throttle enforces at least 60 seconds after every completed send attempt,
+across campaign switches and process restarts. Pause is serialized with sending:
+a request already in progress can finish before pause is acknowledged; it cannot
+be recalled. Accepted messages are not proof of recipient delivery/read status.
+
+Successful requests record message ids. Definite validation/auth/rate-limit
+rejections are failed and pause the campaign; they are not automatically retried.
+Timeouts, server errors and responses without message ids are uncertain and stop
+all further messages in that campaign. Confirm in WhatsApp then mark that row
+sent, or skip it without resending, before explicitly resuming remaining pending
+rows. Startup always pauses active work and treats interrupted in-flight requests
+as uncertain. No schedule, unattended start, auto-resume or hidden retry.
+
+Operates as a separate `waha-bulk` container with no published host ports, only
+Caddy ingress, numeric unprivileged user, read-only root filesystem, restricted
+capabilities, SQLite volume and resource/log bounds. Authenticated endpoints use
+Basic auth over HTTPS. All mutation endpoints additionally require an exact
+same-origin header and JSON content type. Client/recipient content renders with
+textContent; source files are fixed allowlisted paths. No body/phone/key logging.
+
+Runtime files: `/opt/waha/bulk/` (source, read-only in container),
+`/opt/waha/bulk-data/` (0700, owned by uid 10001; SQLite 0600).
+Run as root on the VPS:
+
+```sh
+cd /opt/waha
+docker compose -f bulk-compose.yml config -q
+docker compose -f bulk-compose.yml ps
+python3 bulk-backup.py
+```
+
+Backup uses SQLite's online backup API plus integrity_check and creates root-only
+artifacts under the existing backups directory. No automatic schedule or deletion
+policy has been added. Restore requires stopping ONLY `waha-bulk`, restoring a
+verified complete database snapshot to bulk-data (owner 10001:10001, mode 0600),
+then starting it again; startup never resumes sending. Do not merge old WAL/SHM
+files into a restored snapshot. Preserve the existing `.env`, compose and pinned
+source release. The original WAHA session/media backup remains separate.
+
+Changing dashboard credentials requires recreating only the bulk container to
+load the new login password. It does not recreate WAHA or send a campaign.
+See `BULK_PLAN.md` for deployment evidence and scope.
+
+The bulk deployment supersedes the earlier runtime reload path: current running
+Caddy JSON is `/tmp/Caddy.runtime.bulk.json` in the Caddy container, protected
+host copy `/opt/waha/Caddy.runtime.bulk.json`. The exact live configuration was
+read from Caddy's private admin API and only two bulk-path routes were inserted
+inside the WhatsApp hostname. All other current live routes stayed identical.
+Persistent Caddyfile.active also has the new `/bulk/*` handle. Never reload the
+old `/etc/caddy/Caddyfile` or `/tmp/Caddyfile.waha`; those omit the bulk route.
+For future changes, read the live config first and preserve unrelated routes.
