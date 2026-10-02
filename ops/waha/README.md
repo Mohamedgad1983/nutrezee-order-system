@@ -189,3 +189,31 @@ and the two units; `systemd-analyze verify` both units, reload systemd and
 enable only this timer. A supervised `systemctl start waha-renewal.service`
 verifies a dry assessment without sending or invoking source sync. Disable
 only `waha-renewal.timer` for rollback; protected audit/history stays retained.
+
+### Admin read-only acquisition (PR91; delivery stays disabled)
+
+`admin_source.py` reads only observed Admin screens over verified same-origin
+HTTPS. Authentication uses the existing root-owned canonical legacy migration
+configuration; cookies and CSRF are memory-only. Only login POST is allowed.
+Summary cohorts are full server-rendered tables; Active and pending order lists
+use bounded pages with exact totals and unique identities. Collection joins
+summary order numbers to Active internal IDs, reads authoritative detail payment,
+compares detail/list dates, reads explicit Off Day/Freeze Day controls over the
+complete date range, and reads Order Meals. Later Active/pending renewals match
+normalized phone and strictly later start dates; ambiguous identity blocks.
+
+Root-only supervised commands:
+
+```
+python3 /opt/waha/renewal/admin_source.py
+python3 /opt/waha/renewal/admin_source.py --sample 1
+python3 /opt/waha/renewal/admin_source.py --collect
+```
+
+The first command probes stable enumeration; sampling never marks a source
+complete. Full collection checks index and summary stability again and aborts
+before its 30-minute freshness limit. Commands emit aggregate counts/error codes,
+never rows or credentials. They do not persist/export a certified snapshot,
+configure the evaluator, send messages, or activate a recurring source job.
+Source-to-evaluator wiring remains gated on successful full real-data validation;
+a schema error or upstream read failure must leave renewal evaluation blocked.

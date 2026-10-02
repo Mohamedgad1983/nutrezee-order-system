@@ -146,3 +146,38 @@ payment and unattended server login remain unverified. Owner asked to distinguis
 Nutreeze Admin credentials from separate WAHA Dashboard credentials.
 Verified final page 88 through observed navigation: `Showing 871 to 875 of 875
 entries`. First/last-page consistency is not full 88-page extraction proof.
+
+Predeclared Admin acquisition implementation: admin_source.py,
+test_admin_source.py, README and this plan. Strict source-only HTTPS transport,
+origin/path allowlist, one ephemeral login, no cookie persistence, GET-only reads,
+complete stable pagination checks, and HTML parsing based on observed screens.
+No send transport or campaign writes. Unsupported calendar/payment markup must
+block source certification rather than infer service days from Days Left.
+
+## Admin acquisition recovery and implementation — 2026-10-02
+
+Owner explicitly authorized using Desktop credential file. After exact labeled
+RTF parsing, ephemeral server login succeeded at `/dashboard`; the existing
+canonical credential keys were updated in place, with no credential output,
+git content, copied cookies, accounts or permission changes. Earlier raw-line
+and partial-label submissions were rejected; no invalid-password conclusion
+applies to the correctly parsed Desktop values.
+
+Implemented separate `admin_source.py`: same-origin HTTPS/path/query allowlist,
+one CSRF/cookie-memory login per process, no relogin retries, GET-only acquisition,
+exact/stable Active and pending pagination, all five current-day summary cohorts,
+summary-to-Active order-number membership, authoritative detail/list date checks,
+explicit full-range Off Day/Freeze Day controls, Order Meals read, later renewal
+payment details and stable final re-reads. Unknown/partial/conflicting schema,
+identity/date ambiguity, count changes and 25-minute collection budget fail closed.
+No sender, campaign writer, automatic source timer, snapshot export or evaluator
+activation has been added. Source CLI sampling never certifies completeness.
+
+Verified live enumeration: two complete Active reads stable at 1122 records;
+all five Summary cohorts re-read stable, Off Day 875 and others zero. Source
+acquisition currently running supervised full validation. Full payment/calendar/
+renewal join completeness is not yet proven; no eligible delivery cohort enabled.
+47 scoped tests pass locally, including calendar gaps/duplicates, explicit off/
+pause controls, relogin, partial/duplicate/changing pages, pending renewals,
+detail-date conflicts and summary membership failure. Existing manual campaign
+remains complete with 40 accepted sends. Renewal sending remains disabled.
