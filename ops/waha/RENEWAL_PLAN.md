@@ -133,3 +133,16 @@ insufficient. Verified: the source rejects the server-held credential submission
 Owner browser login remains reported working; equality of those inputs with
 server-held inputs is not established. Required action is hidden owner re-entry
 of that working account using the installed helper; no credential reset needed.
+
+Native Chrome proof after owner setup: authenticated `nutreeze.com/dashboard`
+showed Login successful. Read-only `/summary` for 2026-10-02 showed Off Day 875,
+other current-day cohort counters zero. Its empty default table triggered an
+existing DataTables unknown-parameter warning; warning dismissed without writes.
+The observed Off Day link `/summary/off_day/2026-10-02` loaded successfully,
+with `Showing 1 to 10 of 875 entries` and Previous/Next navigation. Browser
+session/cookies/credentials were not copied to the server. This establishes
+browser access and initial pagination only; complete row coverage, calendar,
+payment and unattended server login remain unverified. Owner asked to distinguish
+Nutreeze Admin credentials from separate WAHA Dashboard credentials.
+Verified final page 88 through observed navigation: `Showing 871 to 875 of 875
+entries`. First/last-page consistency is not full 88-page extraction proof.
