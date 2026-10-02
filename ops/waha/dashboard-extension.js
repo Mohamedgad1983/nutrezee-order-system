@@ -13,7 +13,7 @@
       const link=document.createElement('a');link.id='nutreeze-bulk-link';link.href='/dashboard/#bulk';link.className='nutreeze-bulk-link';
       link.addEventListener('click',event=>{event.preventDefault();location.hash='bulk';});
       const icon=document.createElement('i');icon.className='pi pi-send layout-menuitem-icon';
-      const label=document.createElement('span');label.className='layout-menuitem-text';label.textContent='Bulk · الإرسال الجماعي';
+      const label=document.createElement('span');label.className='layout-menuitem-text';label.textContent='Bulk Messages';
       link.append(icon,label);item.append(link);
       const section=menu.querySelector('li ul')||menu;section.append(item);
     }
@@ -22,7 +22,7 @@
     const link=document.getElementById('nutreeze-bulk-link');
     if(link.classList.contains('active')!==active)link.classList.toggle('active',active);
     if(active&&!frame){
-      frame=document.createElement('iframe');frame.id='nutreeze-bulk-panel';frame.title='Bulk · الإرسال الجماعي';frame.src='/bulk/#embedded';
+      frame=document.createElement('iframe');frame.id='nutreeze-bulk-panel';frame.title='Bulk Messages';frame.src='/bulk/#embedded';
       frame.addEventListener('load',()=>{
         const doc=frame.contentDocument;if(!doc)return;
         const theme=document.querySelector('#theme-css');const target=doc.querySelector('#waha-theme');if(theme&&target)target.href=theme.href;
