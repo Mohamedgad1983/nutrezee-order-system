@@ -86,6 +86,12 @@ class FileSource:
 def eligibility(row, now):
     if not isinstance(row.get('subscription_id'), str) or not row['subscription_id'].strip():
         return 'missing_subscription_id'
+    if row.get('review_reason') is not None:
+        reason = row['review_reason']
+        allowed = {'calendar_changed','payment_or_renewal_changed','order_state_changed',
+                   'calendar_review','payment_review','renewal_chronology_unknown',
+                   'customer_identity_ambiguous'}
+        return 'review_' + reason if isinstance(reason,str) and reason in allowed else 'source_review_unverified'
     if row.get('schedule_complete') is not True or row.get('renewals_complete') is not True:
         return 'incomplete_individual_schedule_or_renewals'
     if now-timestamp(row.get('updated_at')) > MAX_AGE or timestamp(row.get('updated_at')) > now:

@@ -16,7 +16,7 @@ class AdminSourceTests(unittest.TestCase):
     def test_read_allowlist(self):
         for p in ['/admin','/orders/view/12','/orders/ajaxlist/Active?draw=1&start=0&length=100','/summary/off_day/2026-10-02','/orders/getMealsDateWiseFilter/2026-10-03/12']:
             self.assertTrue(allowed(p))
-        for p in ['https://evil.invalid/admin','//evil.invalid/admin','/orders/ChangeOffDay','/orders/create','/logout','/orders/view/../create','/orders/view/12?delete=1','/orders/ajaxlist/Active?draw=1&start=0&length=1001','/logincheck']:
+        for p in ['https://evil.invalid/admin','//evil.invalid/admin','/orders/ChangeOffDay','/orders/create','/logout','/orders/view/../create','/orders/view/12?delete=1','/orders/ajaxlist/Active?draw=1&start=0&length=10001','/logincheck']:
             self.assertFalse(allowed(p))
         self.assertTrue(allowed('/logincheck', login=True))
 
@@ -77,7 +77,7 @@ class CollectionTests(unittest.TestCase):
                     pending=path.endswith('/13')
                     headers=['Order start date','Order end date','Payment Status','Order Status']
                     values=['05-10-2026','08-10-2026','pending','Pending'] if pending else ['01-10-2026','04-10-2026','success','Active']
-                    return '<table><tr>'+''.join('<th>'+h+'</th>' for h in headers)+'</tr><tr>'+''.join('<td>'+v+'</td>' for v in values)+'</tr></table>'
+                    return '<script>var user_id = 1;</script><table><tr>'+''.join('<th>'+h+'</th>' for h in headers)+'</tr><tr>'+''.join('<td>'+v+'</td>' for v in values)+'</tr></table>'
                 if '/vieworderwiseoffdays/' in path:
                     return schedule(day('2026-10-01')+day('2026-10-02',True)+day('2026-10-03')+day('2026-10-04'))
                 if '/getMealsDateWiseFilter/' in path:
@@ -102,13 +102,13 @@ class CollectionTests(unittest.TestCase):
         from admin_source import collect
         fixture=self.fixture(); original=fixture.get
         fixture.get=lambda p:original(p).replace('01-10-2026','02-10-2026') if '/orders/view/' in p else original(p)
-        with self.assertRaisesRegex(Blocked,'order_dates_conflict'):collect(fixture)
+        self.assertEqual(collect(fixture)['subscriptions'][0]['review_reason'],'payment_review')
 
     def test_missing_summary_membership_blocks_whole_source(self):
         from admin_source import collect
         fixture=self.fixture(); original=fixture.get
         fixture.get=lambda p:original(p).replace('<td>100</td>','<td>999</td>') if '/summary/off_day/' in p else original(p)
-        with self.assertRaisesRegex(Blocked,'summary_active_membership_conflict'):collect(fixture)
+        with self.assertRaisesRegex(Blocked,'admin_relevant_identity_changed_after_bounded_attempts'):collect(fixture)
 
 
 class CounterMismatchTests(unittest.TestCase):
@@ -213,7 +213,7 @@ class ConcurrentSubscriptionTests(unittest.TestCase):
         self.assertTrue(result['complete'])
         row=result['subscriptions'][0]
         self.assertFalse(row['renewals_complete'])
-        self.assertEqual(eligibility(row,datetime.now(KUWAIT)),'incomplete_individual_schedule_or_renewals')
+        self.assertEqual(eligibility(row,datetime.now(KUWAIT)),'review_renewal_chronology_unknown')
 
 class RedirectGuardTests(unittest.TestCase):
     def test_redirect_cannot_add_unapproved_query_or_fragment(self):

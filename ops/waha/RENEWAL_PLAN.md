@@ -293,3 +293,55 @@ The real source acceptance blocker remains; no renewal messages sent.
 Final transport regression: redirect guards validate the complete path/query/
 fragment, not just the pathname; an allowed read cannot redirect to a GET with
 an unapproved query. Same-origin HTTPS and the original allowlist remain strict.
+
+## Approved continuation — coherent acquisition and disabled queue integration
+
+Predeclared: admin_source.py, test_admin_source.py, test_admin_snapshot.py,
+renewal.py/test_renewal.py only if the verified source contract needs extensions;
+new renewal_bulk.py/test_renewal_bulk.py and minimum bulk_server.py changes for
+shared transactional creation/claim guards. Companion renewal metadata tables
+must preserve the existing manual schema/data. Both renewal start and worker tick
+remain hard-locked before any send transport; no HTTP or environment live switch,
+no real renewal campaign or customer sends. Synthetic temporary-DB tests only for
+queue integration; deployment cannot enable or modify manual campaigns.
+
+Source refinement must prove complete candidate membership and relevant renewal/
+payment/calendar state despite unrelated live count drift; no partial global
+scan can be silently certified. Source UI filters/large-page export semantics
+must be observed before expanding the allowlist. Bounded retries/checkpoints and
+same-ID revalidation are allowed; ambiguous relevant changes hold or block.
+
+Predeclared acquisition helper files: `admin_enumeration.py` and
+`test_admin_enumeration.py`. Observed Active UI export explicitly requests
+start=0,length=2147483647; use a stricter 10000-row cap and verify complete
+single-response physical membership plus an empty terminal read. Retries are
+bounded; no changed offset pages are stitched. Initial/final global exports may
+differ only when the complete current-Summary/contact-relevant projections and
+per-order authoritative reads establish the stated bounded consistency proof.
+
+Predeclared collection coordinator: `admin_collection.py` and `test_admin_collection.py`, using complete exports, stable Summary identity and two independent relevant authoritative observations; per-customer review holds and bounded relevant-drift retries.
+
+## Bounded source and disabled bridge build proof — 2026-10-02
+
+ASM-062 refines unrelated-global-drift handling without accepting partial scans.
+Observed both Active and Pending UI export actions request all rows. The bounded
+real probe completed with Active1131/1131 and Pending7999/7992, unique internal IDs
+and empty terminal reads, first attempt; the seven-row metadata undercount is
+retained in evidence. Three complete exports and two per-order observations now
+replace the previous global-membership freeze. Unknown/changed relevant evidence
+produces explicit holds, and Summary identity drift has a single bounded restart.
+No transaction-snapshot guarantee is claimed.
+
+117 local and 117 VPS tests pass, including synthetic protected snapshots and
+17 disabled shared Bulk bridge cases. The first VPS test invocation lacked
+unchanged static assets in the isolated test directory; after SHA-verified copies
+of those assets, all117 passed. Active Bulk source/database/services were not
+changed. Isolated bridge tests verify atomic draft/reservation/audit, fresh review,
+manual-history suppression, opt-out, duplicate/concurrent reservation, no automatic
+held-recipient restoration and hard locks before start/transport. No live bridge
+caller or runtime activation switch exists. A future caller must reuse the active
+Store instance and implement verified live source recheck/claim before sends.
+
+The supervised source/evaluator dependency job has started; aggregate terminal
+real-data acceptance results are recorded below when available. Delivery remains
+disabled throughout this build/test proof. No renewal campaign has been created.

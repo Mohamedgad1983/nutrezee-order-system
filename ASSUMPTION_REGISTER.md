@@ -134,3 +134,24 @@ A matching Pending order with missing dates is likewise retained as a hold.
 Active Summary joins remain strict by unique display order number; Pending is
 keyed by unique internal ID because real IDs 3034/3035 share a display number.
 This conservative rule does not authorize delivery or certify a changing source.
+
+## ASM-062 — bounded relevant-state observations [NC]
+
+2026-10-02, A74 approved build/test continuation. This supersedes only ASM-060's
+requirement that unrelated global list membership remain identical. The actual
+Admin UI exposes an all-export action. Each bounded 10000-row response must prove
+unique internal IDs, no declared undercoverage and an empty terminal offset with
+unchanged metadata; changed terminal proofs retry the whole response at most
+three times. A real probe read Active1131/1131 and Pending7999/7992 completely.
+The seven-row metadata undercount does not discard physical rows.
+
+Three independently complete exports surround two observations of every current
+Summary calendar and each two-service-day candidate's authoritative payment,
+customer ID, lifecycle and relevant renewal facts. Unrelated global changes do
+not invalidate otherwise complete reads. Relevant semantic changes hold affected
+customers; Summary identity changes restart the full acquisition once within the
+original 25-minute budget. An excluded customer becoming a two-day candidate is
+retained as a hold. Unknown calendar/payment/identity/chronology remains held.
+This establishes bounded observed consistency, not an atomic database snapshot
+or a guarantee against changes after the observation. Actual delivery remains
+disabled; owner acceptance and live pre-send recheck/claim proof are separate.

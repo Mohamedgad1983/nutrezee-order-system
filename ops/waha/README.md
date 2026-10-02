@@ -143,18 +143,16 @@ Bulk opens within the original WAHA shell at `/dashboard/#bulk`. `/bulk/` redire
 flag. Its systemd sandbox prohibits Internet sockets. Existing Basic Auth,
 manual campaigns, credentials and all other services stay unchanged.
 
-Default result is `blocked`: no fresh individually verified source is configured.
-Supported Partner integration lacks authoritative payment details; neither
-aggregate BI nor archived June imports can substitute. Operators must obtain
-a documented read-only individual API/export contract providing complete
-schedules (service/off/paused/cancelled), stable subscription/customer identifiers,
-phone, later renewals and detail-level payment states. Capture and row updates
-must be within 30 minutes; list/detail conflicts and unpaid renewals hold.
+Missing, partial or stale source data returns `blocked`. The installed source
+dependency reads the existing Admin screens; supported Partner integration lacks
+the necessary authoritative payment details. Neither aggregate BI nor archived
+imports can substitute. Capture and row observations must be within 30 minutes;
+list/detail conflicts and unpaid renewals hold.
 
 A reviewed export adapter may be configured by operations with
-`RENEWAL_SOURCE_PATH`, `RENEWAL_SOURCE_ID`, `RENEWAL_SOURCE_VERIFIED=yes` in
-root-only `/opt/waha/renewal-source.env`. Do not set verified until evidence
-validates the actual upstream data and update mechanism. The example JSON is
+`RENEWAL_SOURCE_PATH`, `RENEWAL_SOURCE_ID`, `RENEWAL_SOURCE_VERIFIED=yes`.
+The installed evaluator unit names only the protected Admin producer output;
+these flags alone do not establish source completeness. The example JSON is
 fixture-only, never an approved source. Required subscription fields are
 `subscription_id`, `phone`, `state=active`, `updated_at`, `schedule_complete`,
 `renewals_complete`, `payment_detail`, `payment_list`, `schedule` (unique dates
@@ -184,10 +182,11 @@ printed. Suppression applies to the new renewal assessment, not existing manual
 campaigns. Read summary with `journalctl -u waha-renewal.service --no-pager`;
 stdout contains counts/error codes only. No new credentials are created.
 
-To install: create `/opt/waha/renewal` and root-only `renewal-data`; copy source
-and the two units; `systemd-analyze verify` both units, reload systemd and
+To install: create `/opt/waha/renewal` and root-only `renewal-data`; copy evaluator,
+Admin source/coordinator/enumeration modules and the three source/evaluator/timer
+units; `systemd-analyze verify` all units, reload systemd and
 enable only this timer. A supervised `systemctl start waha-renewal.service`
-verifies a dry assessment without sending or invoking source sync. Disable
+reads Admin and runs a dry assessment without sending or writing to Admin. Disable
 only `waha-renewal.timer` for rollback; protected audit/history stays retained.
 
 ### Admin read-only acquisition (PR91; delivery stays disabled)
@@ -195,12 +194,19 @@ only `waha-renewal.timer` for rollback; protected audit/history stays retained.
 `admin_source.py` reads only observed Admin screens over verified same-origin
 HTTPS. Authentication uses the existing root-owned canonical legacy migration
 configuration; cookies and CSRF are memory-only. Only login POST is allowed.
-Summary cohorts are full server-rendered tables; Active and pending order lists
-use bounded pages with exact totals and unique identities. Collection joins
-summary order numbers to Active internal IDs, reads authoritative detail payment,
-compares detail/list dates, reads explicit Off Day/Freeze Day controls over the
-complete date range, and reads Order Meals. Later Active/pending renewals match
-normalized phone and strictly later start dates; ambiguous identity blocks.
+Summary cohorts are full server-rendered tables. Active and pending lists use the
+observed all-export mechanism with a stricter 10000-row cap: one complete response,
+unique internal IDs, no reported undercoverage, and an empty terminal request.
+Each export retries a changed terminal proof at most three times; it never joins
+pages from changing enumerations. Actual rows may exceed the known undercounting
+metadata, but every physical row remains available for reconciliation.
+
+Collection joins Summary order numbers to Active internal IDs and verifies their
+contacts. Every Summary calendar is read twice using explicit Off Day/Freeze Day
+controls over the full future date range. Exactly-two-day candidates receive two
+independent authoritative payment/customer-ID/status checks, including relevant
+later Active/pending orders. Same-phone different-customer identity, equal starts,
+unknown chronology, payment conflicts and unknown lifecycle states hold for review.
 
 Root-only supervised commands:
 
@@ -210,9 +216,14 @@ python3 /opt/waha/renewal/admin_source.py --sample 1
 python3 /opt/waha/renewal/admin_source.py --collect
 ```
 
-The first command probes stable enumeration; sampling never marks a source
-complete. Full collection checks index and summary stability again and aborts
-before its 30-minute freshness limit. Commands emit aggregate counts/error codes,
+The first command is the older strict pagination diagnostic; `--collect` uses the
+bounded coordinator. Sampling runs the same complete checks but never marks its
+output complete. Three complete exports surround two calendar/payment observations.
+Unrelated global list changes are allowed; relevant order/calendar/payment changes
+hold the affected decision. Summary identity changes restart the whole acquisition
+once within the original 25-minute budget. Category movement alone is harmless.
+This proves bounded observed consistency, not a transactional database snapshot.
+Commands emit aggregate progress/counts/error codes,
 never rows or credentials. `--write-snapshot` additionally publishes a root-only
 `admin-source.json` after complete stable collection, protected by a retained
 exclusive lock. It removes the previous export before acquisition and never
@@ -226,7 +237,8 @@ Certification scope is today's five Summary cohorts, joined to all Active and
 Pending rows, not all Active subscriptions. Explicit future calendars determine
 exactly two service dates; authoritative detail payment and later renewal status
 control individual eligibility/holds. Source metadata counters are advisory;
-physical unique-ID enumeration must be stable on both full reads. A matching
+every export must independently prove complete physical unique-ID enumeration.
+A matching
 pending order with unknown dates, or another subscription sharing the same start,
 holds that customer's decision without silently discarding the record.
 
@@ -234,5 +246,20 @@ The fail-closed dry-run wiring can attempt a protected source read daily; source
 acceptance remains blocked until full real-data validation succeeds. A failed
 source dependency prevents evaluator execution, so inspect its service status
 as well as the ledger; an older ledger row is not today's completed evaluation.
-Actual renewal sending and shared Bulk queue integration remain disabled pending
-owner acceptance; existing manual campaigns are untouched.
+Actual renewal sending remains disabled pending owner acceptance and verified live
+claim/recheck integration; existing manual campaigns are untouched.
+
+### Disabled shared Bulk bridge (synthetic acceptance only)
+
+`renewal_bulk.py` reuses the Bulk draft transaction with separate renewal metadata,
+durable subscription/phone reservations and same-transaction review audit. Each
+prospective recipient gets a fresh source/opt-out/manual-history check. Relevant
+changes hold recipients; held recipients are never automatically restored. Both
+campaign start and worker tick hard-stop renewal campaigns before readiness,
+claim or any send call. There is no CLI, HTTP route or configuration unlock.
+
+The bridge currently has no scheduler/service caller. Tests use temporary databases;
+the deployed manual Bulk code/database is unchanged. Future wiring must reuse the
+running worker's Store instance: constructing another Store on its live database
+would run the existing startup recovery. File rechecks at draft/review time do not
+substitute for a future live Admin recheck before an actual send.

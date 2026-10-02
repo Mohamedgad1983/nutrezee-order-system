@@ -159,3 +159,10 @@ class RenewalTests(unittest.TestCase):
         self.assertNotIn('sendText',(root/'renewal.py').read_text())
 
 if __name__=='__main__':unittest.main()
+
+class SourceReviewTests(unittest.TestCase):
+    def test_source_review_cannot_become_eligible(self):
+        from renewal import eligibility, KUWAIT
+        from datetime import datetime
+        self.assertEqual(eligibility({'subscription_id':'synthetic','review_reason':'calendar_changed'},datetime.now(KUWAIT)),'review_calendar_changed')
+        self.assertEqual(eligibility({'subscription_id':'synthetic','review_reason':'untrusted value'},datetime.now(KUWAIT)),'source_review_unverified')
