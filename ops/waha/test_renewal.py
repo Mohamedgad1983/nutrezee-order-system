@@ -91,6 +91,7 @@ class RenewalTests(unittest.TestCase):
         try:self.assertEqual(reopened.blocked('TEST-SUB-1','96550000001'),'opted_out')
         finally:reopened.db.close()
         self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM audit').fetchone()[0],1)
+        self.assertEqual(json.loads(self.ledger.db.execute('SELECT ref FROM audit').fetchone()[0])['reason'],'Owner received opt-out')
 
     def test_sent_and_uncertain_never_retried(self):
         for state in ['sent','uncertain','sending']:

@@ -153,7 +153,7 @@ class Ledger:
             raise ValueError('optout_reason_required')
         with self.db:
             self.db.execute('INSERT OR REPLACE INTO suppression VALUES(?,?,?)',(normalized,reason,now.isoformat()))
-            self.event(now,'optout',hashlib.sha256(normalized.encode()).hexdigest())
+            self.event(now,'optout',json.dumps({'phone_hash':hashlib.sha256(normalized.encode()).hexdigest(),'reason':reason}))
 
     def blocked(self, subscription, normalized):
         if self.db.execute('SELECT 1 FROM suppression WHERE phone=?',(normalized,)).fetchone():
