@@ -136,7 +136,8 @@ class InvalidContactScopeTests(unittest.TestCase):
 
     def test_historical_date_filter_does_not_infer_contact_identity(self):
         from admin_source import index
-        self.assertEqual(index([self.row()],min_start='2026-10-05'),{})
+        row=self.row();row[2]='Synthetic [55667788]'
+        self.assertEqual(index([row],min_start='2026-10-05'),{})
 
 class TransportTests(unittest.TestCase):
     def test_read_rejects_cross_origin_post_and_unknown_mutation(self):
@@ -159,3 +160,57 @@ class FutureCalendarTests(unittest.TestCase):
         result=calendar(html,'2026-10-01','2026-10-04',today='2026-10-02')
         self.assertEqual([r['date'] for r in result],['2026-10-03','2026-10-04'])
         self.assertTrue(all(r['state']=='service' for r in result))
+
+
+class PendingChronologyTests(unittest.TestCase):
+    def test_pending_unknown_dates_hold_matching_contact(self):
+        from admin_source import index
+        row=['']*17;row[1]='101';row[2]='Synthetic [55667788]';row[5]='';row[6]='';row[10]='pending';row[16]='/orders/view/13'
+        result=index([row],target_phones={'96555667788'})
+        self.assertTrue(result['101']['chronology_unverified'])
+        self.assertEqual(index([row],target_phones={'96555443322'}),{})
+
+class AuthenticatedMealReadTests(unittest.TestCase):
+    def test_nested_meal_tables_do_not_bypass_login_detection(self):
+        from admin_source import Session
+        session=Session.__new__(Session)
+        page='<table><tr><td><table><tr><td>Meal</td></tr></table></td></tr></table>'
+        session.read=lambda request:page
+        self.assertEqual(session.get('/orders/getMealsDateWiseFilter/2026-10-03/13'),page)
+        session.read=lambda request:page+'<input type="password" name="password">'
+        with self.assertRaises(Blocked):session.get('/orders/getMealsDateWiseFilter/2026-10-03/13')
+
+class PendingIdentityTests(unittest.TestCase):
+    def row(self,identity,number):
+        row=['']*17;row[1]=number;row[2]='Synthetic [55667788]';row[10]='pending';row[16]='/orders/view/'+identity
+        return row
+    def test_pending_duplicate_and_blank_display_numbers_retain_distinct_ids(self):
+        from admin_source import index
+        result=index([self.row('13','100'),self.row('14','100'),self.row('15','')],target_phones={'96555667788'},identity_key=True)
+        self.assertEqual(set(result),{'13','14','15'})
+        self.assertTrue(all(r['chronology_unverified'] for r in result.values()))
+    def test_active_display_identity_and_pending_internal_identity_remain_strict(self):
+        from admin_source import index
+        for rows,kwargs in [([self.row('13','100'),self.row('14','100')],{}),([self.row('13','')],{}),([self.row('13','100'),self.row('13','101')],{'identity_key':True})]:
+            with self.assertRaises(Blocked):index(rows,**kwargs)
+
+class ConcurrentSubscriptionTests(unittest.TestCase):
+    def test_same_start_different_subscription_holds_individual(self):
+        from admin_source import collect
+        from renewal import eligibility,KUWAIT
+        from datetime import datetime
+        fixture=CollectionTests().fixture();original=fixture.get
+        def get(path):
+            data=original(path)
+            if '/ajaxlist/Active?' in path:
+                page=json.loads(data);page['recordsTotal']=page['recordsFiltered']=2
+                if page['data']:
+                    extra=list(page['data'][0]);extra[1]='102';extra[16]='/orders/view/14';page['data'].append(extra)
+                return json.dumps(page)
+            return data
+        fixture.get=get
+        result=collect(fixture)
+        self.assertTrue(result['complete'])
+        row=result['subscriptions'][0]
+        self.assertFalse(row['renewals_complete'])
+        self.assertEqual(eligibility(row,datetime.now(KUWAIT)),'incomplete_individual_schedule_or_renewals')

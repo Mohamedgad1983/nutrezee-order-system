@@ -1,0 +1,19 @@
+[Unit]
+Description=Read-only Admin source for WAHA renewal DRY-RUN
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /opt/waha/renewal/admin_source.py --write-snapshot
+UMask=0077
+TimeoutStartSec=26min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/waha/renewal-data
+ReadOnlyPaths=/opt/nutrezee/legacy-migration.env
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+Restart=no
+StandardOutput=journal
+StandardError=journal

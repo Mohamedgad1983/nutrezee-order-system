@@ -223,3 +223,63 @@ accepts up to 64 MiB for legitimate detail pages; no historical grids are export
 Every transport request now enforces origin, method, path and query guards,
 including rejecting arbitrary POSTs and cross-origin requests. A Kuwait date
 rollover aborts acquisition rather than changing eligibility mid-snapshot.
+
+Read-only collection repair: date-filtered meal grids contain nested layout tables.
+Their authenticated GET uses the existing input-only login guard; payment and
+complete future calendar parsing retain strict table validation. Pending rows with
+unknown dates for matching cohort contacts explicitly hold renewal completeness.
+Unrelated pending contacts remain enumerated for snapshot stability but are not
+interpreted as this customer's renewal history. No sending is enabled by this repair.
+
+Predeclared dry-run source wiring: `admin_source.py`, `test_admin_source.py`,
+`waha-renewal-source.service`, `waha-renewal.service`, README and append-only
+register evidence. Root-only snapshot publication after full stability validation;
+separate bounded network-enabled acquisition unit required by the networkless
+existing evaluator, retaining daily 13:00 Kuwait. This has no send capability.
+Verified diagnostic: Active 1122 has no duplicate display numbers. Pending 7994
+contains two rows with one repeated display number, internal IDs 3034 and 3035.
+Pending must retain both by unique internal ID; Active Summary joins stay strict.
+
+Additional predeclared regression file: `test_admin_snapshot.py` for protected snapshot publication, failure invalidation, locks and evaluator integration.
+
+A subsequent real run saw Pending grow to 7995; the preceding scan correctly
+blocked when its short-page membership changed. Another complete index read
+reached 25 calendars before a same-contact/same-start distinct subscription.
+This is an individual chronology hold, not malformed global membership: retain
+it with renewals_complete=false and exclude from eligibility without inventing
+which order is the renewal. Pending/unknown chronology remains review-only.
+
+Latest protected writer validation (PID 1458951) reached Active 1123 then
+terminated blocked `active_count_changed` during complete pagination. Prior
+Pending was 7995 after the original 7994; no stable complete snapshot was
+published, and no outgoing messages occurred. Source certification is blocked
+by live membership changing during read, rather than credentials.
+
+Deployable DRY-RUN wiring is a fail-closed build/test extension: the acquisition
+dependency may publish only after a complete stable fresh read. Its failure
+prevents the networkless evaluator running and leaves no export. The unchanged
+13:00 Kuwait timer may attempt this read independently of the Mac. This is not
+source acceptance or live activation; full real-data acceptance remains blocked
+until one complete coherent read is proven. A previously stored evaluator result
+must not be reported as today's success when source dependency has failed.
+
+## Fail-closed server wiring proof — 2026-10-02
+
+Installed the predeclared acquisition unit and evaluator dependency/configuration.
+`systemd-analyze verify` passed; daemon reload only, timer schedule untouched.
+53 source/snapshot/evaluator/setup tests pass on VPS, 68 including Bulk locally.
+A supervised held-source-lock test caused the source to exit before login,
+prevented evaluator execution, and left its ledger unchanged. No snapshot exists;
+renewal delivery table count remains 0. All 67 existing container start/restart
+records compared before/after unchanged; manual campaign 1 complete, sent 40,
+pending 0, unchanged. The existing timer is active with next 2026-10-03 10:00 UTC
+= 13:00 Kuwait, Persistent=false. Synthetic failed states reset after proof.
+
+Real source outcome is terminal, not a still-running background job: PID1458951
+blocked `active_count_changed` after reading Active 1123. Earlier Pending actual
+7994 versus label7987 was proven by complete physical enumeration; later actual
+7995 reflects live change. Complete stable re-read is required; no raw snapshot
+was accepted, and no eligible cohort count can be claimed. Source is now wired
+to the DRY-RUN evaluator through a separate network-enabled dependency, while the
+evaluator remains AF_UNIX-only and cannot send. Source acceptance/live queue
+integration/owner test acceptance remain BLOCKED. ASM-061 records overlap holds.

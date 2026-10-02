@@ -1,11 +1,15 @@
 [Unit]
+Requires=waha-renewal-source.service
+After=waha-renewal-source.service
 Description=WAHA renewal eligibility assessment (DRY-RUN ONLY)
 
 [Service]
 Type=oneshot
 User=root
 ExecStart=/usr/bin/python3 /opt/waha/renewal/renewal.py
-EnvironmentFile=-/opt/waha/renewal-source.env
+Environment=RENEWAL_SOURCE_PATH=/opt/waha/renewal-data/admin-source.json
+Environment=RENEWAL_SOURCE_ID=nutreeze-admin-ui-v1
+Environment=RENEWAL_SOURCE_VERIFIED=yes
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

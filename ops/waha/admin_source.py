@@ -9,8 +9,10 @@ import re
 import shlex
 import stat
 import os
+import fcntl
+import tempfile
 from zoneinfo import ZoneInfo
-from renewal import phone, KUWAIT, MAX_AGE, eligibility, SourceBlocked
+from renewal import phone, KUWAIT, MAX_AGE, eligibility, SourceBlocked, FileSource
 from collections import Counter
 import urllib.parse
 import urllib.request
@@ -209,7 +211,7 @@ def paged(get, size=1000, status="Active"):
             # termination is verified explicitly with offset equal to rows seen.
             terminal = json.loads(get('/orders/ajaxlist/'+status+'?' + urllib.parse.urlencode({'draw':1,'start':len(all_rows),'length':1000})))
             if terminal.get('recordsTotal') != total or terminal.get('recordsFiltered') != total or terminal.get('data') != [] or len(all_rows) < total:
-                raise Blocked('order_short_page_not_terminal')
+                raise Blocked('order_short_page_not_terminal_'+status+'_physical_'+str(len(all_rows))+'_reported_'+str(total)+'_terminal_rows_'+str(len(terminal.get('data', [])))+'_terminal_reported_'+str(terminal.get('recordsTotal')))
             all_rows.reported_total = total
             return all_rows
     raise Blocked('order_no_empty_terminal_page')
@@ -323,41 +325,46 @@ def iso(value):
     raise Blocked('order_date_schema')
 
 
-def index(rows, min_start=None, irrelevant_invalid=None):
+def index(rows, min_start=None, irrelevant_invalid=None, target_phones=None, identity_key=False):
     result = {}
+    seen = set()
     for row in rows:
         number = text(row[1])
         identities = set(re.findall(r'/orders/view/(\d+)', str(row)))
-        if not number.isdigit() or number in result:
+        if len(identities) != 1:
+            raise Blocked('order_identity_schema')
+        identity = next(iter(identities))
+        key = identity if identity_key else number
+        if (not identity_key and not number.isdigit()) or key in seen:
             raise Blocked('order_number_duplicate_or_schema')
-        try:
-            start = iso(row[5])
-        except Blocked:
-            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
-                continue
-            raise Blocked('order_date_review_required_order_'+next(iter(identities))) from None
-        if min_start is not None and start < min_start:
-            continue
+        seen.add(key)
         match = re.search(r'\[([+0-9٠-٩ ()-]+)\]', text(row[2]))
-        if not match:
-            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
-                continue
-            raise Blocked('order_contact_review_required_order_'+next(iter(identities)))
         try:
+            if not match:
+                raise SourceBlocked('invalid_phone')
             normalized = phone(match[1])
         except SourceBlocked:
-            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+            if irrelevant_invalid is not None and irrelevant_invalid(identity):
                 continue
-            raise Blocked('order_contact_review_required_order_'+next(iter(identities))) from None
+            raise Blocked('order_contact_review_required_order_'+identity) from None
+        # Later renewals are matched by exact normalized contact. This skips no
+        # candidate match; malformed contacts require independent customer-ID proof.
+        if target_phones is not None and normalized not in target_phones:
+            continue
+        payment_list = {'success':'paid','pending':'pending','failed':'failed','refunded':'refunded'}.get(text(row[10]).lower(),'unverified')
         try:
+            start = iso(row[5])
             end = iso(row[6])
         except Blocked:
-            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+            if target_phones is not None:
+                result[key] = {'id':identity,'phone':normalized,'start':None,'end':None,'payment_list':payment_list,'chronology_unverified':True}
                 continue
-            raise Blocked('order_date_review_required_order_'+next(iter(identities))) from None
-        result[number] = {'id': next(iter(identities)), 'phone': normalized,
-                          'start': start, 'end': end,
-                          'payment_list': {'success':'paid','pending':'pending','failed':'failed','refunded':'refunded'}.get(text(row[10]).lower(), 'unverified')}
+            if irrelevant_invalid is not None and irrelevant_invalid(identity):
+                continue
+            raise Blocked('order_date_review_required_order_'+identity) from None
+        if min_start is not None and start < min_start:
+            continue
+        result[key] = {'id':identity,'phone':normalized,'start':start,'end':end,'payment_list':payment_list}
     return result
 
 
@@ -398,7 +405,11 @@ def collect(session, limit=None):
         numbers.update(row[1]['text'] for row in rows)
     if not numbers.issubset(active):
         raise Blocked('summary_active_membership_conflict')
-    pending = index(pending_raw, min(active[n]['start'] for n in numbers), irrelevant_invalid) if numbers else {}
+    for entries in cohorts.values():
+        for summary_row in entries:
+            if phone(summary_row[3]['text']) != active[summary_row[1]['text']]['phone']:
+                raise Blocked('summary_active_contact_conflict')
+    pending = index(pending_raw, min(active[n]['start'] for n in numbers), irrelevant_invalid, {active[n]['phone'] for n in numbers}, identity_key=True) if numbers else {}
     rows = []
     detail_cache = {}
     def payment_for(order):
@@ -419,18 +430,25 @@ def collect(session, limit=None):
             return None
         payment_detail = payment_for(current)
         history = []
+        renewals_complete = True
         for later in all_orders:
             if later['id'] != current['id'] and later['phone'] == current['phone']:
+                if later.get('chronology_unverified'):
+                    renewals_complete = False
+                    history.append({'state':'pending','payment_detail':None,'payment_list':later['payment_list']})
+                    continue
                 if later['start'] == current['start']:
-                    raise Blocked('renewal_order_identity_ambiguous')
+                    renewals_complete = False
+                    history.append({'state':'active','payment_detail':None,'payment_list':later['payment_list']})
+                    continue
                 if later['start'] > current['start']:
                     history.append({'state':'active','payment_detail':payment_for(later),'payment_list':later['payment_list']})
         for entry in schedule:
             if entry['state'] == 'service':
-                parse(session.get('/orders/getMealsDateWiseFilter/'+entry['date']+'/'+current['id']))
+                session.get('/orders/getMealsDateWiseFilter/'+entry['date']+'/'+current['id'])
         return {'subscription_id':current['id'],'phone':current['phone'], 'state':'active',
                      'payment_detail':payment_detail,'payment_list':current['payment_list'],
-                     'schedule_complete':True,'renewals_complete':True,'updated_at':began.isoformat(),
+                     'schedule_complete':True,'renewals_complete':renewals_complete,'updated_at':began.isoformat(),
                      'schedule':schedule,'later_renewals':history}
     from concurrent.futures import ThreadPoolExecutor, as_completed
     pool = ThreadPoolExecutor(max_workers=4)
@@ -459,6 +477,69 @@ def collect(session, limit=None):
     return {'schema_version':1,'complete':True,'payment_authority':'order_detail','source_id':'nutreeze-admin-ui-v1','captured_at':began.isoformat(),'subscriptions':rows}
 
 
+def publish_snapshot(producer, path, now=None):
+    """Publish only a complete protected export; never retain a failed predecessor."""
+    path = Path(path)
+    parent = path.parent
+    if parent.is_symlink() or not parent.is_dir():
+        raise Blocked('snapshot_parent_permissions')
+    info = parent.stat()
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise Blocked('snapshot_parent_permissions')
+    def protected(info):
+        return stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o600
+    lock_path = Path(str(path)+'.lock')
+    try:
+        lock = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    except OSError:
+        raise Blocked('snapshot_lock_permissions') from None
+    temporary = None
+    published = False
+    try:
+        if not protected(os.fstat(lock)):
+            raise Blocked('snapshot_lock_permissions')
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Blocked('source_collection_already_running') from None
+        if path.exists() or path.is_symlink():
+            if not protected(path.lstat()):
+                raise Blocked('snapshot_output_permissions')
+            path.unlink()
+        data = producer()
+        encoded = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        if len(encoded) > 10 * 1024 * 1024:
+            raise SourceBlocked('source_too_large')
+        fd, temporary = tempfile.mkstemp(prefix='.admin-source-', dir=parent)
+        with os.fdopen(fd, 'wb') as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+        instant = now or datetime.now(KUWAIT)
+        rows = FileSource(temporary, 'nutreeze-admin-ui-v1', True).read(instant)
+        counts = Counter(eligibility(row, instant) for row in rows)
+        os.replace(temporary, path)
+        temporary = None
+        published = True
+        directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return {'mode':'dry-run','source_certified':True,'complete':True,'live_enabled':False,
+                'scope':'current_day_summary_cohorts','subscriptions':len(rows),'counts':dict(counts),
+                'captured_at':data['captured_at']}
+    except BaseException:
+        if published:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        if temporary is not None:
+            Path(temporary).unlink(missing_ok=True)
+        os.close(lock)
+
+
 def probe():
     session = Session(*credentials())
     first = paged(session.get)
@@ -483,10 +564,16 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser()
         parser.add_argument('--collect',action='store_true')
         parser.add_argument('--sample',type=int)
+        parser.add_argument('--write-snapshot',action='store_true')
         args = parser.parse_args()
-        if args.collect or args.sample:
+        if args.write_snapshot:
+            if args.collect or args.sample:
+                raise Blocked('snapshot_mode_conflict')
+            result = publish_snapshot(lambda: collect(Session(*credentials())), '/opt/waha/renewal-data/admin-source.json')
+            print(json.dumps(result))
+        elif args.collect or args.sample:
             result = collect(Session(*credentials()), args.sample)
-            print(json.dumps({'mode':'dry-run','live_enabled':False,'complete':result['complete'],'subscriptions':len(result['subscriptions']), 'counts':dict(Counter(eligibility(row, datetime.now(KUWAIT)) for row in result['subscriptions']))}))
+            print(json.dumps({'mode':'dry-run','live_enabled':False,'source_certified':result['complete'],'scope':'current_day_summary_cohorts','complete':result['complete'],'subscriptions':len(result['subscriptions']), 'counts':dict(Counter(eligibility(row, datetime.now(KUWAIT)) for row in result['subscriptions']))}))
         else:
             print(json.dumps(probe()))
     except (Blocked, SourceBlocked, KeyError, ValueError, OSError) as exc:

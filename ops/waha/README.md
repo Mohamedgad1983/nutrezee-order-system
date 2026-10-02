@@ -213,7 +213,26 @@ python3 /opt/waha/renewal/admin_source.py --collect
 The first command probes stable enumeration; sampling never marks a source
 complete. Full collection checks index and summary stability again and aborts
 before its 30-minute freshness limit. Commands emit aggregate counts/error codes,
-never rows or credentials. They do not persist/export a certified snapshot,
-configure the evaluator, send messages, or activate a recurring source job.
-Source-to-evaluator wiring remains gated on successful full real-data validation;
-a schema error or upstream read failure must leave renewal evaluation blocked.
+never rows or credentials. `--write-snapshot` additionally publishes a root-only
+`admin-source.json` after complete stable collection, protected by a retained
+exclusive lock. It removes the previous export before acquisition and never
+publishes incomplete, stale or failed results. It does not send messages.
+
+The separately predeclared `waha-renewal-source.service` can be required by the
+networkless dry-run evaluator. The existing daily 13:00 Asia/Kuwait timer starts
+the source dependency first; a failed source blocks evaluation. Root credentials
+remain in their existing canonical configuration, not copied into unit files.
+Certification scope is today's five Summary cohorts, joined to all Active and
+Pending rows, not all Active subscriptions. Explicit future calendars determine
+exactly two service dates; authoritative detail payment and later renewal status
+control individual eligibility/holds. Source metadata counters are advisory;
+physical unique-ID enumeration must be stable on both full reads. A matching
+pending order with unknown dates, or another subscription sharing the same start,
+holds that customer's decision without silently discarding the record.
+
+The fail-closed dry-run wiring can attempt a protected source read daily; source
+acceptance remains blocked until full real-data validation succeeds. A failed
+source dependency prevents evaluator execution, so inspect its service status
+as well as the ledger; an older ledger row is not today's completed evaluation.
+Actual renewal sending and shared Bulk queue integration remain disabled pending
+owner acceptance; existing manual campaigns are untouched.

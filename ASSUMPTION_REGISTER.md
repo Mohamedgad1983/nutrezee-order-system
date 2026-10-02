@@ -123,3 +123,14 @@ improves coverage beyond stopping at the undercount; it does not certify unseen
 payment/calendar semantics or authorize a partial source. Historical pending
 orders starting before every current summary subscription cannot be a later
 renewal and may be excluded only after parsing their authoritative start date.
+
+## ASM-061 — overlapping subscription chronology hold [NC]
+
+2026-10-02, A74; sponsor-review-required. Distinct internal order IDs with the
+same normalized phone and start date cannot establish which is a later renewal.
+Retain both and set individual renewal completeness false; hold that customer
+rather than choosing a subscription or blocking otherwise valid membership.
+A matching Pending order with missing dates is likewise retained as a hold.
+Active Summary joins remain strict by unique display order number; Pending is
+keyed by unique internal ID because real IDs 3034/3035 share a display number.
+This conservative rule does not authorize delivery or certify a changing source.

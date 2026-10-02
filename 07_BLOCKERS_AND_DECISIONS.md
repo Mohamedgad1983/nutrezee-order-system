@@ -70,3 +70,13 @@ Still standing, clearly scoped:
 > **2026-07-25 — WP-OPS-02/03 release gate verified:** provision separate least-privilege Fleetbase service identities for credential rotation and order reassignment, store their tokens only in `/opt/nutrezee/.env` mode `0600`, and identify the named human Logistics Manager account. The three required integration variables are currently unset; no dedicated Logistics Manager exists; migrations `0025/0026` are not deployed. Draft PR #43 is green and mergeable but must remain unmerged until those inputs exist and its broad operational parent diff is reviewed. Then merge PR #43, deploy migrations `0024–0026`, and run the required staging Playwright and Navigator proof. Do not use the UAT seed account or silently add logistics privileges to the existing super-admin as a substitute.
 
 **WP-14's remaining critical path** is now the non-infrastructure items per `19_Roadmap/wp14_blocker_report.md` §4: the workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix), assumption-register sign-off, and the staging **restore drill** (environment_plan §4). UAT/pilot can now exercise the live staging URL.
+
+## OPS-WAHA-RENEWAL Admin source acceptance — 2026-10-02
+
+Authenticated server access is recovered. Latest complete acquisition terminated
+blocked because live order counts changed during pagination; no certified full
+snapshot exists. Fail-closed server source-to-DRY-RUN dependency is installed,
+daily13:00Kuwait; no Mac dependency, no sends. Next coherent complete read must
+pass calendar/payment/later-renewal coverage before acceptance. Actual delivery
+also requires owner test acceptance and shared Bulk transactional queue/recheck
+integration. Existing manual campaign/auth unchanged; see ops/waha/RENEWAL_PLAN.md.

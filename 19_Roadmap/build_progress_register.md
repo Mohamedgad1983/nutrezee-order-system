@@ -344,3 +344,25 @@ opt-out audit retains its reason without logging the phone. Final supervised
 dry-run service status success, delivery disabled, source blocked. No actual
 individual source has been certified. Live shared Bulk claim/recheck/pacing
 integration is NOT shipped; activating delivery remains a separate gated unit.
+
+## OPS-WAHA-RENEWAL source recovery / dry-run wiring — 2026-10-02
+
+A74 authorized Admin UI acquisition, existing owner-provided credentials recovered
+through the canonical server-held configuration; no secrets retained in git/logs.
+Implemented strict read-only pagination/calendar/payment/renewal adapter and
+root-only atomic export. ASM-060: Pending physical7994 vs reported7987; ASM-061:
+overlap chronology holds. Three invalid Active contacts are excluded only after
+stable customer-ID proof puts them outside all current Summary cohorts.
+
+Latest real full writer job PID1458951 is terminal BLOCKED `active_count_changed`
+(Active1123; Pending grew from7994 to7995 in intervening reads). No certified
+complete snapshot or actual eligible count exists. Partial/sample acquisition
+cannot feed evaluation. Fail-closed source dependency is installed on server,
+required before the existing networkless DRY-RUN evaluator; daily13:00Kuwait
+unchanged, nextOct3. Tests68 local/53 VPS and systemd verification pass; held-lock
+failure prevents evaluation and leaves ledger unchanged, delivery0. Existing67
+container start/restart records and manualcampaign1 complete/sent40/pending0
+unchanged. No renewal sends; live shared Bulk queue path not implemented.
+Status BLOCKED on coherent complete real source read + owner acceptance/live
+integration. DraftPR91 remains open/unmerged; final commit/CI evidence follows.
+General engineering queue unchanged by this side task.
