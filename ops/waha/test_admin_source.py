@@ -123,3 +123,17 @@ class CounterMismatchTests(unittest.TestCase):
         def missing(path):
             return json.dumps({'recordsTotal':3,'recordsFiltered':3,'data':[row(1)] if 'start=0' in path else []})
         with self.assertRaises(Blocked):paged(missing)
+
+class InvalidContactScopeTests(unittest.TestCase):
+    def row(self):
+        row=['']*17;row[1]='100';row[2]='Synthetic [00000000]';row[5]='01-10-2026';row[6]='04-10-2026';row[10]='success';row[16]='/orders/view/12';return row
+
+    def test_invalid_contact_only_excluded_after_reference_proof(self):
+        from admin_source import index
+        with self.assertRaises(Blocked):index([self.row()])
+        with self.assertRaises(Blocked):index([self.row()],irrelevant_invalid=lambda _:False)
+        self.assertEqual(index([self.row()],irrelevant_invalid=lambda _:True),{})
+
+    def test_historical_date_filter_does_not_infer_contact_identity(self):
+        from admin_source import index
+        self.assertEqual(index([self.row()],min_start='2026-10-05'),{})

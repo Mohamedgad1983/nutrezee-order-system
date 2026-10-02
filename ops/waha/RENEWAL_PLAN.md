@@ -199,3 +199,16 @@ Full calendar is read for every summary order; payment/Order Meals/history detai
 are then required for the exactly-two-future-service-day candidate subset.
 Non-candidates are excluded only through explicit calendar service/off/freeze
 rows, never Days Left or guessed package weekdays. Source samples remain incomplete.
+
+Additional source checks: three Active orders have invalid contact values, and
+none of their order numbers is in today's Summary membership. A record with an
+invalid contact/date is excluded as irrelevant only after its detail page's
+observed immutable `var user_id` reference is unique and absent from ALL current
+Summary customer IDs. No customer-name matching is used. Missing/ambiguous
+references or defects belonging to a current Summary customer still block.
+This is explicit membership proof, not dropping a malformed relevant record.
+ISO and day-first hyphenated UI date presentations are parsed unambiguously.
+Calendar/detail reads use at most four concurrent GETs, with memory-only cookies,
+bounded freshness and cancellation after any failure. Source write/send features
+remain absent. Final real-data validation continues; automatic delivery is NOT
+operational yet, despite owner requirement for future server-only automation.

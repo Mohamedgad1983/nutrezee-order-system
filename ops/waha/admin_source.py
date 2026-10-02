@@ -300,27 +300,49 @@ def text(value):
 
 
 def iso(value):
-    try:
-        return datetime.strptime(text(value), '%d-%m-%Y').date().isoformat()
-    except ValueError:
-        raise Blocked('order_date_schema') from None
+    value = text(value)
+    for pattern in ('%d-%m-%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(value, pattern).date().isoformat()
+        except ValueError:
+            pass
+    raise Blocked('order_date_schema')
 
 
-def index(rows, min_start=None):
+def index(rows, min_start=None, irrelevant_invalid=None):
     result = {}
     for row in rows:
         number = text(row[1])
         identities = set(re.findall(r'/orders/view/(\d+)', str(row)))
         if not number.isdigit() or number in result:
             raise Blocked('order_number_duplicate_or_schema')
-        start = iso(row[5])
+        try:
+            start = iso(row[5])
+        except Blocked:
+            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+                continue
+            raise Blocked('order_date_review_required_order_'+next(iter(identities))) from None
         if min_start is not None and start < min_start:
             continue
         match = re.search(r'\[([+0-9 ()-]+)\]', text(row[2]))
         if not match:
-            raise Blocked('order_phone_schema')
-        result[number] = {'id': next(iter(identities)), 'phone': phone(match[1]),
-                          'start': start, 'end': iso(row[6]),
+            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+                continue
+            raise Blocked('order_contact_review_required_order_'+next(iter(identities)))
+        try:
+            normalized = phone(match[1])
+        except SourceBlocked:
+            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+                continue
+            raise Blocked('order_contact_review_required_order_'+next(iter(identities))) from None
+        try:
+            end = iso(row[6])
+        except Blocked:
+            if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
+                continue
+            raise Blocked('order_date_review_required_order_'+next(iter(identities))) from None
+        result[number] = {'id': next(iter(identities)), 'phone': normalized,
+                          'start': start, 'end': end,
                           'payment_list': {'success':'paid','pending':'pending','failed':'failed','refunded':'refunded'}.get(text(row[10]).lower(), 'unverified')}
     return result
 
@@ -348,14 +370,21 @@ def collect(session, limit=None):
     print(json.dumps({'phase':'active_index','records':len(active_raw),'live_enabled':False}),flush=True)
     pending_raw = paged(session.get, status='pending')
     print(json.dumps({'phase':'pending_index','records':len(pending_raw),'live_enabled':False}),flush=True)
-    active = index(active_raw)
     cohorts = summaries(session.get, today)
+    user_ids = {row[0]['text'] for entries in cohorts.values() for row in entries}
+    def irrelevant_invalid(identity):
+        html = session.get('/orders/view/'+identity)
+        ids = set(re.findall(r'var\s+user_id\s*=\s*(\d+)\s*;', html))
+        if len(ids) != 1:
+            raise Blocked('invalid_contact_customer_reference_unverified')
+        return next(iter(ids)) not in user_ids
+    active = index(active_raw, irrelevant_invalid=irrelevant_invalid)
     numbers = set()
     for rows in cohorts.values():
         numbers.update(row[1]['text'] for row in rows)
     if not numbers.issubset(active):
         raise Blocked('summary_active_membership_conflict')
-    pending = index(pending_raw, min(active[n]['start'] for n in numbers)) if numbers else {}
+    pending = index(pending_raw, min(active[n]['start'] for n in numbers), irrelevant_invalid) if numbers else {}
     rows = []
     detail_cache = {}
     def payment_for(order):
@@ -363,14 +392,14 @@ def collect(session, limit=None):
             detail_cache[order['id']] = detail(session, order)
         return detail_cache[order['id']]
     all_orders = list(active.values())+list(pending.values())
-    for number in sorted(numbers, key=int):
+    def read_number(number):
         if datetime.now(KUWAIT)-began > MAX_AGE-timedelta(minutes=5):
             raise Blocked('admin_collection_freshness_exceeded')
         current = active[number]
         schedule = calendar(session.get('/orders/vieworderwiseoffdays/'+current['id']), current['start'], current['end'])
         future_service = sum(day['date'] > today and day['state'] == 'service' for day in schedule)
         if future_service != 2:
-            continue
+            return None
         payment_detail = payment_for(current)
         history = []
         for later in all_orders:
@@ -380,13 +409,27 @@ def collect(session, limit=None):
                 if later['start'] > current['start']:
                     history.append({'state':'active','payment_detail':payment_for(later),'payment_list':later['payment_list']})
         parse(session.get('/orders/getMealsDateWiseFilter/all/'+current['id']))
-        rows.append({'subscription_id':current['id'],'phone':current['phone'], 'state':'active',
+        return {'subscription_id':current['id'],'phone':current['phone'], 'state':'active',
                      'payment_detail':payment_detail,'payment_list':current['payment_list'],
                      'schedule_complete':True,'renewals_complete':True,'updated_at':began.isoformat(),
-                     'schedule':schedule,'later_renewals':history})
-        print(json.dumps({'mode':'source-read-only','two_day_candidates_checked':len(rows),'total_summary_orders':len(numbers),'live_enabled':False}),flush=True)
-        if limit and len(rows) >= limit:
-            return {'schema_version':1,'complete':False,'payment_authority':'order_detail','source_id':'nutreeze-admin-ui-v1','captured_at':began.isoformat(),'subscriptions':rows}
+                     'schedule':schedule,'later_renewals':history}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    pool = ThreadPoolExecutor(max_workers=4)
+    futures = [pool.submit(read_number, number) for number in sorted(numbers,key=int)]
+    processed = 0
+    try:
+        for future in as_completed(futures):
+            row = future.result()
+            processed += 1
+            if row is not None:
+                rows.append(row)
+            if processed % 25 == 0:
+                print(json.dumps({'mode':'source-read-only','calendar_orders_checked':processed,'total_summary_orders':len(numbers),'two_day_candidates_checked':len(rows),'live_enabled':False}),flush=True)
+            if limit and len(rows) >= limit:
+                return {'schema_version':1,'complete':False,'payment_authority':'order_detail','source_id':'nutreeze-admin-ui-v1','captured_at':began.isoformat(),'subscriptions':rows}
+    finally:
+        pool.shutdown(wait=True,cancel_futures=True)
+    rows.sort(key=lambda r:r['subscription_id'])
     digest = lambda value: hashlib.sha256(json.dumps(value,sort_keys=True).encode()).digest()
     if digest(active_raw) != digest(paged(session.get)) or digest(pending_raw) != digest(paged(session.get,status='pending')) or digest(cohorts) != digest(summaries(session.get,today)):
         raise Blocked('admin_snapshot_changed_during_collection')
