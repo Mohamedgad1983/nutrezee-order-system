@@ -14,7 +14,7 @@ def schedule(rows):
 
 class AdminSourceTests(unittest.TestCase):
     def test_read_allowlist(self):
-        for p in ['/admin','/orders/view/12','/orders/ajaxlist/Active?draw=1&start=0&length=100','/summary/off_day/2026-10-02']:
+        for p in ['/admin','/orders/view/12','/orders/ajaxlist/Active?draw=1&start=0&length=100','/summary/off_day/2026-10-02','/orders/getMealsDateWiseFilter/2026-10-03/12']:
             self.assertTrue(allowed(p))
         for p in ['https://evil.invalid/admin','//evil.invalid/admin','/orders/ChangeOffDay','/orders/create','/logout','/orders/view/../create','/orders/view/12?delete=1','/orders/ajaxlist/Active?draw=1&start=0&length=1001','/logincheck']:
             self.assertFalse(allowed(p))
@@ -92,7 +92,7 @@ class CollectionTests(unittest.TestCase):
         row=result['subscriptions'][0]
         self.assertEqual(row['payment_detail'],'paid')
         self.assertEqual(row['later_renewals'][0]['payment_detail'],'pending')
-        self.assertEqual(row['schedule'][1]['state'],'off')
+        self.assertEqual([x['date'] for x in row['schedule']],['2026-10-03','2026-10-04'])
 
     def test_sample_never_certifies_complete(self):
         from admin_source import collect
@@ -137,3 +137,25 @@ class InvalidContactScopeTests(unittest.TestCase):
     def test_historical_date_filter_does_not_infer_contact_identity(self):
         from admin_source import index
         self.assertEqual(index([self.row()],min_start='2026-10-05'),{})
+
+class TransportTests(unittest.TestCase):
+    def test_read_rejects_cross_origin_post_and_unknown_mutation(self):
+        import urllib.request
+        from admin_source import Session
+        session=Session.__new__(Session)
+        for request in [urllib.request.Request('https://evil.invalid/admin'),urllib.request.Request('https://nutreeze.com/orders/ChangeOffDay',data=b'x'),urllib.request.Request('http://nutreeze.com/admin'),urllib.request.Request('https://nutreeze.com/admin',method='DELETE')]:
+            with self.assertRaises(Blocked):session.read(request)
+
+    def test_unambiguous_ui_dates(self):
+        from admin_source import iso
+        self.assertEqual(iso('2026-10-02'),'2026-10-02')
+        self.assertEqual(iso('02-10-2026'),'2026-10-02')
+        with self.assertRaises(Blocked):iso('10/02/26')
+
+
+class FutureCalendarTests(unittest.TestCase):
+    def test_past_flags_are_not_fabricated_or_required_for_future_days(self):
+        html=schedule('<tr><td>1</td><td>2026-10-01</td><td>Thursday</td><td>-</td><td>-</td></tr>'+day('2026-10-02',True)+day('2026-10-03')+day('2026-10-04'))
+        result=calendar(html,'2026-10-01','2026-10-04',today='2026-10-02')
+        self.assertEqual([r['date'] for r in result],['2026-10-03','2026-10-04'])
+        self.assertTrue(all(r['state']=='service' for r in result))

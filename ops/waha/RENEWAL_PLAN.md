@@ -212,3 +212,14 @@ Calendar/detail reads use at most four concurrent GETs, with memory-only cookies
 bounded freshness and cancellation after any failure. Source write/send features
 remain absent. Final real-data validation continues; automatic delivery is NOT
 operational yet, despite owner requirement for future server-only automation.
+
+Real collection identified the oversized response as all-history Order Meals
+for internal order 19479, not a missing future schedule. Use the observed UI
+`getMealsDateWiseFilter/<exact-date>/<internal-id>` route for each of the two
+verified future service dates instead. The future schedule remains fully checked
+through explicit Off Day/Freeze Day controls. Historical flags are neither
+fabricated nor required for today's future-date decision. Bounded transport
+accepts up to 64 MiB for legitimate detail pages; no historical grids are exported.
+Every transport request now enforces origin, method, path and query guards,
+including rejecting arbitrary POSTs and cross-origin requests. A Kuwait date
+rollover aborts acquisition rather than changing eligibility mid-snapshot.

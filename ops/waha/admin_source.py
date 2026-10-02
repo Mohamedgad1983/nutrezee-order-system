@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 
 ORIGIN = 'https://nutreeze.com'
+MAX_RESPONSE = 64 * 1024 * 1024
 
 
 class Blocked(ValueError):
@@ -36,7 +37,7 @@ def allowed(path, login=False):
             return False
         if not 1 <= int(query['length'][0]) <= 1000:
             return False
-    return bool(re.fullmatch(r'/(?:admin|dashboard|summary(?:/(?:0|off_day|meal_not_added|meal_added|suspend_day)/\d{4}-\d{2}-\d{2})?|orders/(?:list/(?:Active|pending)|ajaxlist/(?:Active|pending)|view/\d+|vieworderwiseoffdays/\d+|getMealsDateWiseFilter/all/\d+))', u.path))
+    return bool(re.fullmatch(r'/(?:admin|dashboard|summary(?:/(?:0|off_day|meal_not_added|meal_added|suspend_day)/\d{4}-\d{2}-\d{2})?|orders/(?:list/(?:Active|pending)|ajaxlist/(?:Active|pending)|view/\d+|vieworderwiseoffdays/\d+|getMealsDateWiseFilter/(?:all|\d{4}-\d{2}-\d{2})/\d+))', u.path))
 
 
 class Markup(HTMLParser):
@@ -103,7 +104,7 @@ def table(p, headers):
     return matches[0][1:]
 
 
-def calendar(html, start, end):
+def calendar(html, start, end, today=None):
     rows = table(parse(html), ['No', 'Date', 'Day', 'Off Day', 'Freeze Day'])
     out = []
     for row in rows:
@@ -113,6 +114,8 @@ def calendar(html, start, end):
             day = date.fromisoformat(row[1]['text'])
         except ValueError:
             raise Blocked('calendar_date_schema') from None
+        if today is not None and day <= date.fromisoformat(today):
+            continue
         flags = []
         for cell in row[3:]:
             inputs = cell['inputs']
@@ -133,6 +136,8 @@ def calendar(html, start, end):
     final = date.fromisoformat(end)
     if final < current or (final-current).days > 10000:
         raise Blocked('calendar_range_invalid')
+    if today is not None:
+        current = max(current, date.fromisoformat(today)+timedelta(days=1))
     while current <= final:
         expected.append(current.isoformat())
         current += timedelta(days=1)
@@ -254,11 +259,16 @@ class Session:
         parse(self.get('/dashboard'))
 
     def read(self, req):
+        u = urllib.parse.urlsplit(req.full_url)
+        method = req.get_method()
+        path = u.path + ('?'+u.query if u.query else '')
+        if u.scheme != 'https' or u.netloc != 'nutreeze.com' or method not in ('GET','POST') or not allowed(path, login=method=='POST'):
+            raise Blocked('admin_transport_request_blocked')
         try:
             with self.opener.open(req, timeout=20) as response:
-                value = response.read(10*1024*1024+1)
-            if len(value) > 10*1024*1024:
-                raise Blocked('admin_response_too_large')
+                value = response.read(MAX_RESPONSE+1)
+            if len(value) > MAX_RESPONSE:
+                raise Blocked('admin_response_too_large_path_'+u.path.replace('/','_'))
             return value.decode('utf-8')
         except Blocked:
             raise
@@ -270,7 +280,11 @@ class Session:
             raise Blocked('admin_path_blocked')
         html = self.read(urllib.request.Request(ORIGIN+path))
         if not signing_in:
-            parse(html)
+            auth = Markup()
+            for tag in re.findall(r'<input\b[^>]*>', html, re.I):
+                auth.feed(tag)
+            if auth.login:
+                raise Blocked('admin_relogin_required')
         return html
 
 
@@ -324,7 +338,7 @@ def index(rows, min_start=None, irrelevant_invalid=None):
             raise Blocked('order_date_review_required_order_'+next(iter(identities))) from None
         if min_start is not None and start < min_start:
             continue
-        match = re.search(r'\[([+0-9 ()-]+)\]', text(row[2]))
+        match = re.search(r'\[([+0-9٠-٩ ()-]+)\]', text(row[2]))
         if not match:
             if irrelevant_invalid is not None and irrelevant_invalid(next(iter(identities))):
                 continue
@@ -396,7 +410,10 @@ def collect(session, limit=None):
         if datetime.now(KUWAIT)-began > MAX_AGE-timedelta(minutes=5):
             raise Blocked('admin_collection_freshness_exceeded')
         current = active[number]
-        schedule = calendar(session.get('/orders/vieworderwiseoffdays/'+current['id']), current['start'], current['end'])
+        try:
+            schedule = calendar(session.get('/orders/vieworderwiseoffdays/'+current['id']), current['start'], current['end'], today)
+        except Blocked as exc:
+            raise Blocked(str(exc)+'_order_'+current['id']) from None
         future_service = sum(day['date'] > today and day['state'] == 'service' for day in schedule)
         if future_service != 2:
             return None
@@ -408,7 +425,9 @@ def collect(session, limit=None):
                     raise Blocked('renewal_order_identity_ambiguous')
                 if later['start'] > current['start']:
                     history.append({'state':'active','payment_detail':payment_for(later),'payment_list':later['payment_list']})
-        parse(session.get('/orders/getMealsDateWiseFilter/all/'+current['id']))
+        for entry in schedule:
+            if entry['state'] == 'service':
+                parse(session.get('/orders/getMealsDateWiseFilter/'+entry['date']+'/'+current['id']))
         return {'subscription_id':current['id'],'phone':current['phone'], 'state':'active',
                      'payment_detail':payment_detail,'payment_list':current['payment_list'],
                      'schedule_complete':True,'renewals_complete':True,'updated_at':began.isoformat(),
@@ -435,6 +454,8 @@ def collect(session, limit=None):
         raise Blocked('admin_snapshot_changed_during_collection')
     if datetime.now(KUWAIT)-began > MAX_AGE-timedelta(minutes=5):
         raise Blocked('admin_collection_freshness_exceeded')
+    if datetime.now(KUWAIT).date() != began.date():
+        raise Blocked('collection_crossed_kuwait_day')
     return {'schema_version':1,'complete':True,'payment_authority':'order_detail','source_id':'nutreeze-admin-ui-v1','captured_at':began.isoformat(),'subscriptions':rows}
 
 
