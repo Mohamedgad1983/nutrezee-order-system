@@ -132,3 +132,6 @@ inside the WhatsApp hostname. All other current live routes stayed identical.
 Persistent Caddyfile.active also has the new `/bulk/*` handle. Never reload the
 old `/etc/caddy/Caddyfile` or `/tmp/Caddyfile.waha`; those omit the bulk route.
 For future changes, read the live config first and preserve unrelated routes.
+
+### Dashboard Bulk extension
+Bulk opens within the original WAHA shell at `/dashboard/#bulk`. `/bulk/` redirects users to that panel; only `#embedded` renders the inner form. It uses WAHA's theme/font resources. The installer `/opt/waha/bulk/install-dashboard-extension.py` injects the separately identifiable extension into stock HTML entry points, retaining originals under `/opt/waha/dashboard-extension/original`. Run it before first use of the new compose HTML mounts. No WAHA bundle files are edited. For an image upgrade, verify new HTML/DOM entry points and regenerate from that image; never carry stale HTML across image versions. Rollback: restore original HTML and remove the seven extension mounts. No campaign data or sending logic is changed.

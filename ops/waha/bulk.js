@@ -1,9 +1,12 @@
 'use strict';
+const embedded=new URLSearchParams(location.search).get('embedded')==='1'||location.hash==='#embedded';
+if(embedded)document.documentElement.classList.add('embedded');
+else if(window.top===window)location.replace('/dashboard/#bulk');
 const $ = id => document.getElementById(id);
 let language = 'ar';
 const translations = {
 'تم إرسالها':'Sent','في الانتظار · Queue':'Pending · Queue','قبلها WAHA؛ الوصول والقراءة غير مؤكدين.':'Accepted by WAHA; delivery and read status are unconfirmed.','تشمل المسودات والحملات المتوقفة.':'Includes drafts and paused campaigns.','إجمالي كل الحملات · تحديث تلقائي كل 5 ثوانٍ':'All campaigns · Updates automatically every 5 seconds',
-'واتساب':'WhatsApp','لوحة WAHA ↗':'WAHA dashboard ↗','رسالة واحدة كل دقيقة':'One message per minute','الإرسال الجماعي':'Bulk messaging','أضف الأرقام والرسالة، راجع الحملة، ثم ابدأ الإرسال عندما تكون جاهزًا.':'Add recipients and a message, review the campaign, then start when ready.',
+'مثال: عرض نهاية الأسبوع':'Example: Weekend offer','رقم واحد في كل سطر':'One number per line','اكتب رسالتك هنا…':'Write your message here…','واتساب':'WhatsApp','لوحة WAHA ↗':'WAHA dashboard ↗','رسالة واحدة كل دقيقة':'One message per minute','الإرسال الجماعي':'Bulk messaging','أضف الأرقام والرسالة، راجع الحملة، ثم ابدأ الإرسال عندما تكون جاهزًا.':'Add recipients and a message, review the campaign, then start when ready.',
 'حملة جديدة':'New campaign','اسم الحملة':'Campaign name','أرقام المستلمين':'Recipient numbers','نص الرسالة':'Message text','رقم واحد في كل سطر. الرقم الكويتي 8 أرقام أو رقم دولي يبدأ بكود الدولة. الأرقام المكررة تُحذف تلقائيًا.':'One number per line. Eight digits means Kuwait; international numbers include the country code. Duplicates are removed.',
 'أو اختر ملف CSV / TXT بعمود أرقام واحد':'Or select a one-column CSV / TXT file','نص واحد لكل المستلمين؛ لا توجد متغيرات أو مرفقات في هذه النسخة.':'The same plain text goes to every recipient. Variables and attachments are not supported.',
 'حفظ ومراجعة الحملة':'Save and review campaign','الحفظ لا يرسل أي رسالة. الحد التقني للحملة 10000 رقم.':'Saving sends nothing. Technical limit: 10,000 numbers per campaign.',
@@ -34,11 +37,15 @@ function render(data){const totals=campaignTotals(data.campaigns);$('sent-count'
 async function refresh(){try{render(await api('campaigns'));}catch(error){notice(error.message,true);}}
 $('draft').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;const submit=event.target.querySelector('button');submit.disabled=true;try{await api('campaigns',{name:$('name').value,numbers:$('numbers').value,message:$('message').value});notice('تم حفظ المسودة وإزالة تكرار الأرقام. لم يتم إرسال أي رسالة. راجعها أسفل الصفحة قبل البدء.');event.target.reset();await refresh();}catch(error){notice(error.message,true);}finally{busy=false;submit.disabled=false;}});
 $('file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;if(file.size>700000){notice('الملف أكبر من الحد المسموح 700 كيلوبايت.',true);return;}$('numbers').value=await file.text();});
-$('refresh').addEventListener('click',refresh);refresh();setInterval(()=>{if(!busy)refresh();},5000);
+$('refresh').addEventListener('click',refresh);setInterval(()=>{if(!busy)refresh();},5000);
 
 $('language').addEventListener('click',()=>{
 const english=language==='ar';language=english?'en':'ar';document.documentElement.lang=language;document.documentElement.dir=english?'ltr':'rtl';document.title=english?'Nutreeze | Bulk messaging':'Nutreeze | الإرسال الجماعي';
 const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const reverse=Object.fromEntries(Object.entries(translations).map(([a,e])=>[e,a]));let node;
 while((node=walker.nextNode())){if(node.parentElement.closest('#campaigns,#notice,#language'))continue;const key=node.nodeValue.trim();const value=english?translations[key]:reverse[key];if(value)node.nodeValue=node.nodeValue.replace(key,value);}
+for(const field of document.querySelectorAll('[placeholder]')){const key=field.placeholder;field.placeholder=(english?translations[key]:reverse[key])||key;}
 $('language').textContent=english?'العربية':'English';$('empty').textContent=tr('لم تُضف حملات بعد. الإرسال متوقف.');$('notice').textContent='';refresh();
 });
+
+// Owner-selected default: match the English WAHA dashboard.
+$('language').click();

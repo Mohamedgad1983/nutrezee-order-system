@@ -299,7 +299,7 @@ def handler(store, username, password, origin):
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
-            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
             if code == 401:
                 self.send_header('WWW-Authenticate', 'Basic realm="Nutreeze batch sender", charset="UTF-8"')
             self.end_headers()

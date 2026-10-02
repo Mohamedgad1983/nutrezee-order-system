@@ -11,6 +11,13 @@ services:
     volumes:
       - ./sessions:/app/.sessions
       - ./media:/app/.media
+      - ./dashboard-extension/patched/index.html:/app/dist/dashboard/index.html:ro
+      - ./dashboard-extension/patched/200.html:/app/dist/dashboard/200.html:ro
+      - ./dashboard-extension/patched/404.html:/app/dist/dashboard/404.html:ro
+      - ./dashboard-extension/patched/Workers/index.html:/app/dist/dashboard/Workers/index.html:ro
+      - ./dashboard-extension/patched/Sessions/index.html:/app/dist/dashboard/Sessions/index.html:ro
+      - ./dashboard-extension/patched/event-monitor/index.html:/app/dist/dashboard/event-monitor/index.html:ro
+      - ./dashboard-extension/patched/Login/index.html:/app/dist/dashboard/Login/index.html:ro
     mem_limit: 2g
     cpus: 2
     shm_size: 256m
