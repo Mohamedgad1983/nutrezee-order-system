@@ -170,3 +170,12 @@ Subscribers (marketing list) · content/legal pages · gallery/video · advertis
 ## After the engineering queue empties
 
 WP-DATA-01 (real Batch 1+2 dry-runs once S1 lands) → WP-14 execution (restore drill, L1/L2 impl post-workshop, TS-S/TS-A on staging, perf baseline, training, UAT, pilot) → cutover weekend → 30-day reconciliation clock → legacy order-ops retired. Full sequence: `Legacy_Core_Gap_To_Cutover.md` §3.
+
+## OPS-WAHA-RENEWAL side-task cursor — 2026-10-02
+
+A74 dry-run server wiring installed; next scheduled read Oct3 13:00Kuwait.
+BLOCKED acceptance: complete stable Admin read (latest live counts changed,
+no certified snapshot), then owner test acceptance and shared Bulk queue/recheck
+integration before sending. Draft PR91 unmerged, functional fd2402a CI15/15.
+No real source job remains running; manualcampaign1 complete/sent40 unchanged.
+This scoped side task does not advance the general engineering frontier above.

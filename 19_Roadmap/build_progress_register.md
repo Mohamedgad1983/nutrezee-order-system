@@ -366,3 +366,9 @@ unchanged. No renewal sends; live shared Bulk queue path not implemented.
 Status BLOCKED on coherent complete real source read + owner acceptance/live
 integration. DraftPR91 remains open/unmerged; final commit/CI evidence follows.
 General engineering queue unchanged by this side task.
+
+Final functional code `fd2402a`, pushed on build/ops-waha-renewal-dryrun,
+Draft PR #91 OPEN/unmerged. Push CI37017726852 and PR CI37017735640 both pass
+15/15 jobs on this exact head. 68 local and 53 server tests pass. All real source
+jobs are terminal; latest `active_count_changed`, no running job/no snapshot.
+The real source acceptance blocker remains; no renewal messages sent.
