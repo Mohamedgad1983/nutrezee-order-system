@@ -88,3 +88,27 @@ certified or deployed and no complete source snapshot has been produced. The
 existing evaluator/timer remains dry-run-only, network-disabled and blocked;
 manual campaigns and WAHA remain unchanged. After access recovery, predeclare
 adapter/parser files and validate actual markup before implementing extraction.
+
+Predeclared follow-up: `admin_login_setup.py`, `test_admin_login_setup.py` and
+this plan. Owner-run hidden terminal input updates only the two existing
+site-specific credential keys in their canonical root-owned file. The helper
+must preserve all other bytes/keys, owner and mode; reject unsafe paths or
+ambiguous keys; never authenticate, print values or create an account.
+
+Secure setup evidence: canonical configuration verified root UID 0, mode 0600.
+No matching legacy/migration log files were present directly in `/var/log` or
+`/opt/nutrezee`; the failed probe did not retain response errors or redirect
+history. Cause therefore remains UNKNOWN (CSRF/validation/credentials/session
+cannot be distinguished), not proven wrong password. No repeat login attempted.
+No supported secure configuration UI was found in repository runbooks; they
+identify this canonical env file as the existing setup path.
+
+Owner terminal command after helper installation:
+`sudo python3 /opt/waha/renewal/admin_login_setup.py`
+Both email and password prompts are hidden. Use the existing account that the
+owner has independently verified through normal Admin login. This helper does
+not create credentials, change file permissions, authenticate or activate sends.
+Synthetic tests verify literal shell quoting, preservation of other settings,
+and refusal of missing/duplicate keys or multiline inputs. 37 scoped tests pass.
+UI acquisition/parsing still needs authenticated markup; no speculative parser
+has been certified against unseen pagination/payment/calendar screens.
