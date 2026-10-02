@@ -58,3 +58,33 @@ opt-out audit retains its reason without logging the phone. Final supervised
 dry-run service status success, delivery disabled, source blocked. No actual
 individual source has been certified. Live shared Bulk claim/recheck/pacing
 integration is NOT shipped; activating delivery remains a separate gated unit.
+
+## Admin UI source clarification — 2026-10-02
+
+Owner clarification: obtain current individual data through existing Admin screens,
+not require an API contract. This supersedes the API-only acquisition assumption;
+source completeness and authoritative payment/calendar acceptance remain mandatory.
+
+Verified authenticated-access blocker: a supervised ephemeral read-only source
+probe used the existing root-held `/opt/nutrezee/legacy-migration.env` in place,
+GET `/admin`, parsed the form's `_csrf`, and POSTed only `/logincheck`.
+The response returned `/admin` with the password/login form still present.
+No credential value, CSRF value, cookie, customer record or raw HTML was output,
+copied or persisted. No credentials/configuration or services were changed.
+This proves authentication was not established; it does not establish whether
+credentials are invalid, expired or require another owner-managed login step.
+
+Required one-time secure owner setup: verify that the existing Admin account can
+log in at `https://nutreeze.com/admin`; if its credentials have changed, update
+only the existing root-protected canonical legacy-migration configuration through
+the owner's secure server administration channel (never through chat or git).
+Any additional interactive authentication must be completed through the supported
+owner login flow; browser sessions must not be copied to this service.
+
+Until authenticated access succeeds, summary cohort pagination, all Active order
+pages, authoritative detail payment, subsequent renewals and full Order Meals
+service/off/paused calendar coverage are UNVERIFIED. No UI extraction adapter is
+certified or deployed and no complete source snapshot has been produced. The
+existing evaluator/timer remains dry-run-only, network-disabled and blocked;
+manual campaigns and WAHA remain unchanged. After access recovery, predeclare
+adapter/parser files and validate actual markup before implementing extraction.
