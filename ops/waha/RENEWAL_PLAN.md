@@ -112,3 +112,14 @@ Synthetic tests verify literal shell quoting, preservation of other settings,
 and refusal of missing/duplicate keys or multiline inputs. 37 scoped tests pass.
 UI acquisition/parsing still needs authenticated markup; no speculative parser
 has been certified against unseen pagination/payment/calendar screens.
+
+Owner confirmed secure setup completed and normal browser login works. The
+subsequent server probe still returned `/admin` with login form. A corrected
+form submission parsed HTML attributes using HTMLParser (entity-decoded CSRF),
+used the same in-memory cookie jar, and included Origin/Referer, browser-style
+User-Agent and URL-encoded fields. It also returned the login form; no known
+CSRF, invalid-credential, missing-field or CAPTCHA error marker was detected.
+A session cookie existed, which does not establish authenticated access.
+Cause remains unverified. Do not repeatedly retry credentials or infer that
+browser authentication proves unattended server authentication. No source
+snapshot, authenticated pagination, calendar or payment completeness proof exists.
