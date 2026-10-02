@@ -262,7 +262,8 @@ Status vocabulary: NOT STARTED · IN PROGRESS (branch open) · BLOCKED (gate/NC 
 | A71 | 2026-10-01 | Owner requested WAHA as the replacement for `/opt/evolution`. Authorizes an isolated `/opt/waha` gateway and replacement of only the existing WhatsApp HTTPS route, preserving Evolution data/backups and unrelated running services. Existing credentials reused; no secret generation, session creation, pairing, message sends, Fleetbase/vendor edits or unrelated restart. | Owner directive; `ops/waha/PLAN.md` |
 | A72 | 2026-10-02 | Owner requested preparation of bulk WAHA messaging while recipients/text will arrive later. Authorizes isolated batch sender and `/bulk/` route, manually reviewed drafts, explicit start, minimum 60-second global interval, pause/resume, durable send ledger and no automatic retry/resume of ambiguous work. Existing dashboard/API credentials reused; no new secrets, live campaign creation or message sends in preparation. | Owner directive; `ops/waha/BULK_PLAN.md` |
 | A73 | 2026-10-02 | Owner authorized integrating Bulk into the original WAHA shell/sidebar with its theme/fonts. Separately identifiable UI extension and protected HTML entry mounts; same-origin framing only, existing auth/CSRF/60-second queue preserved. No campaign sends or WAHA session restart. | Owner directive; `ops/waha/BULK_PLAN.md` |
-| *next: A74* | | | |
+| A74 | 2026-10-02 | Owner authorized daily 13:00 Kuwait renewal automation implementation/tests in existing WAHA; actual renewal delivery remains disabled pending acceptance. Two future service days, US15 15%, verified fresh individual data only. Source remains blocked on payment/schedule completeness. Isolated no-network dry-run schedule and protected audit/suppression; manual campaigns/auth unchanged. | Owner approval forwarded; `ops/waha/RENEWAL_PLAN.md` |
+| *next: A75* | | | |
 
 ## OPS-WAHA deployment session — 2026-10-01
 
@@ -309,3 +310,29 @@ COUNTERS release complete: PR #89 merged as `3039fe3`, implementation `90433a3`.
 A73 scoped dashboard integration: original header/sidebar, Bulk navigation and embedded campaign panel; original theme/font resources. Seven stock HTML originals retained and patched entries persisted by read-only compose mounts. CSP allows only same-origin embedding. Regression suite 15/15 and JS syntax pass. Only isolated empty Bulk worker restarted for its CSP header; WAHA sessions/proxy untouched. No campaign writes/sends. CI and final browser evidence follow.
 
 OPS-WAHA-DASHBOARD-BULK DONE: PR #90 merge `e5d8997`, final code `4d30224`; push CI `36990630806` and PR CI `36990637839` passed 15/15 each. Native Chrome verified English headings, counters, placeholders, fields and buttons inside the original WAHA shell, Bulk Messages sidebar entry, Workers navigation and unsaved-form retention (temporary UI test value cleared without saving). Live dashboard/Bulk/API HTTP 200, zero campaigns, session WORKING. Compose validation passed; seven original HTML backups retained. Only empty Bulk worker restarted for same-origin CSP; WAHA session and proxy not restarted. A73 recorded, no new ASM. No infrastructure blocker; next owner step recipients/message and explicit campaign start.
+
+## OPS-WAHA-RENEWAL — A74 dry-run acceptance-gated work
+
+Implemented isolated daily evaluation, source adapter validation, future-service
+days, renewal/payment holds, protected opt-out/audit and evaluation dedup. No
+live sender or campaign writes; existing manual campaigns are unchanged.
+ASM-059 records conservative freshness and pending-renewal holds. Complete
+fresh individual source/payment access is still BLOCKED, and live queue
+integration/activation is deferred until source and owner test acceptance.
+35 tests pass locally, including 20 new renewal cases and all 15 Bulk gates.
+Draft PR publication requested; no merge until requested acceptance.
+
+## Deployment proof — 2026-10-02
+
+Verified source remains blocked: no approved payment/schedule source configured.
+Installed only `/opt/waha/renewal/renewal.py` and `waha-renewal` service/timer,
+with root-only 0700 data directory and SQLite 0600. `systemd-analyze verify`
+passed. Timer enabled, next 2026-10-03 10:00 UTC = 13:00 Kuwait; Persistent=false.
+Two supervised no-network dry runs returned blocked, live_enabled=false, sent=0.
+Renewal delivery table empty. 20 renewal tests pass on the server; 35 combined
+regressions pass locally. All 42 existing container start/restart records
+unchanged; manual campaign complete with 40 WAHA-accepted sends (not delivery
+receipts), untouched by renewal work. Root-only journal emits no phones/messages.
+Existing source credentials/auth untouched; no new access or live campaign.
+Live sending BLOCKED on source contract + owner acceptance + shared Bulk queue
+integration. Draft PR/CI evidence follows.

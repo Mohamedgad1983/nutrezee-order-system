@@ -1,0 +1,52 @@
+# OPS-WAHA-RENEWAL — A74, dry-run acceptance gate
+
+Owner approval forwarded 2026-10-02: daily 13:00 Asia/Kuwait implementation/testing,
+actual renewal delivery disabled until owner reviews test evidence. Existing manual
+campaigns, WAHA auth, credentials, session and running services must not change.
+
+Predeclared: this plan, renewal.py, test_renewal.py, renewal-source.example.json,
+waha-renewal.service, waha-renewal.timer, README.md, a scoped extension of the
+existing waha-bulk CI job, append-only build register and assumption register.
+
+Verified blocker: supported Partner orders/meal-history/daily-deliveries do not
+provide authoritative payment detail; dashboard CI is aggregate-only, legacy
+incremental archives do not refresh existing payment records. No available
+complete fresh individual source contract has been verified. Never treat the
+old Days Left 3 review cohort as eligibility for the two-service-day workflow.
+
+Conservative implementation: isolated root-operated, durable dry-run evaluator
+and schedule. Source adapter remains blocked unless an individually verified,
+complete, fresh export is explicitly configured by operations. No HTTP credential
+acquisition, guessed endpoints, source sync, campaign changes, WAHA calls or live
+send path. Fixture input exists only in tests. Source agreement is deployment
+configuration; cannot be inferred from workbook or aggregate data.
+
+Eligibility: exactly two distinct future service dates (today excluded), explicitly
+service/off/paused/cancelled status, complete full schedule and later renewal list,
+authoritative payment detail equal to list presentation or fail closed. A later
+non-cancelled unpaid renewal holds for review, paid renewal excludes. Opt-out,
+per-subscription/normalized-phone dedup and same-message manual Bulk history
+(sending/sent/uncertain) exclude. Recheck method uses a new read at decision time;
+it is NOT a functioning send integration. Uncertain sends are never retried.
+
+Dry-run decisions/audit/run outcomes persist in protected SQLite, no PII in stdout.
+Double-run by Kuwait date is recorded and cannot repeat completed evaluation.
+Source failures remain retryable the same day. root CLI opt-out via stdin with
+required reason; append-only audit. Live activation needs source/access contract,
+owner acceptance, and a verified shared Bulk transactional queue integration;
+this release deliberately cannot send, even via CLI flags.
+
+## Deployment proof — 2026-10-02
+
+Verified source remains blocked: no approved payment/schedule source configured.
+Installed only `/opt/waha/renewal/renewal.py` and `waha-renewal` service/timer,
+with root-only 0700 data directory and SQLite 0600. `systemd-analyze verify`
+passed. Timer enabled, next 2026-10-03 10:00 UTC = 13:00 Kuwait; Persistent=false.
+Two supervised no-network dry runs returned blocked, live_enabled=false, sent=0.
+Renewal delivery table empty. 20 renewal tests pass on the server; 35 combined
+regressions pass locally. All 42 existing container start/restart records
+unchanged; manual campaign complete with 40 WAHA-accepted sends (not delivery
+receipts), untouched by renewal work. Root-only journal emits no phones/messages.
+Existing source credentials/auth untouched; no new access or live campaign.
+Live sending BLOCKED on source contract + owner acceptance + shared Bulk queue
+integration. Draft PR/CI evidence follows.

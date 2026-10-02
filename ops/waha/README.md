@@ -135,3 +135,57 @@ For future changes, read the live config first and preserve unrelated routes.
 
 ### Dashboard Bulk extension
 Bulk opens within the original WAHA shell at `/dashboard/#bulk`. `/bulk/` redirects users to that panel; only `#embedded` renders the inner form. It uses WAHA's theme/font resources. The installer `/opt/waha/bulk/install-dashboard-extension.py` injects the separately identifiable extension into stock HTML entry points, retaining originals under `/opt/waha/dashboard-extension/original`. Run it before first use of the new compose HTML mounts. No WAHA bundle files are edited. For an image upgrade, verify new HTML/DOM entry points and regenerate from that image; never carry stale HTML across image versions. Rollback: restore original HTML and remove the seven extension mounts. No campaign data or sending logic is changed.
+
+### Renewal assessment — DRY-RUN only (A74)
+
+`waha-renewal.timer` runs at 13:00 Asia/Kuwait (10:00 UTC), no boot catch-up,
+`Restart=no`. The evaluator has no WAHA transport, campaign writer or live CLI
+flag. Its systemd sandbox prohibits Internet sockets. Existing Basic Auth,
+manual campaigns, credentials and all other services stay unchanged.
+
+Default result is `blocked`: no fresh individually verified source is configured.
+Supported Partner integration lacks authoritative payment details; neither
+aggregate BI nor archived June imports can substitute. Operators must obtain
+a documented read-only individual API/export contract providing complete
+schedules (service/off/paused/cancelled), stable subscription/customer identifiers,
+phone, later renewals and detail-level payment states. Capture and row updates
+must be within 30 minutes; list/detail conflicts and unpaid renewals hold.
+
+A reviewed export adapter may be configured by operations with
+`RENEWAL_SOURCE_PATH`, `RENEWAL_SOURCE_ID`, `RENEWAL_SOURCE_VERIFIED=yes` in
+root-only `/opt/waha/renewal-source.env`. Do not set verified until evidence
+validates the actual upstream data and update mechanism. The example JSON is
+fixture-only, never an approved source. Required subscription fields are
+`subscription_id`, `phone`, `state=active`, `updated_at`, `schedule_complete`,
+`renewals_complete`, `payment_detail`, `payment_list`, `schedule` (unique dates
+and states), and `later_renewals` (state/detail/list payment). Source metadata
+requires `schema_version=1`, `source_id`, `captured_at`, `complete=true` and
+`payment_authority=order_detail`. Pending/conflicting/missing payment blocks.
+
+Today is excluded: exactly two FUTURE service dates qualify. Friday-off
+ending Oct 4 has Oct 3/4 = two; weekend-off has Oct 4 = one; pauses Oct 3/5
+through Oct 7 leave Oct 4/6/7 = three. Expiry date/Days Left presentation is
+not used. No actual eligibility claims are made while the source is blocked.
+
+Protected state is `/opt/waha/renewal-data/renewal.sqlite3` (0600 in 0700).
+Run/decision/audit records persist across restarts. A completed Kuwait-day run
+cannot repeat; source failures can be assessed again. The recheck API reads
+source again and consults suppression, previous subscription/phone deliveries,
+and the same-message manual Bulk send/uncertain ledger read-only. This is
+evaluation infrastructure, **not a completed shared live sender integration**.
+Live acceptance must add a tested transactionally shared Bulk queue/throttle,
+claim/recheck lifecycle and ambiguous-send reconciliation before enabling delivery.
+The existing bulk interval and active campaigns are not touched by assessment.
+
+Operator opt-out (root SSH only, no browser permission changes):
+`python3 /opt/waha/renewal/renewal.py --opt-out --reason 'Customer requested stop'`
+then enter the phone on stdin. It is normalized, persisted and audited; never
+printed. Suppression applies to the new renewal assessment, not existing manual
+campaigns. Read summary with `journalctl -u waha-renewal.service --no-pager`;
+stdout contains counts/error codes only. No new credentials are created.
+
+To install: create `/opt/waha/renewal` and root-only `renewal-data`; copy source
+and the two units; `systemd-analyze verify` both units, reload systemd and
+enable only this timer. A supervised `systemctl start waha-renewal.service`
+verifies a dry assessment without sending or invoking source sync. Disable
+only `waha-renewal.timer` for rollback; protected audit/history stays retained.

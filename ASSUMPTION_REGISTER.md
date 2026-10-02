@@ -101,3 +101,12 @@ Risk scale:
 | 2026-08-08 | A35 superseded ASM-055's shared-credential model and added ASM-056 for the initial code-derived production usernames. |
 | 2026-08-12 | Added ASM-057 for fail-closed canonicalization of repeated rows from the authoritative Partner daily-deliveries endpoint. |
 | 2026-08-12 | Added ASM-058 for the PII-free Driver Orders membership manifest after exact set comparison found one API-only Aug-13 order. |
+
+## ASM-059 — renewal dry-run freshness and pending-renewal hold
+
+2026-10-02, A74; sponsor-review-required [NC]. Conservative default: source
+and individual updates older than 30 minutes hold; a non-cancelled later
+renewal with pending/unknown payment holds for review rather than sending a
+second promotion. Only future service dates count; today is excluded, per
+verified calendar examples. This does not certify any upstream source or
+authorize live delivery. Config/contract review required before acceptance.

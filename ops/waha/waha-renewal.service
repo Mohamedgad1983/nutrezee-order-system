@@ -1,0 +1,19 @@
+[Unit]
+Description=WAHA renewal eligibility assessment (DRY-RUN ONLY)
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /opt/waha/renewal/renewal.py
+EnvironmentFile=-/opt/waha/renewal-source.env
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/waha/renewal-data
+ReadOnlyPaths=/opt/waha/bulk-data
+RestrictAddressFamilies=AF_UNIX
+Restart=no
+StandardOutput=journal
+StandardError=journal
