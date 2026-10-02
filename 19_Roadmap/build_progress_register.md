@@ -372,3 +372,5 @@ Draft PR #91 OPEN/unmerged. Push CI37017726852 and PR CI37017735640 both pass
 15/15 jobs on this exact head. 68 local and 53 server tests pass. All real source
 jobs are terminal; latest `active_count_changed`, no running job/no snapshot.
 The real source acceptance blocker remains; no renewal messages sent.
+
+Final redirect query/fragment guard regression raises the validated count to 69 local / 54 VPS tests, all passing. No new source job or sending was triggered.

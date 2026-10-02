@@ -214,3 +214,21 @@ class ConcurrentSubscriptionTests(unittest.TestCase):
         row=result['subscriptions'][0]
         self.assertFalse(row['renewals_complete'])
         self.assertEqual(eligibility(row,datetime.now(KUWAIT)),'incomplete_individual_schedule_or_renewals')
+
+class RedirectGuardTests(unittest.TestCase):
+    def test_redirect_cannot_add_unapproved_query_or_fragment(self):
+        import urllib.request
+        from unittest.mock import patch,MagicMock
+        from admin_source import Session
+        handlers=[]
+        def build(*items):
+            handlers.extend(items)
+            return MagicMock()
+        def get(session,path,signing_in=False):
+            return '<input name="_csrf" value="synthetic">' if path=='/admin' else '<h1>Dashboard</h1>'
+        with patch('admin_source.urllib.request.build_opener',side_effect=build),patch.object(Session,'get',get),patch.object(Session,'read',return_value='<h1>Dashboard</h1>'):
+            Session('synthetic','synthetic')
+        guard=handlers[0]
+        request=urllib.request.Request('https://nutreeze.com/admin')
+        for url in ['https://nutreeze.com/orders/view/13?delete=1','https://nutreeze.com/dashboard/#anything','https://other.invalid/dashboard','http://nutreeze.com/dashboard']:
+            with self.assertRaises(Blocked):guard.redirect_request(request,None,302,'',{},url)

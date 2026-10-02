@@ -289,3 +289,7 @@ Draft PR #91 OPEN/unmerged. Push CI37017726852 and PR CI37017735640 both pass
 15/15 jobs on this exact head. 68 local and 53 server tests pass. All real source
 jobs are terminal; latest `active_count_changed`, no running job/no snapshot.
 The real source acceptance blocker remains; no renewal messages sent.
+
+Final transport regression: redirect guards validate the complete path/query/
+fragment, not just the pathname; an allowed read cannot redirect to a GET with
+an unapproved query. Same-origin HTTPS and the original allowlist remain strict.

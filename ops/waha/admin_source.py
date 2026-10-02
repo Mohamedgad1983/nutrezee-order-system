@@ -246,7 +246,8 @@ class Session:
         class Guard(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, req, fp, code, msg, headers, url):
                 u = urllib.parse.urlsplit(url)
-                if u.scheme != 'https' or u.netloc != 'nutreeze.com' or not allowed(u.path):
+                path = u.path + ('?'+u.query if u.query else '') + ('#'+u.fragment if u.fragment else '')
+                if u.scheme != 'https' or u.netloc != 'nutreeze.com' or not allowed(path):
                     raise Blocked('admin_redirect_blocked')
                 return super().redirect_request(req, fp, code, msg, headers, url)
         self.opener = urllib.request.build_opener(Guard(), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
