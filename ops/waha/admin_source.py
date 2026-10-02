@@ -131,7 +131,7 @@ def calendar(html, start, end):
     expected = []
     current = date.fromisoformat(start)
     final = date.fromisoformat(end)
-    if final < current or (final-current).days > 366:
+    if final < current or (final-current).days > 10000:
         raise Blocked('calendar_range_invalid')
     while current <= final:
         expected.append(current.isoformat())
@@ -156,14 +156,19 @@ def payment(html):
     return {'success': 'paid'}.get(value, value)
 
 
-def paged(get, size=100, status="Active"):
+class PageRows(list):
+    reported_total = None
+
+
+def paged(get, size=1000, status="Active"):
     if status not in ("Active", "pending"):
         raise Blocked("order_status_not_allowed")
-    all_rows = []
+    all_rows = PageRows()
     total = None
     identities = set()
-    while total is None or len(all_rows) < total:
-        start = len(all_rows)
+    # Admin pending counter is verified to undercount by seven. Prove physical
+    # UI membership by bounded empty-terminated scans, not by that counter.
+    for start in range(0, 10001, size):
         data = get('/orders/ajaxlist/'+status+'?' + urllib.parse.urlencode({'draw': 1, 'start': start, 'length': size}))
         try:
             page = json.loads(data)
@@ -176,8 +181,15 @@ def paged(get, size=100, status="Active"):
             raise Blocked('active_count_changed')
         total = count
         rows = page.get('data')
-        if not isinstance(rows, list) or len(rows) != min(size, total-start):
+        if not isinstance(rows, list) or len(rows) > size:
             raise Blocked('active_page_partial')
+        if not rows:
+            all_rows.reported_total = total
+            if len(all_rows) < total:
+                raise Blocked('order_source_below_reported_count')
+            return all_rows
+        if len(all_rows)+len(rows) > 10000:
+            raise Blocked('order_source_too_large')
         for row in rows:
             if not isinstance(row, list) or len(row) != 17:
                 raise Blocked('active_row_schema')
@@ -186,7 +198,16 @@ def paged(get, size=100, status="Active"):
                 raise Blocked('active_duplicate_or_missing_identity')
             identities.update(ids)
             all_rows.append(row)
-    return all_rows
+        if len(rows) < size:
+            # Confirm immediately after the short physical page, not beyond a gap.
+            # Re-querying offsets with a changed stride is unsafe; short-page
+            # termination is verified explicitly with offset equal to rows seen.
+            terminal = json.loads(get('/orders/ajaxlist/'+status+'?' + urllib.parse.urlencode({'draw':1,'start':len(all_rows),'length':1000})))
+            if terminal.get('recordsTotal') != total or terminal.get('recordsFiltered') != total or terminal.get('data') != [] or len(all_rows) < total:
+                raise Blocked('order_short_page_not_terminal')
+            all_rows.reported_total = total
+            return all_rows
+    raise Blocked('order_no_empty_terminal_page')
 
 
 SUMMARY_HEADERS = ['UserID', 'Order', 'User name', 'Phone No', 'Days Left', 'Meal', 'Notification', 'Driver']
@@ -285,18 +306,21 @@ def iso(value):
         raise Blocked('order_date_schema') from None
 
 
-def index(rows):
+def index(rows, min_start=None):
     result = {}
     for row in rows:
         number = text(row[1])
         identities = set(re.findall(r'/orders/view/(\d+)', str(row)))
         if not number.isdigit() or number in result:
             raise Blocked('order_number_duplicate_or_schema')
+        start = iso(row[5])
+        if min_start is not None and start < min_start:
+            continue
         match = re.search(r'\[([+0-9 ()-]+)\]', text(row[2]))
         if not match:
             raise Blocked('order_phone_schema')
         result[number] = {'id': next(iter(identities)), 'phone': phone(match[1]),
-                          'start': iso(row[5]), 'end': iso(row[6]),
+                          'start': start, 'end': iso(row[6]),
                           'payment_list': {'success':'paid','pending':'pending','failed':'failed','refunded':'refunded'}.get(text(row[10]).lower(), 'unverified')}
     return result
 
@@ -325,13 +349,13 @@ def collect(session, limit=None):
     pending_raw = paged(session.get, status='pending')
     print(json.dumps({'phase':'pending_index','records':len(pending_raw),'live_enabled':False}),flush=True)
     active = index(active_raw)
-    pending = index(pending_raw)
     cohorts = summaries(session.get, today)
     numbers = set()
     for rows in cohorts.values():
         numbers.update(row[1]['text'] for row in rows)
     if not numbers.issubset(active):
         raise Blocked('summary_active_membership_conflict')
+    pending = index(pending_raw, min(active[n]['start'] for n in numbers)) if numbers else {}
     rows = []
     detail_cache = {}
     def payment_for(order):
@@ -343,6 +367,10 @@ def collect(session, limit=None):
         if datetime.now(KUWAIT)-began > MAX_AGE-timedelta(minutes=5):
             raise Blocked('admin_collection_freshness_exceeded')
         current = active[number]
+        schedule = calendar(session.get('/orders/vieworderwiseoffdays/'+current['id']), current['start'], current['end'])
+        future_service = sum(day['date'] > today and day['state'] == 'service' for day in schedule)
+        if future_service != 2:
+            continue
         payment_detail = payment_for(current)
         history = []
         for later in all_orders:
@@ -351,14 +379,12 @@ def collect(session, limit=None):
                     raise Blocked('renewal_order_identity_ambiguous')
                 if later['start'] > current['start']:
                     history.append({'state':'active','payment_detail':payment_for(later),'payment_list':later['payment_list']})
-        schedule = calendar(session.get('/orders/vieworderwiseoffdays/'+current['id']), current['start'], current['end'])
         parse(session.get('/orders/getMealsDateWiseFilter/all/'+current['id']))
         rows.append({'subscription_id':current['id'],'phone':current['phone'], 'state':'active',
                      'payment_detail':payment_detail,'payment_list':current['payment_list'],
                      'schedule_complete':True,'renewals_complete':True,'updated_at':began.isoformat(),
                      'schedule':schedule,'later_renewals':history})
-        if len(rows) % 25 == 0:
-            print(json.dumps({'mode':'source-read-only','processed':len(rows),'total':len(numbers),'live_enabled':False}),flush=True)
+        print(json.dumps({'mode':'source-read-only','two_day_candidates_checked':len(rows),'total_summary_orders':len(numbers),'live_enabled':False}),flush=True)
         if limit and len(rows) >= limit:
             return {'schema_version':1,'complete':False,'payment_authority':'order_detail','source_id':'nutreeze-admin-ui-v1','captured_at':began.isoformat(),'subscriptions':rows}
     digest = lambda value: hashlib.sha256(json.dumps(value,sort_keys=True).encode()).digest()

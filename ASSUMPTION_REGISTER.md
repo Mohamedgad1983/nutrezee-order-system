@@ -110,3 +110,16 @@ renewal with pending/unknown payment holds for review rather than sending a
 second promotion. Only future service dates count; today is excluded, per
 verified calendar examples. This does not certify any upstream source or
 authorize live delivery. Config/contract review required before acceptance.
+
+## ASM-060 — Admin list counter undercount [NC]
+
+2026-10-02, A74 source verification. Verified pending UI endpoint repeatedly
+reports 7987 while a bounded scan returns 7994 unique order IDs, no duplicates,
+and an empty terminal page. Counter is non-authoritative for enumeration.
+Conservative acquisition scans physical pages to an explicitly empty offset,
+rejects duplicate/conflicting IDs, count changes, over-10000 rows, or fewer rows
+than declared, and requires a second identical complete membership read. This
+improves coverage beyond stopping at the undercount; it does not certify unseen
+payment/calendar semantics or authorize a partial source. Historical pending
+orders starting before every current summary subscription cannot be a later
+renewal and may be excluded only after parsing their authoritative start date.

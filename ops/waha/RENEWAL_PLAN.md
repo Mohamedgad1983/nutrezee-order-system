@@ -181,3 +181,21 @@ renewal join completeness is not yet proven; no eligible delivery cohort enabled
 pause controls, relogin, partial/duplicate/changing pages, pending renewals,
 detail-date conflicts and summary membership failure. Existing manual campaign
 remains complete with 40 accepted sends. Renewal sending remains disabled.
+
+Owner reaffirmed 2026-10-02: future operation and automatic sending must run on
+server, not Mac. Desktop was only the specifically authorized one-time credential
+input source; canonical server config now authenticates. Source-to-shared-Bulk
+activation still requires real completeness and per-recipient recheck proof;
+no unsafe delivery is activated while acquisition validation is blocked.
+
+Live pending enumeration uncovered a metadata discrepancy: reported count 7987,
+actual bounded physical scan 7994 distinct IDs, zero duplicate/conflicting rows,
+empty terminal page. Initial strict reported-count stopping rejected this;
+ASM-060 records the conservative replacement: empty-terminated physical reads,
+no missing offset gap, reject below-reported coverage, duplicates, count changes,
+rows beyond technical cap, and require stable second complete reads. No row is
+silently dropped to match the lower counter. Batches of 1000 reduce source load.
+Full calendar is read for every summary order; payment/Order Meals/history detail
+are then required for the exactly-two-future-service-day candidate subset.
+Non-candidates are excluded only through explicit calendar service/off/freeze
+rows, never Days Left or guessed package weekdays. Source samples remain incomplete.

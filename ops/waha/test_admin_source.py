@@ -42,9 +42,9 @@ class AdminSourceTests(unittest.TestCase):
         calls=[]
         def get(path):
             calls.append(path)
-            return json.dumps({'recordsTotal':3,'recordsFiltered':3,'data':[row(1),row(2)] if 'start=0' in path else [row(3)]})
+            return json.dumps({'recordsTotal':3,'recordsFiltered':3,'data':[row(1),row(2)] if 'start=0' in path else [row(3)] if 'start=2' in path else []})
         self.assertEqual(len(paged(get,2)),3)
-        self.assertEqual(len(calls),2)
+        self.assertEqual(len(calls),3)
         for data in [ {'recordsTotal':2,'recordsFiltered':2,'data':[row(1)]}, {'recordsTotal':2,'recordsFiltered':2,'data':[row(1),row(1)]}, {'recordsTotal':2,'recordsFiltered':1,'data':[row(1),row(2)]} ]:
             with self.assertRaises(Blocked):paged(lambda _:json.dumps(data),2)
 
@@ -67,7 +67,7 @@ class CollectionTests(unittest.TestCase):
                     row[6]='08-10-2026' if pending else '04-10-2026'
                     row[10]='pending' if pending else 'success'
                     row[16]='/orders/view/'+('13' if pending else '12')
-                    return json.dumps({'recordsTotal':1,'recordsFiltered':1,'data':[row]})
+                    return json.dumps({'recordsTotal':1,'recordsFiltered':1,'data':[row] if 'start=0' in path else []})
                 if path.startswith('/summary/'):
                     head='<thead>'+''.join('<th>'+h+'</th>' for h in SUMMARY_HEADERS)+'</thead>'
                     values=['1','100','Synthetic','55667788','2','','','']
@@ -109,3 +109,17 @@ class CollectionTests(unittest.TestCase):
         fixture=self.fixture(); original=fixture.get
         fixture.get=lambda p:original(p).replace('<td>100</td>','<td>999</td>') if '/summary/off_day/' in p else original(p)
         with self.assertRaisesRegex(Blocked,'summary_active_membership_conflict'):collect(fixture)
+
+
+class CounterMismatchTests(unittest.TestCase):
+    def test_underreported_counter_requires_empty_terminated_scan(self):
+        from admin_source import paged
+        row=lambda n:['']*16+['/orders/view/'+str(n)]
+        def get(path):
+            return json.dumps({'recordsTotal':2,'recordsFiltered':2,'data':[row(1),row(2),row(3)] if 'start=0' in path else []})
+        result=paged(get)
+        self.assertEqual(len(result),3)
+        self.assertEqual(result.reported_total,2)
+        def missing(path):
+            return json.dumps({'recordsTotal':3,'recordsFiltered':3,'data':[row(1)] if 'start=0' in path else []})
+        with self.assertRaises(Blocked):paged(missing)
