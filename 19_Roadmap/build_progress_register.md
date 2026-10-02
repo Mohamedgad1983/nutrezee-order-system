@@ -296,3 +296,7 @@ OPS-WAHA-BULK DONE (server preparation): PR #88 merge `4feb72d`, code
 HTTPS checks passed. Final campaign count 0; messages sent during preparation 0.
 No new ASM; A72 recorded. Next owner step: provide recipients/text, review the
 draft and explicitly start. No infrastructure blocker; general queue unchanged.
+
+## OPS-WAHA-BULK-COUNTERS — 2026-10-02
+
+Owner-authorized A72 presentation extension: bilingual sent/queued aggregate cards, complete campaign counts, existing 5-second refresh. Pending includes draft/paused rows; sending/failed/uncertain excluded. 15 regression cases plus syntax/mixed-state aggregate checks passed. Live static deployment/authenticated endpoints 200, sent/pending 0/0; no campaign writes, sends or restarts. CI/merge evidence follows. No new assumptions; engineering queue unchanged.

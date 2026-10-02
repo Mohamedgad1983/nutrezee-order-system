@@ -54,3 +54,9 @@ the dedicated 15-case WAHA bulk regression suite. Final server store is empty;
 WAHA session WORKING; SQLite mode 0600; final online backup
 `bulk-20261002T060905Z.sqlite3` passed integrity_check. No campaigns or messages
 created by this preparation. Future owner input/start is a separate action.
+
+## OPS-WAHA-BULK-COUNTERS — owner directive 2026-10-02
+
+Predeclared: bulk.html, bulk.css, bulk.js, this plan and append-only build register evidence. Add bilingual aggregate sent/pending cards using complete API counts across all campaigns, refreshed by existing five-second polling. Pending includes drafts/paused campaigns; sending, failed and uncertain are excluded. No API/worker/database changes, sends or service restarts. Verify mixed-state totals, existing regression suite, syntax and live UI.
+
+Verified: 15 regression cases, JS syntax and empty/mixed-state aggregate checks pass. Live authenticated HTML/JS/CSS/API return 200; current sent/pending totals 0/0. Static files deployed without worker/proxy restart or campaign mutation.
