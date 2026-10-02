@@ -300,3 +300,5 @@ draft and explicitly start. No infrastructure blocker; general queue unchanged.
 ## OPS-WAHA-BULK-COUNTERS — 2026-10-02
 
 Owner-authorized A72 presentation extension: bilingual sent/queued aggregate cards, complete campaign counts, existing 5-second refresh. Pending includes draft/paused rows; sending/failed/uncertain excluded. 15 regression cases plus syntax/mixed-state aggregate checks passed. Live static deployment/authenticated endpoints 200, sent/pending 0/0; no campaign writes, sends or restarts. CI/merge evidence follows. No new assumptions; engineering queue unchanged.
+
+COUNTERS release complete: PR #89 merged as `3039fe3`, implementation `90433a3`. Push CI `36989600560` and PR CI `36989606994` both successful (15/15 jobs each). Native Chrome confirmed both counters visible at 0/0. No messages sent or campaigns modified by this task.
