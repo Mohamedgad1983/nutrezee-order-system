@@ -358,3 +358,38 @@ the evaluator's filesystem/network sandbox unchanged. This avoids root-owned or
 unavailable SQLite WAL sidecars. Unavailable history is a retryable dependency
 failure, never a completed eligible assessment; preserve the prior aggregate
 failure audit if correcting the earlier completed-but-unavailable result.
+
+## Terminal real-data proof — 2026-10-02 19:19 Kuwait
+
+Verified functional code `4e25e29` deployed to the isolated renewal service;
+130 tests pass locally and on VPS. Push CI37032676216 and PR CI37032681834
+both pass15/15. Draft PR91 stays open/unmerged. ASM-062/063 recorded.
+
+The first full read completed but held all41 candidates because the status-cell
+parser included unselected options; its evaluator also incorrectly marked an
+unavailable Bulk dependency complete. Both verified defects were corrected.
+The selected-value parser rejects ambiguity. A fixed read-only query in the
+existing Bulk container now succeeds under the unchanged evaluator sandbox;
+no new permissions/account, Store initialization, Bulk restart or application
+write. The old aggregate is preserved in `retry_bulk_dependency_run` audit.
+
+Corrected complete read captured 19:07:28 Kuwait and evaluated 19:19:03. All875
+current-day Summary orders received two calendar observations. Three complete
+exports each proved Active1132/1132 and Pending7999/7992 physical/reported rows,
+unique internal IDs and empty terminals, first attempt. Each observation found41
+two-service-day cases;42 rows were retained including explicit review holds.
+Bounded observed consistency remains the stated limit, not a database snapshot.
+
+Final source and durable evaluator agree: eligible20; verified-renewal3 excluded;
+payment-conflict6, chronology-unknown11, calendar-changed1, renewal-payment-conflict1
+held (19 total review holds). Sent0, renewal delivery ledger0. Snapshot complete,
+root UID0/mode0600. Both services terminated successfully with MainPID0; no real
+source job remains running. All67 existing container start/restart records are
+unchanged; manualcampaign1 complete/sent40/pending0; actual Bulk has no renewal
+tables. Daily timer enabled/active, next Oct3 13:00Kuwait, Persistent=false.
+
+Source acquisition and dry-run assessment are now proven on real data; tomorrow's
+cohort is not inferred from today's20. Remaining acceptance gate: owner review
+and separately implemented/verified live claim plus fresh pre-send Admin recheck.
+The disabled shared draft/review bridge is synthetic-only and has no activation
+switch or live caller. This result does not authorize or activate actual sending.

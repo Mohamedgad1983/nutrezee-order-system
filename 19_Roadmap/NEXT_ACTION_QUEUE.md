@@ -173,9 +173,12 @@ WP-DATA-01 (real Batch 1+2 dry-runs once S1 lands) → WP-14 execution (restore 
 
 ## OPS-WAHA-RENEWAL side-task cursor — 2026-10-02
 
-A74 dry-run server wiring installed; next scheduled read Oct3 13:00Kuwait.
-BLOCKED acceptance: complete stable Admin read (latest live counts changed,
-no certified snapshot), then owner test acceptance and shared Bulk queue/recheck
-integration before sending. Draft PR91 unmerged, functional fd2402a CI15/15.
-No real source job remains running; manualcampaign1 complete/sent40 unchanged.
+A74 complete real Admin acquisition/dry-run verified Oct2 19:19Kuwait:
+875 Summary orders checked twice;20 eligible,3 verified renewals excluded,
+19 review holds; sent0. Next scheduled server read Oct3 13:00Kuwait.
+NEXT GATED: owner test acceptance and verified live claim/fresh pre-send recheck.
+Shared Bulk draft/review bridge is hard-disabled and synthetic-only. DraftPR91
+unmerged, functional4e25e29 push/PR CI15/15;130 local/VPS tests pass.
+No real source job remains running; manualcampaign1 complete/sent40 unchanged,
+all67 container start/restart records unchanged. ASM-062/063 recorded.
 This scoped side task does not advance the general engineering frontier above.

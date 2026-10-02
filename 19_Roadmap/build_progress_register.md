@@ -374,3 +374,30 @@ jobs are terminal; latest `active_count_changed`, no running job/no snapshot.
 The real source acceptance blocker remains; no renewal messages sent.
 
 Final redirect query/fragment guard regression raises the validated count to 69 local / 54 VPS tests, all passing. No new source job or sending was triggered.
+
+## OPS-WAHA-RENEWAL complete source / disabled bridge proof — 2026-10-02
+
+Functional4e25e29 (following2ef3081) deployed to isolated renewal service.
+130 tests pass locally and on VPS; push CI37032676216 and PR CI37032681834
+both15/15. DraftPR91 OPEN/unmerged. ASM-062 permits independently complete
+exports despite unrelated global drift; ASM-063 reads only selected workflow
+status. Real proof corrected the combined-select-text defect and unavailable WAL
+history access: existing Bulk owner context performs fixed read-only SQL through
+local Docker; evaluator filesystem/network sandbox remains unchanged. Prior
+incorrect completed dependency failure is preserved in audit and safely retried.
+
+Final real source captured Oct2 19:07:28Kuwait; evaluator complete19:19:03.
+875 Summary calendars checked twice, three complete exports Active1132/1132 and
+Pending7999/7992 physical/reported, unique IDs/empty terminals, attempt1.
+42 retained candidate/review rows: eligible20; verified-renewal3 excluded;
+payment-conflict6, chronology-unknown11, calendar-changed1, renewal-payment-conflict1
+held (19 total). Snapshot root0600 and complete; services terminal success/MainPID0.
+No running source job, no renewal campaigns/sends, deliveryledger0. All67 container
+start/restart records and manualcampaign1 complete/sent40/pending0 unchanged.
+Timer active/enabled, nextOct3 13:00Kuwait, Persistent=false, independent of Mac.
+
+Disabled shared Bulk draft/review/reservation/audit bridge has17 synthetic tests
+and hard locks before campaign start or transport; active Bulk code/DB untouched.
+Source-acquisition blocker is resolved. Live claim/fresh pre-send Admin recheck
+and owner acceptance still gate actual sending; no runtime unlock exists.
+Tomorrow's cohort cannot be claimed from today's20. General frontier unchanged.

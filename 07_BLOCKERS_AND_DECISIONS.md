@@ -73,10 +73,13 @@ Still standing, clearly scoped:
 
 ## OPS-WAHA-RENEWAL Admin source acceptance — 2026-10-02
 
-Authenticated server access is recovered. Latest complete acquisition terminated
-blocked because live order counts changed during pagination; no certified full
-snapshot exists. Fail-closed server source-to-DRY-RUN dependency is installed,
-daily13:00Kuwait; no Mac dependency, no sends. Next coherent complete read must
-pass calendar/payment/later-renewal coverage before acceptance. Actual delivery
-also requires owner test acceptance and shared Bulk transactional queue/recheck
-integration. Existing manual campaign/auth unchanged; see ops/waha/RENEWAL_PLAN.md.
+Verified corrected source/evaluator completed 2026-10-02 19:19Kuwait:875 Summary
+orders checked twice;20 eligible,3 verified renewals excluded,19 review holds.
+Protected complete snapshot, source/evaluator both terminal success; sent0.
+130 local/VPS tests and functional4e25e29 push/PR CI15/15 pass. Existing manual
+campaign1 complete/sent40 and67 container start/restart records unchanged.
+Daily13:00Kuwait assessment runs on server without the Mac. Source acquisition is
+no longer blocked. Actual delivery remains gated by owner test acceptance plus
+verified live claim/fresh pre-send Admin recheck. Shared Bulk draft/review bridge
+is implemented only in disabled synthetic tests, not deployed to active Bulk.
+See ops/waha/RENEWAL_PLAN.md; tomorrow's eligible count remains data-dependent.
