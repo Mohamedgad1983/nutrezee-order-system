@@ -11,6 +11,7 @@
     if(!document.getElementById('nutreeze-bulk-link')){
       const item=document.createElement('li');
       const link=document.createElement('a');link.id='nutreeze-bulk-link';link.href='/dashboard/#bulk';link.className='nutreeze-bulk-link';
+      link.addEventListener('click',event=>{event.preventDefault();location.hash='bulk';});
       const icon=document.createElement('i');icon.className='pi pi-send layout-menuitem-icon';
       const label=document.createElement('span');label.className='layout-menuitem-text';label.textContent='Bulk · الإرسال الجماعي';
       link.append(icon,label);item.append(link);
@@ -31,6 +32,7 @@
         if(theme)new MutationObserver(()=>{target.href=theme.href;}).observe(theme,{attributes:true,attributeFilter:['href']});
       });main.append(frame);
     }
+    if(active&&frame&&frame.parentElement!==main)main.append(frame);
     if(frame&&frame.hidden===active)frame.hidden=!active;
   }
   let scheduled=false;
