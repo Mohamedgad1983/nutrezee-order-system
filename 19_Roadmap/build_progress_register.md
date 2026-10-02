@@ -336,3 +336,11 @@ receipts), untouched by renewal work. Root-only journal emits no phones/messages
 Existing source credentials/auth untouched; no new access or live campaign.
 Live sending BLOCKED on source contract + owner acceptance + shared Bulk queue
 integration. Draft PR/CI evidence follows.
+
+Final code `56188d5`, Draft PR #91 (not merged). Push CI `37004057941`
+and PR CI `37004061241` both completed successfully. Final server source and
+20 renewal tests verified after recovering a transient upload timeout; the
+opt-out audit retains its reason without logging the phone. Final supervised
+dry-run service status success, delivery disabled, source blocked. No actual
+individual source has been certified. Live shared Bulk claim/recheck/pacing
+integration is NOT shipped; activating delivery remains a separate gated unit.
