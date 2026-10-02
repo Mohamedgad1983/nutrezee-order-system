@@ -289,3 +289,10 @@ and no outgoing messages. Python fake-transport/HTTP regression tests are scoped
 in the new waha-bulk CI job; root CI remains unchanged otherwise. Full deployment
 and authentication/backup/neighbor evidence in `ops/waha/BULK_PLAN.md`. The owner
 will provide recipients/text later; unrelated engineering queue unchanged.
+
+OPS-WAHA-BULK DONE (server preparation): PR #88 merge `4feb72d`, code
+`09ddf4e`; push CI `36972091057` and PR CI `36972131766` passed 15/15 jobs.
+15 fake-transport/HTTP regression cases plus native Chrome and live authenticated
+HTTPS checks passed. Final campaign count 0; messages sent during preparation 0.
+No new ASM; A72 recorded. Next owner step: provide recipients/text, review the
+draft and explicitly start. No infrastructure blocker; general queue unchanged.

@@ -47,3 +47,10 @@ Final source includes Arabic/English interface and localized error messages.
 15 fake-transport/HTTP tests pass, including slow-send spacing and absent message
 id handling. JavaScript syntax and diff whitespace checks pass. No real phones
 or message contents from this conversation are committed as campaign fixtures.
+
+Release complete: PR #88 merged as `4feb72d`, final implementation `09ddf4e`.
+Push CI `36972091057` and PR CI `36972131766` both passed all 15 jobs, including
+the dedicated 15-case WAHA bulk regression suite. Final server store is empty;
+WAHA session WORKING; SQLite mode 0600; final online backup
+`bulk-20261002T060905Z.sqlite3` passed integrity_check. No campaigns or messages
+created by this preparation. Future owner input/start is a separate action.
