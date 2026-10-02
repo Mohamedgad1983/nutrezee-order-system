@@ -144,6 +144,8 @@ class QueueTests(unittest.TestCase):
         self.store.tick()
         new = Store(self.path, self.transport, lambda: self.clock[0])
         self.assertEqual(new.snapshot()['campaigns'][0]['state'], 'paused')
+        with new.db() as db:
+            self.assertEqual(db.execute("SELECT actor FROM event WHERE kind='server_recovery'").fetchone()[0], 'admin')
         new.action(c, 'start', {'confirmed': True})
         self.assertFalse(new.tick())
         self.clock[0] += 60

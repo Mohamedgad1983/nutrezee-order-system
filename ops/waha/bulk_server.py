@@ -57,6 +57,8 @@ def numbers(text):
         if value not in seen:
             result.append(value)
             seen.add(value)
+            if len(result) > MAX_RECIPIENTS:
+                raise Invalid('الحد التقني 10000 رقم للحملة الواحدة.')
     if not result:
         raise Invalid('أضف رقمًا واحدًا على الأقل.')
     return result
@@ -81,8 +83,8 @@ class Transport:
 
 
 class Store:
-    def __init__(self, path, transport, clock=time.time):
-        self.path, self.transport, self.clock = str(path), transport, clock
+    def __init__(self, path, transport, clock=time.time, actor='admin'):
+        self.path, self.transport, self.clock, self.actor = str(path), transport, clock, actor
         self.lock = threading.Lock()
         with self.db() as db:
             db.executescript('''
@@ -95,15 +97,20 @@ class Store:
                 attempted REAL, message_id TEXT, error TEXT,
                 UNIQUE(campaign_id, phone));
               CREATE TABLE IF NOT EXISTS event (
-                id INTEGER PRIMARY KEY, campaign_id INTEGER, kind TEXT NOT NULL, at REAL NOT NULL);
+                id INTEGER PRIMARY KEY, campaign_id INTEGER, kind TEXT NOT NULL, at REAL NOT NULL, actor TEXT NOT NULL DEFAULT 'admin');
               CREATE TABLE IF NOT EXISTS throttle (
                 id INTEGER PRIMARY KEY CHECK(id=1), next_at REAL NOT NULL);
               INSERT OR IGNORE INTO throttle VALUES(1,0);
             ''')
+            if 'actor' not in {r['name'] for r in db.execute('PRAGMA table_info(event)')}:
+                db.execute("ALTER TABLE event ADD COLUMN actor TEXT NOT NULL DEFAULT 'admin'")
+            recovery = [r[0] for r in db.execute("SELECT id FROM campaign WHERE state='running' OR id IN (SELECT campaign_id FROM recipient WHERE state='sending')")]
             db.execute("UPDATE recipient SET state='uncertain',error='interrupted_send' WHERE state='sending'")
             # Restart never resumes unattended sending.
             db.execute("UPDATE campaign SET state='paused',error='server_restart' WHERE state='running'")
             db.execute("UPDATE campaign SET state='uncertain',error='interrupted_send' WHERE id IN (SELECT campaign_id FROM recipient WHERE state='uncertain') AND state NOT IN ('draft','complete')")
+            for campaign in recovery:
+                self.event(db, campaign, 'server_recovery')
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -119,7 +126,7 @@ class Store:
             db.close()
 
     def event(self, db, campaign, kind):
-        db.execute('INSERT INTO event(campaign_id,kind,at) VALUES(?,?,?)', (campaign, kind, self.clock()))
+        db.execute('INSERT INTO event(campaign_id,kind,at,actor) VALUES(?,?,?,?)', (campaign, kind, self.clock(), self.actor))
 
     def create(self, data):
         phones = numbers(data.get('numbers'))
@@ -362,7 +369,7 @@ def main():
     path = Path(os.environ.get('BULK_DB', '/data/campaigns.sqlite3'))
     path.parent.mkdir(parents=True, exist_ok=True)
     transport = Transport(os.environ['WAHA_URL'], os.environ['WAHA_API_KEY'])
-    store = Store(path, transport)
+    store = Store(path, transport, actor=os.environ['BULK_USERNAME'])
     stop = threading.Event()
 
     def work():
@@ -372,8 +379,11 @@ def main():
             except Exception:
                 # A claimed send remains recoverable/uncertain on startup; never loop and resend it.
                 with store.db() as db:
+                    recovery = [r[0] for r in db.execute("SELECT id FROM campaign WHERE state='running'")]
                     db.execute("UPDATE recipient SET state='uncertain',error='worker_failure' WHERE state='sending'")
                     db.execute("UPDATE campaign SET state='uncertain',error='worker_failure' WHERE state='running'")
+                    for campaign in recovery:
+                        store.event(db, campaign, 'worker_failure')
 
     thread = threading.Thread(target=work, daemon=True)
     thread.start()
