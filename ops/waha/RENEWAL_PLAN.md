@@ -123,3 +123,13 @@ A session cookie existed, which does not establish authenticated access.
 Cause remains unverified. Do not repeatedly retry credentials or infer that
 browser authentication proves unattended server authentication. No source
 snapshot, authenticated pagination, calendar or payment completeness proof exists.
+
+Root-cause clarification: differential visible-text inspection of the login
+response (without emitting form values/cookies/raw HTML) found the exact site
+alert `Username or password is incorrect!` after HTTP 302 `/admin`. The configured
+origin is canonical HTTPS nutreeze.com with empty path; both credential keys are
+nonempty. Earlier error-marker matching omitted this exact phrasing and was
+insufficient. Verified: the source rejects the server-held credential submission.
+Owner browser login remains reported working; equality of those inputs with
+server-held inputs is not established. Required action is hidden owner re-entry
+of that working account using the installed helper; no credential reset needed.
