@@ -345,3 +345,16 @@ Store instance and implement verified live source recheck/claim before sends.
 The supervised source/evaluator dependency job has started; aggregate terminal
 real-data acceptance results are recorded below when available. Delivery remains
 disabled throughout this build/test proof. No renewal campaign has been created.
+
+Predeclared real-proof corrections: existing Markup/coordinator/tests must read
+only the explicitly selected main Order Status option. Observed Active membership
+has a selected workflow `success`/Success, not a literal Active text cell. Unknown
+or ambiguous options remain held. Predeclare `bulk_history.py`,
+`test_bulk_history.py`, minimal renewal.py/test_renewal.py and evaluator-unit
+configuration: read the existing Bulk SQLite inside its running container under
+its existing UID10001, using only a fixed mode=ro/query_only SELECT, stdin parameters
+and boolean stdout. Do not initialize Store or modify/restart the Bulk app. Keep
+the evaluator's filesystem/network sandbox unchanged. This avoids root-owned or
+unavailable SQLite WAL sidecars. Unavailable history is a retryable dependency
+failure, never a completed eligible assessment; preserve the prior aggregate
+failure audit if correcting the earlier completed-but-unavailable result.

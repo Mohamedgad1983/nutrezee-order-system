@@ -175,6 +175,17 @@ Live acceptance must add a tested transactionally shared Bulk queue/throttle,
 claim/recheck lifecycle and ambiguous-send reconciliation before enabling delivery.
 The existing bulk interval and active campaigns are not touched by assessment.
 
+The installed unit sets `RENEWAL_BULK_READER=container`. Its fixed read-only query
+runs through the existing local Docker socket in `waha-bulk` as UID10001 against
+`/data/campaigns.sqlite3`, with SQLite `mode=ro` and `query_only=ON`. This lets
+SQLite use its ordinary owner-held WAL sidecars while keeping the evaluator's
+host Bulk directory read-only. No Store constructor, application write, send or
+service restart is invoked. Phone/message parameters travel on stdin; only a
+boolean result returns. Timeouts, malformed output or unavailable history block
+the complete assessment, clearing partial decisions. A narrowly recognized older
+dry-run outcome that incorrectly marked unavailable history complete may retry,
+preserving its previous aggregate in audit; valid completed runs stay deduplicated.
+
 Operator opt-out (root SSH only, no browser permission changes):
 `python3 /opt/waha/renewal/renewal.py --opt-out --reason 'Customer requested stop'`
 then enter the phone on stdin. It is normalized, persisted and audited; never
@@ -207,6 +218,12 @@ controls over the full future date range. Exactly-two-day candidates receive two
 independent authoritative payment/customer-ID/status checks, including relevant
 later Active/pending orders. Same-phone different-customer identity, equal starts,
 unknown chronology, payment conflicts and unknown lifecycle states hold for review.
+
+The main detail workflow status is a select, whose unselected labels must not be
+treated as its current state. Require one explicit selected option with matching
+value/label. Observed selected `success`/Success supports Active membership;
+selected `pending`/Pending supports Pending. Other workflow options remain held
+until verified, and unrelated page controls never establish order status.
 
 Root-only supervised commands:
 

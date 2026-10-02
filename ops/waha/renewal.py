@@ -135,8 +135,8 @@ def eligibility(row, now):
 
 
 class Ledger:
-    def __init__(self, path, bulk_path=None):
-        self.path=Path(path);self.bulk_path=bulk_path
+    def __init__(self, path, bulk_path=None, history_reader=None):
+        self.path=Path(path);self.bulk_path=bulk_path;self.history_reader=history_reader
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.path.parent.stat().st_mode & 0o077 or self.path.is_symlink():
             raise ValueError('ledger_permissions')
@@ -166,6 +166,11 @@ class Ledger:
             return 'opted_out'
         if self.db.execute('SELECT 1 FROM delivery WHERE subscription=? AND phone=?',(subscription,normalized)).fetchone():
             return 'previous_delivery_or_uncertain'
+        if self.history_reader is not None:
+            try:
+                return 'same_message_in_manual_bulk' if self.history_reader.contains(normalized,MESSAGE) else None
+            except ValueError:
+                return 'bulk_ledger_unavailable'
         if self.bulk_path:
             try:
                 connection=sqlite3.connect(Path(self.bulk_path).resolve().as_uri()+'?mode=ro',uri=True)
@@ -184,22 +189,47 @@ class Ledger:
         matches=[r for r in rows if r.get('subscription_id')==subscription and phone(r.get('phone'))==normalized]
         if len(matches)!=1:
             return 'subscription_changed_or_missing'
-        return self.blocked(subscription,normalized) or eligibility(matches[0],now)
+        reason=self.blocked(subscription,normalized)
+        if reason=='bulk_ledger_unavailable':
+            raise SourceBlocked(reason)
+        return reason or eligibility(matches[0],now)
 
     def evaluate(self, source, now):
         day=now.astimezone(KUWAIT).date().isoformat()
         counts=Counter()
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
-            existing=self.db.execute('SELECT state FROM run WHERE day=?',(day,)).fetchone()
+            existing=self.db.execute('SELECT state,at,summary FROM run WHERE day=?',(day,)).fetchone()
             if existing and existing[0]=='complete':
-                self.event(now,'duplicate_run',day)
-                return {'mode':'dry-run','live_enabled':False,'state':'duplicate_run','day':day,'sent':0}
+                # Old releases accidentally completed a run when Bulk dedup
+                # history was unreadable. Reopen ONLY that known dry-run failure;
+                # completed valid runs and unknown historical formats stay deduped.
+                try:
+                    prior=json.loads(existing[2])
+                except (ValueError, TypeError):
+                    prior=None
+                retryable=(isinstance(prior,dict) and prior.get('mode')=='dry-run'
+                           and prior.get('state')=='complete' and prior.get('day')==day
+                           and prior.get('live_enabled') is False
+                           and type(prior.get('sent')) is int and prior['sent']==0
+                           and prior.get('error') is None and isinstance(prior.get('counts'),dict)
+                           and all(isinstance(k,str) and type(v) is int and v>=0 for k,v in prior['counts'].items())
+                           and prior['counts'].get('bulk_ledger_unavailable',0)>0)
+                if not retryable:
+                    self.event(now,'duplicate_run',day)
+                    return {'mode':'dry-run','live_enabled':False,'state':'duplicate_run','day':day,'sent':0}
+                self.event(now,'retry_bulk_dependency_run',json.dumps({
+                    'day':day,'previous_at':existing[1],'previous_summary':prior}))
             try:
+                # A retried source may have a different cohort. Never retain old
+                # decisions, including the historical dependency-failure records.
+                self.db.execute('DELETE FROM decision WHERE day=?',(day,))
                 rows=source.read(now)
                 for row in rows:
                     normalized=phone(row['phone']);sid=row.get('subscription_id','')
                     reason=self.blocked(sid,normalized) or eligibility(row,now)
+                    if reason=='bulk_ledger_unavailable':
+                        raise SourceBlocked(reason)
                     counts[reason]+=1
                     self.db.execute('INSERT OR REPLACE INTO decision VALUES(?,?,?,?)',(day,sid,normalized,reason))
                 state='complete'
@@ -223,7 +253,13 @@ def main():
     parser.add_argument('--reason',default='')
     args=parser.parse_args()
     now=datetime.now(timezone.utc)
-    ledger=Ledger(args.ledger,args.bulk_ledger)
+    reader=None
+    if os.environ.get('RENEWAL_BULK_READER')=='container':
+        from bulk_history import ContainerHistory
+        reader=ContainerHistory()
+    elif os.environ.get('RENEWAL_BULK_READER'):
+        raise SourceBlocked('bulk_reader_configuration_invalid')
+    ledger=Ledger(args.ledger,args.bulk_ledger,reader)
     if args.opt_out:
         ledger.optout(sys.stdin.readline().strip(),args.reason,now)
         print(json.dumps({'opt_out_recorded':True,'live_enabled':False}))

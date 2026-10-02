@@ -158,6 +158,84 @@ class RenewalTests(unittest.TestCase):
         self.assertIn('RestrictAddressFamilies=AF_UNIX',service)
         self.assertNotIn('sendText',(root/'renewal.py').read_text())
 
+    def legacy_dependency_run(self, **changes):
+        summary={'mode':'dry-run','live_enabled':False,'state':'complete',
+                 'day':NOW.date().isoformat(),'counts':{'bulk_ledger_unavailable':41},
+                 'sent':0,'error':None}
+        summary.update(changes)
+        day=NOW.date().isoformat()
+        with self.ledger.db:
+            self.ledger.db.execute('INSERT OR REPLACE INTO run VALUES(?,?,?,?)',
+                                   (day,'complete',NOW.isoformat(),json.dumps(summary)))
+            self.ledger.db.executemany('INSERT OR REPLACE INTO decision VALUES(?,?,?,?)',
+                [(day,'SYNTHETIC-OLD-'+str(i),'9655000'+str(i).zfill(4),'bulk_ledger_unavailable') for i in range(41)])
+        return summary
+
+    def test_unavailable_bulk_blocks_whole_run_and_retry_after_recovery(self):
+        path=self.root/'missing-bulk.sqlite3'
+        self.ledger.bulk_path=path
+        result=self.ledger.evaluate(self.source(),NOW)
+        self.assertEqual(result['state'],'blocked')
+        self.assertEqual(result['error'],'bulk_ledger_unavailable')
+        self.assertEqual(result['counts'],{})
+        self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM decision').fetchone()[0],0)
+        db=sqlite3.connect(path)
+        db.executescript('CREATE TABLE recipient(campaign_id INTEGER,phone TEXT,state TEXT);CREATE TABLE campaign(id INTEGER,message TEXT);')
+        db.close()
+        result=self.ledger.evaluate(self.source(),NOW)
+        self.assertEqual(result['state'],'complete')
+        self.assertEqual(result['counts'],{'eligible':1})
+        self.assertEqual(result['sent'],0)
+
+    def test_mid_cohort_bulk_failure_clears_every_decision(self):
+        second=subscription();second['subscription_id']='TEST-SUB-2';second['phone']='50000002'
+        self.ledger.blocked=lambda sid,number: None if sid=='TEST-SUB-1' else 'bulk_ledger_unavailable'
+        result=self.ledger.evaluate(self.source(subscriptions=[subscription(),second]),NOW)
+        self.assertEqual(result['state'],'blocked')
+        self.assertEqual(result['counts'],{})
+        self.assertEqual(result['error'],'bulk_ledger_unavailable')
+        self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM decision').fetchone()[0],0)
+
+    def test_recheck_unavailable_bulk_raises_instead_of_individual_hold(self):
+        self.ledger.bulk_path=self.root/'missing-bulk.sqlite3'
+        with self.assertRaisesRegex(SourceBlocked,'bulk_ledger_unavailable'):
+            self.ledger.recheck(self.source(),'TEST-SUB-1','96550000001',NOW)
+
+    def test_completed_dependency_run_can_retry_retains_original_aggregate_audit(self):
+        prior=self.legacy_dependency_run()
+        result=self.ledger.evaluate(self.source(),NOW)
+        self.assertEqual(result['state'],'complete')
+        self.assertEqual(result['counts'],{'eligible':1})
+        decisions=self.ledger.db.execute('SELECT subscription,reason FROM decision').fetchall()
+        self.assertEqual(decisions,[('TEST-SUB-1','eligible')])
+        entry=json.loads(self.ledger.db.execute("SELECT ref FROM audit WHERE kind='retry_bulk_dependency_run'").fetchone()[0])
+        self.assertEqual(entry['previous_summary'],prior)
+        self.assertEqual(entry['previous_at'],NOW.isoformat())
+        self.assertEqual(self.ledger.evaluate(self.source(),NOW)['state'],'duplicate_run')
+        self.assertEqual(self.ledger.db.execute("SELECT count(*) FROM audit WHERE kind='retry_bulk_dependency_run'").fetchone()[0],1)
+        self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM delivery').fetchone()[0],0)
+
+    def test_legacy_dependency_retry_failure_stays_blocked_without_stale_decisions(self):
+        prior=self.legacy_dependency_run()
+        result=self.ledger.evaluate(FileSource(),NOW)
+        self.assertEqual(result['state'],'blocked')
+        self.assertEqual(result['counts'],{})
+        self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM decision').fetchone()[0],0)
+        entry=json.loads(self.ledger.db.execute("SELECT ref FROM audit WHERE kind='retry_bulk_dependency_run'").fetchone()[0])
+        self.assertEqual(entry['previous_summary'],prior)
+        self.assertEqual(self.ledger.evaluate(self.source(),NOW)['state'],'complete')
+
+    def test_completed_runs_without_exact_safe_dependency_outcome_remain_deduped(self):
+        for changes in ({'counts':{'eligible':41}}, {'counts':{'bulk_ledger_unavailable':0}},
+                        {'counts':{'bulk_ledger_unavailable':True}}, {'counts':{'bulk_ledger_unavailable':'41'}},
+                        {'sent':1}, {'live_enabled':True}, {'mode':'live'}, {'day':'2026-10-01'}):
+            with self.subTest(changes=changes):
+                self.legacy_dependency_run(**changes)
+                result=self.ledger.evaluate(self.source(),NOW)
+                self.assertEqual(result['state'],'duplicate_run')
+                self.assertEqual(self.ledger.db.execute('SELECT count(*) FROM decision').fetchone()[0],41)
+        self.assertEqual(self.ledger.db.execute("SELECT count(*) FROM audit WHERE kind='retry_bulk_dependency_run'").fetchone()[0],0)
+
 if __name__=='__main__':unittest.main()
 
 class SourceReviewTests(unittest.TestCase):

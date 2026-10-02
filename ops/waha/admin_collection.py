@@ -139,9 +139,25 @@ def _detail(session, order, uid, api):
               and 'Payment Status' in [cell['text'] for cell in table[0]]
               and 'Order Status' in [cell['text'] for cell in table[0]]]
     headers = [cell['text'] for cell in tables[0][0]]
-    state = tables[0][1][headers.index('Order Status')]['text'].lower()
+    cell = tables[0][1][headers.index('Order Status')]
+    selects = cell.get('selects', [])
     expected = order.get('source_state', 'active')
-    if state not in ('active', 'pending') or state != expected:
+    if selects:
+        if len(selects) != 1 or selects[0]['attrs'].get('id') != 'order_status' or not selects[0]['closed']:
+            return payment, customer, 'order_state_changed'
+        selected = [option for option in selects[0]['options'] if 'selected' in option['attrs']]
+        if len(selected) != 1:
+            return payment, customer, 'order_state_changed'
+        option = selected[0]
+        state = option['attrs'].get('value')
+        if state not in ('success', 'pending') or option['text'].lower() != state:
+            return payment, customer, 'order_state_changed'
+        # Verified Admin workflow "Success" is the selected value for current
+        # Active orders; the remaining unselected labels are not their status.
+        semantic_state = {'success': 'active', 'pending': 'pending'}[state]
+    else:
+        semantic_state = cell['text'].lower()
+    if semantic_state not in ('active', 'pending') or semantic_state != expected:
         return payment, customer, 'order_state_changed'
     return payment, customer, None if payment is not None else 'payment_review'
 

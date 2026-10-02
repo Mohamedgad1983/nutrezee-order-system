@@ -37,6 +37,15 @@ def detail(identity='12', uid='1', payment='success', start='01-10-2026', end='0
     return '<script>var user_id = ' + uid + ';</script><table><tr>' + ''.join('<th>' + value + '</th>' for value in headers) + '</tr><tr>' + ''.join('<td>' + value + '</td>' for value in values) + '</tr></table>'
 
 
+def workflow(selected='success'):
+    return '<select id="order_status" disabled>' + ''.join(
+        '<option value="' + value + '"' + (' selected' if value == selected else '') + '>'
+        + label + '</option>' for value, label in (
+            ('pending', 'Pending'), ('accept', 'Accept'), ('reject', 'Reject'),
+            ('cancel', 'Cancel'), ('success', 'Success'), ('ongoing', 'Ongoing'),
+        )) + '</select>'
+
+
 class Fixture:
     def __init__(self):
         self.summary_round = 0
@@ -223,6 +232,42 @@ class CollectionTests(unittest.TestCase):
         row = self.collect()['subscriptions'][0]
         self.assertEqual(row['review_reason'], 'order_state_changed')
         self.assertNotEqual(eligibility(row, NOW), 'verified_renewal')
+
+    def selected_status(self, html):
+        original = self.fixture.get
+        self.fixture.get = lambda path: original(path).replace('<td>Active</td>', '<td>' + html + '</td>') if '/orders/view/' in path else original(path)
+
+    def test_observed_selected_success_ignores_unselected_workflow_labels(self):
+        self.selected_status(workflow())
+        row = self.collect()['subscriptions'][0]
+        self.assertNotIn('review_reason', row)
+        self.assertEqual(eligibility(row, NOW), 'eligible')
+
+    def test_selected_pending_is_valid_for_pending_renewal(self):
+        self.fixture.pending = lambda round: [listing('13', '101', start='05-10-2026', end='08-10-2026', payment='pending')]
+        self.fixture.payment = lambda identity, round: 'pending' if identity == '13' else 'success'
+        original = self.fixture.get
+        self.fixture.get = lambda path: original(path).replace('<td>Pending</td>', '<td>' + workflow('pending') + '</td>') if '/orders/view/' in path else original(path)
+        row = self.collect()['subscriptions'][0]
+        self.assertNotIn('review_reason', row)
+        self.assertEqual(eligibility(row, NOW), 'renewal_payment_review')
+
+    def test_unverified_or_ambiguous_selected_state_is_held(self):
+        invalid = [
+            workflow(None),
+            workflow().replace('value="pending"', 'value="pending" selected'),
+            workflow().replace('id="order_status"', 'id="unrelated_setting"'),
+            workflow().replace('value="success" selected>Success', 'value="success" selected>Pending'),
+            workflow() + workflow(),
+            workflow().replace('</select>', ''),
+        ] + [workflow(state) for state in ('accept', 'ongoing', 'reject', 'cancel', 'pending')]
+        for html in invalid:
+            with self.subTest(status=html):
+                self.fixture = Fixture()
+                self.selected_status(html)
+                row = self.collect()['subscriptions'][0]
+                self.assertEqual(row['review_reason'], 'order_state_changed')
+                self.assertNotEqual(eligibility(row, NOW), 'eligible')
 
     def test_sample_never_claims_complete(self):
         self.assertFalse(self.collect(1)['complete'])

@@ -49,6 +49,7 @@ class Markup(HTMLParser):
         self.login = False
         self.tables = []
         self.table = self.row = self.cell = None
+        self.select = self.option = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -65,7 +66,7 @@ class Markup(HTMLParser):
         if tag == 'th' and self.table is not None and self.row is None:
             self.row = []
         if tag in ('td', 'th') and self.row is not None:
-            self.cell = {'text': '', 'inputs': [], 'buttons': [], 'links': []}
+            self.cell = {'text': '', 'inputs': [], 'buttons': [], 'links': [], 'selects': []}
         if self.cell is not None:
             if tag == 'input':
                 self.cell['inputs'].append(attrs)
@@ -73,16 +74,35 @@ class Markup(HTMLParser):
                 self.cell['buttons'].append(attrs)
             if tag == 'a':
                 self.cell['links'].append(attrs.get('href', ''))
+            if tag == 'select':
+                if self.select is not None:
+                    raise Blocked('nested_select_schema')
+                self.select = {'attrs': attrs, 'options': [], 'closed': False}
+                self.cell['selects'].append(self.select)
+            if tag == 'option' and self.select is not None:
+                if self.option is not None:
+                    self.option['text'] = ' '.join(self.option['text'].split())
+                self.option = {'attrs': attrs, 'text': ''}
+                self.select['options'].append(self.option)
 
     def handle_data(self, data):
         if self.cell is not None:
             self.cell['text'] += data
+        if self.option is not None:
+            self.option['text'] += data
 
     def handle_endtag(self, tag):
+        if tag in ('option', 'select') and self.option is not None:
+            self.option['text'] = ' '.join(self.option['text'].split())
+            self.option = None
+        if tag == 'select' and self.select is not None:
+            self.select['closed'] = True
+            self.select = None
         if tag in ('td', 'th') and self.cell is not None:
             self.cell['text'] = ' '.join(self.cell['text'].split())
             self.row.append(self.cell)
             self.cell = None
+            self.select = self.option = None
         if tag in ('tr', 'thead', 'tfoot') and self.row is not None:
             self.table.append(self.row)
             self.row = None

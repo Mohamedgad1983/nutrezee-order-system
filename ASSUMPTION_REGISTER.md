@@ -155,3 +155,14 @@ retained as a hold. Unknown calendar/payment/identity/chronology remains held.
 This establishes bounded observed consistency, not an atomic database snapshot
 or a guarantee against changes after the observation. Actual delivery remains
 disabled; owner acceptance and live pre-send recheck/claim proof are separate.
+
+## ASM-063 — Admin selected workflow status [NC]
+
+2026-10-02, A74 real-data proof. The main Order Status cell contains a disabled
+select with six labels; the observed current Active row explicitly selects
+`success`/Success. This workflow status is distinct from subscription-list Active
+membership. Use only a single explicit selected value with the matching label;
+Success is accepted for Active and Pending for Pending. Accept/Ongoing and all
+unknown, rejected, cancelled or ambiguous options remain held pending verified
+semantics. This corrects the parser; it does not authorize delivery or reinterpret
+payment status, which remains independently sourced from Payment Status.
