@@ -196,6 +196,12 @@ class QueueTests(unittest.TestCase):
             return response.status, body
         self.assertEqual(request('GET', '/bulk/')[0], 401)
         self.assertEqual(request('GET', '/bulk/', headers={'Authorization': auth})[0], 200)
+        client = http.client.HTTPConnection('127.0.0.1', server.server_port)
+        client.request('GET', '/bulk/', headers={'Authorization': auth})
+        response = client.getresponse()
+        self.assertIn("frame-ancestors 'self'", response.getheader('Content-Security-Policy'))
+        self.assertIn("script-src 'self'", response.getheader('Content-Security-Policy'))
+        response.read(); client.close()
         self.assertEqual(request('POST', '/bulk/api/campaigns', {}, {'Authorization': auth, 'Content-Type': 'application/json', 'Origin': 'https://evil.invalid'})[0], 403)
         self.assertEqual(request('POST', '/bulk/api/campaigns', {}, {'Authorization': auth, 'Content-Type': 'application/json'})[0], 403)
         status, _ = request('POST', '/bulk/api/campaigns', {'name': 'HTTP test', 'message': 'hello', 'numbers': '50000001'}, {'Authorization': auth, 'Content-Type': 'application/json', 'Origin': 'https://test.invalid'})

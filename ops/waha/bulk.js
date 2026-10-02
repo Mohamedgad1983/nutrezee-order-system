@@ -1,4 +1,7 @@
 'use strict';
+const embedded=new URLSearchParams(location.search).get('embedded')==='1'||location.hash==='#embedded';
+if(embedded)document.documentElement.classList.add('embedded');
+else if(window.top===window)location.replace('/dashboard/#bulk');
 const $ = id => document.getElementById(id);
 let language = 'ar';
 const translations = {

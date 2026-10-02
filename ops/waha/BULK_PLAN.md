@@ -62,3 +62,8 @@ Predeclared: bulk.html, bulk.css, bulk.js, this plan and append-only build regis
 Verified: 15 regression cases, JS syntax and empty/mixed-state aggregate checks pass. Live authenticated HTML/JS/CSS/API return 200; current sent/pending totals 0/0. Static files deployed without worker/proxy restart or campaign mutation.
 
 COUNTERS release complete: PR #89 merged as `3039fe3`, implementation `90433a3`. Push CI `36989600560` and PR CI `36989606994` both successful (15/15 jobs each). Native Chrome confirmed both counters visible at 0/0. No messages sent or campaigns modified by this task.
+
+## OPS-WAHA-DASHBOARD-BULK — 2026-10-02
+Owner explicitly requested Bulk inside the original WAHA page/sidebar using its exact typography and colors. Predeclared: bulk.js, bulk.css, bulk.html, dashboard-extension.js, install-dashboard-extension.py, docker-compose.yml, README.md, this plan, append-only build register. Separately identifiable extension injects a sidebar item and same-origin Bulk panel into the existing shell using #bulk, retaining original routes and controls. Stock HTML entry points receive only the extension script; protected copies and read-only compose mounts persist the patch. No WAHA session/worker restarts, campaign mutation or sends. Existing interval/auth/queue behavior unchanged.
+
+Additional predeclared: bulk_server.py and test_bulk.py. Embedding needs CSP frame-ancestors self (only this origin); auth/CSRF remain enforced. Before restarting only the isolated Bulk worker, verify no active campaigns. Add HTTP header acceptance proof.
