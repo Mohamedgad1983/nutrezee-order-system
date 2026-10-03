@@ -17,6 +17,7 @@ Secrets never leave their containers: WAHA key (waha-api), Bulk login (waha-bulk
 Usage: whatsapp-reminder.py                         daily run
        whatsapp-reminder.py --days 1,2                one-off run for other days-remaining values
        whatsapp-reminder.py --test-to 9655XXXXXXX   send the message once to one number (owner test)
+       whatsapp-reminder.py --report-email          email today's follow-up list to customer service
        whatsapp-reminder.py --email-only            send today's summary email again from the ledger
 """
 import datetime, fcntl, io, json, os, re, sqlite3, subprocess, sys, time, zipfile, zoneinfo
@@ -31,6 +32,8 @@ BULK_DB = '/opt/waha/bulk-data/campaigns.sqlite3'
 SESSION = 'nutreeze'
 MAIL_TO = ['it@nutreeze.com']  # sender is the server mailer's hello@nutreeze.com
 MAIL_CC = ['callcenter@nutreeze.com']
+REPORT_TO = ['callcenter@nutreeze.com']  # daily call list
+REPORT_CC = ['it@nutreeze.com']
 MAIL_CONTAINER = 'fleetbase-application-1'
 KW = zoneinfo.ZoneInfo('Asia/Kuwait')
 DAY_PHRASE = {1: 'يوم واحد', 2: 'يومين', 3: '3 أيام'}
@@ -137,6 +140,60 @@ def xlsx(rows):
     return buf.getvalue()
 
 
+def mail(subject, body, name, sheet, to, cc):
+    """Send through the server mailer (hello@nutreeze.com) with one .xlsx attached."""
+    tmp = {'/tmp/nzrem-body.txt': body.encode(), '/tmp/nzrem-subject.txt': subject.encode(), f'/tmp/{name}': sheet}
+    try:
+        for path, content in tmp.items():
+            subprocess.run(['docker', 'exec', '-i', MAIL_CONTAINER, 'sh', '-c', f'cat > {path}'], input=content, check=True, timeout=60)
+        php = ("$b = file_get_contents('/tmp/nzrem-body.txt'); $s = file_get_contents('/tmp/nzrem-subject.txt');"
+               "Illuminate\\Support\\Facades\\Mail::raw($b, function ($m) use ($s) { $m->to(" + json.dumps(to) + ")->cc(" + json.dumps(cc) + ")->subject($s)"
+               "->attach('/tmp/" + name + "', ['as' => '" + name + "', 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']); });"
+               "echo 'MAIL_SENT', PHP_EOL;")
+        res = subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'php', '-d', 'error_reporting=0', 'artisan', 'tinker', '--execute', php],
+                             capture_output=True, text=True, timeout=180).stdout
+        return 'MAIL_SENT' in res
+    except Exception:
+        return False
+    finally:
+        subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'rm', '-f', *tmp.keys()], capture_output=True, timeout=60)
+
+
+def report_email(today):
+    """Daily call list for customer service: today's ACTION_REQUIRED customers as an Excel sheet."""
+    try:
+        report = json.load(open(REPORT, encoding='utf-8'))
+    except (OSError, ValueError):
+        return fail('action-required report missing or unreadable — call list not emailed')
+    if report.get('today') != today or report.get('report') != 'ACTION_REQUIRED' or not report.get('active_orders_read'):
+        return fail('action-required report is not from today — call list not emailed')
+    reminded = {}
+    try:
+        for phone, state in sqlite3.connect(LEDGER).execute("SELECT phone,state FROM reminder WHERE at>?", ((now() - datetime.timedelta(days=7)).isoformat(),)):
+            reminded[phone] = state
+    except sqlite3.Error:
+        pass
+    rows = [('Date', 'Customer name', 'Phone', 'Package', 'End date', 'Days left', 'Area', 'WhatsApp reminder')]
+    for c in report['customers']:
+        phone = normalize(c.get('mobile'))
+        rows.append((today, c.get('customer_name', ''), '+' + phone if phone else c.get('mobile', ''), c.get('package', ''), c.get('end_date', ''),
+                     c.get('days_remaining', ''), c.get('area', ''), 'sent' if reminded.get(phone) == 'sent' else 'not sent'))
+    n = len(rows) - 1
+    by = {}
+    for c in report['customers']:
+        by[c['days_remaining']] = by.get(c['days_remaining'], 0) + 1
+    subject = f'Nutreeze subscriptions ending within 3 days — {today}: {n} customers to follow up'
+    body = (f'قائمة متابعة التجديد — {today}\n'
+            f'عدد العملاء اللي اشتراكهم هينتهي خلال 3 أيام ومحتاجين متابعة: {n}\n'
+            f"باقي يوم: {by.get(1, 0)} — باقي يومين: {by.get(2, 0)} — باقي 3 أيام: {by.get(3, 0)}\n"
+            'العملاء اللي جددوا فعلاً مش في القائمة.\n'
+            '\nالتفاصيل في ملف الإكسيل المرفق.\n'
+            f'\nRenewal follow-up list {today}: {n} customers whose subscription ends within 3 days and who have not renewed. Details in the attached sheet.\n')
+    ok = mail(subject, body, f'renewal-follow-up-{today}.xlsx', xlsx(rows), REPORT_TO, REPORT_CC)
+    log(f"Call-list email to {', '.join(REPORT_TO)} cc {', '.join(REPORT_CC)} ({n} customers): {'sent' if ok else 'FAILED'}")
+    return 0 if ok else 2
+
+
 def send_email(today, note=''):
     """Short summary + Excel sheet of today's sent reminders (date, customer name, phone)."""
     db = sqlite3.connect(LEDGER)
@@ -160,23 +217,7 @@ def send_email(today, note=''):
             + '\nالتفاصيل في ملف الإكسيل المرفق (التاريخ، اسم العميل، رقم التليفون).\n'
             f'\nRenewal reminders {today}: {len(sent)} customers received the WhatsApp message. Details in the attached sheet.\n'
             'Follow the campaign: https://wa.13-140-159-201.sslip.io/dashboard/#bulk\n')
-    name = f'renewal-reminders-{today}.xlsx'
-    tmp = {'/tmp/nzrem-body.txt': body.encode(), '/tmp/nzrem-subject.txt': subject.encode(),
-           f'/tmp/{name}': xlsx([('Date', 'Customer name', 'Phone')] + sent)}
-    try:
-        for path, content in tmp.items():
-            subprocess.run(['docker', 'exec', '-i', MAIL_CONTAINER, 'sh', '-c', f'cat > {path}'], input=content, check=True, timeout=60)
-        php = ("$b = file_get_contents('/tmp/nzrem-body.txt'); $s = file_get_contents('/tmp/nzrem-subject.txt');"
-               "Illuminate\\Support\\Facades\\Mail::raw($b, function ($m) use ($s) { $m->to(" + json.dumps(MAIL_TO) + ")->cc(" + json.dumps(MAIL_CC) + ")->subject($s)"
-               "->attach('/tmp/" + name + "', ['as' => '" + name + "', 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']); });"
-               "echo 'MAIL_SENT', PHP_EOL;")
-        res = subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'php', '-d', 'error_reporting=0', 'artisan', 'tinker', '--execute', php],
-                             capture_output=True, text=True, timeout=180).stdout
-        ok = 'MAIL_SENT' in res
-    except Exception:
-        ok = False
-    finally:
-        subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'rm', '-f', *tmp.keys()], capture_output=True, timeout=60)
+    ok = mail(subject, body, f'renewal-reminders-{today}.xlsx', xlsx([('Date', 'Customer name', 'Phone')] + sent), MAIL_TO, MAIL_CC)
     log(f"Summary email to {', '.join(MAIL_TO)} cc {', '.join(MAIL_CC)} ({len(sent)} rows in the sheet): {'sent' if ok else 'FAILED'}")
     return ok
 
@@ -190,6 +231,8 @@ def main():
     template = open(f'{DIR}/whatsapp-message.txt', encoding='utf-8').read().strip()
     if not template:
         return fail('message file is empty')
+    if '--report-email' in sys.argv:
+        return report_email(today)
     if '--email-only' in sys.argv:
         return 0 if send_email(today) else 2
     if '--test-to' in sys.argv:

@@ -36,7 +36,13 @@ server mailer (hello@nutreeze.com, Fleetbase Laravel mailer) with an .xlsx (date
 Switch: `WHATSAPP_LIVE=yes|no` in `whatsapp.env`. Ledger `whatsapp-ledger.sqlite3`, log `whatsapp.log`
 (both in `/var/log/nutrezee/subscription-expiry/`). Skips anyone in a Bulk campaign of the last 10 days.
 Owner test: `whatsapp-reminder.py --test-to 965XXXXXXXX` · resend today's email: `--email-only`.
-- Customers whose name matches test/"do not deliver" are excluded and counted in the log.
+
+## Daily call list for customer service (2026-10-03)
+
+After the 07:30 reading, `whatsapp-reminder.py --report-email` (ExecStartPost of `nutreeze-subscription-expiry.service`)
+emails today's ACTION_REQUIRED customers as an .xlsx to callcenter@nutreeze.com (cc it@nutreeze.com).
+WhatsApp sending is OFF (`WHATSAPP_LIVE=no`) since the number got a 24 h WhatsApp block on 2026-10-03;
+the owner chose to move to the official WhatsApp Business API before sending again.
 
 ## Deploy (repo → VPS)
 

@@ -7,5 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/opt/nutrezee/subscription-expiry/run.sh
+# then the follow-up list goes to customer service by email (only after a successful reading)
+ExecStartPost=/usr/bin/python3 /opt/nutrezee/subscription-expiry/whatsapp-reminder.py --report-email
 TimeoutStartSec=3600
 # No [Install]: the .timer drives it.
