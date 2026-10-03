@@ -15,6 +15,7 @@ Safe by default:
 Secrets never leave their containers: WAHA key (waha-api), Bulk login (waha-bulk), mailer (fleetbase).
 
 Usage: whatsapp-reminder.py                         daily run
+       whatsapp-reminder.py --days 1,2                one-off run for other days-remaining values
        whatsapp-reminder.py --test-to 9655XXXXXXX   send the message once to one number (owner test)
        whatsapp-reminder.py --email-only            send today's summary email again from the ledger
 """
@@ -29,6 +30,7 @@ LOG = f'{OUT}/whatsapp.log'
 BULK_DB = '/opt/waha/bulk-data/campaigns.sqlite3'
 SESSION = 'nutreeze'
 MAIL_TO = ['it@nutreeze.com']  # sender is the server mailer's hello@nutreeze.com
+MAIL_CC = ['callcenter@nutreeze.com']
 MAIL_CONTAINER = 'fleetbase-application-1'
 KW = zoneinfo.ZoneInfo('Asia/Kuwait')
 DAY_PHRASE = {1: 'يوم واحد', 2: 'يومين', 3: '3 أيام'}
@@ -165,7 +167,7 @@ def send_email(today, note=''):
         for path, content in tmp.items():
             subprocess.run(['docker', 'exec', '-i', MAIL_CONTAINER, 'sh', '-c', f'cat > {path}'], input=content, check=True, timeout=60)
         php = ("$b = file_get_contents('/tmp/nzrem-body.txt'); $s = file_get_contents('/tmp/nzrem-subject.txt');"
-               "Illuminate\\Support\\Facades\\Mail::raw($b, function ($m) use ($s) { $m->to(" + json.dumps(MAIL_TO) + ")->subject($s)"
+               "Illuminate\\Support\\Facades\\Mail::raw($b, function ($m) use ($s) { $m->to(" + json.dumps(MAIL_TO) + ")->cc(" + json.dumps(MAIL_CC) + ")->subject($s)"
                "->attach('/tmp/" + name + "', ['as' => '" + name + "', 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']); });"
                "echo 'MAIL_SENT', PHP_EOL;")
         res = subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'php', '-d', 'error_reporting=0', 'artisan', 'tinker', '--execute', php],
@@ -175,13 +177,15 @@ def send_email(today, note=''):
         ok = False
     finally:
         subprocess.run(['docker', 'exec', MAIL_CONTAINER, 'rm', '-f', *tmp.keys()], capture_output=True, timeout=60)
-    log(f"Summary email to {', '.join(MAIL_TO)} ({len(sent)} rows in the sheet): {'sent' if ok else 'FAILED'}")
+    log(f"Summary email to {', '.join(MAIL_TO)} cc {', '.join(MAIL_CC)} ({len(sent)} rows in the sheet): {'sent' if ok else 'FAILED'}")
     return ok
 
 
 def main():
     os.umask(0o077)
     conf = settings()
+    if '--days' in sys.argv:  # one-off catch-up, e.g. --days 1,2
+        conf['REMIND_DAYS'] = sys.argv[sys.argv.index('--days') + 1]
     today = now().date().isoformat()
     template = open(f'{DIR}/whatsapp-message.txt', encoding='utf-8').read().strip()
     if not template:
