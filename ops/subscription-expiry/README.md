@@ -25,17 +25,16 @@ and writes the report. Never submits a form on an order; never visits action lin
 - Manual run: `systemctl start nutreeze-subscription-expiry.service` · options: `EXPIRY_DAYS_AHEAD`, `EXPIRY_TODAY`
 - Customers whose name matches test/"do not deliver" are excluded and counted in the log.
 
-## WhatsApp renewal reminders (2026-10-03, LIVE)
+## WhatsApp renewal reminders — gentle mode (2026-10-03, currently OFF)
 
-`nutreeze-renewal-whatsapp.timer` (14:00 Asia/Kuwait) → refreshes the report (`run.sh`) → `whatsapp-reminder.py`:
-ACTION_REQUIRED customers with `REMIND_DAYS` (3) days left get `whatsapp-message.txt` once per subscription.
-The script creates and starts a campaign in the WAHA Bulk tool ("Renewal YYYY-MM-DD — 3 days — auto"), so the
-owner follows it at https://wa.13-140-159-201.sslip.io/dashboard/#bulk ; the Bulk tool sends (session `nutreeze`,
-60 s pacing, stops on a failed/uncertain send). After the campaign ends: summary email to it@nutreeze.com from the
-server mailer (hello@nutreeze.com, Fleetbase Laravel mailer) with an .xlsx (date, customer name, phone).
-Switch: `WHATSAPP_LIVE=yes|no` in `whatsapp.env`. Ledger `whatsapp-ledger.sqlite3`, log `whatsapp.log`
-(both in `/var/log/nutrezee/subscription-expiry/`). Skips anyone in a Bulk campaign of the last 10 days.
-Owner test: `whatsapp-reminder.py --test-to 965XXXXXXXX` · resend today's email: `--email-only`.
+`nutreeze-renewal-whatsapp.timer` (14:00 Asia/Kuwait) → refreshes the report (`run.sh`) → `whatsapp-reminder.py`.
+After the 24 h WhatsApp block of 2026-10-03 the owner kept this channel with gentler rules (`whatsapp.env`):
+`DAILY_CAP=40`, random gap `GAP_MIN..GAP_MAX` (4–8 min), nothing after `SEND_UNTIL`, customers with 3 days left only.
+`whatsapp-message.txt` is personal ({name} = customer first name, {days}), has no link or promo code, and an opt-out line;
+a reply "إيقاف"/"stop" (or `--optout <phone>`) stops reminders for that number. The first failed send or a
+disconnected session halts sending for the day (`.whatsapp-halt-YYYY-MM-DD`). Sent directly through the WAHA session
+(not the Bulk page: it can only send identical text every 60 s). Summary email + .xlsx to it@ (cc call centre) after each run.
+Switch: `WHATSAPP_LIVE=yes|no`. Ledger `whatsapp-ledger.sqlite3`, log `whatsapp.log` in `/var/log/nutrezee/subscription-expiry/`.
 
 ## Daily call list for customer service (2026-10-03)
 

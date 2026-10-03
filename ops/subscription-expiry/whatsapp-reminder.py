@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""Nutreeze renewal reminders over WhatsApp, sent as a campaign of the WAHA Bulk page.
+"""Nutreeze renewal reminders over WhatsApp (WAHA session "nutreeze"), gentle mode.
 
-Reads today's ACTION_REQUIRED list (subscription-expiry report), creates one campaign in the Bulk tool
-(https://wa.13-140-159-201.sslip.io/dashboard/#bulk) and starts it, so the owner follows every message there.
-The Bulk tool does the sending (session "nutreeze", 60 s between messages, stops on a failed/uncertain send).
-When the campaign ends, a short email with an Excel sheet (date, customer name, phone) goes to the owner.
+After the 24 h WhatsApp block of 2026-10-03 the owner chose to keep this channel but make it far less
+spam-like: a personal message (customer first name, no link, no promo code, opt-out line), a daily cap,
+long random gaps, and a full stop for the day on the first problem.
 
-Safe by default:
-  * DRY-RUN unless WHATSAPP_LIVE=yes in whatsapp.env (owner decision) — dry-run creates no campaign
-  * refuses a report that is not from today (Asia/Kuwait) or that is empty/unreadable
-  * one reminder per customer per subscription (ledger: phone + end date); skips customers already in any
-    Bulk campaign of the last 10 days; skips numbers that are not on WhatsApp; hard cap per run
-  * no message text and no full phone numbers in the log
-Secrets never leave their containers: WAHA key (waha-api), Bulk login (waha-bulk), mailer (fleetbase).
+  * DRY-RUN unless WHATSAPP_LIVE=yes in whatsapp.env (owner decision)
+  * only today's ACTION_REQUIRED customers with REMIND_DAYS days left; one reminder per subscription
+  * at most DAILY_CAP messages per day; GAP_MIN..GAP_MAX seconds between messages; nothing after SEND_UNTIL
+  * skips opted-out numbers (reply "إيقاف"/"stop", or --optout), numbers not on WhatsApp, anyone messaged
+    in the last 7 days (ledger) or in a Bulk-page campaign of the last 10 days
+  * first failed/uncertain send, or a disconnected session, halts sending for the rest of the day
+  * customers not reached stay "not sent" in the next morning's call list for customer service
+  * summary email + Excel sheet when the run ends; no message text or full phone numbers in the log
 
 Usage: whatsapp-reminder.py                         daily run
        whatsapp-reminder.py --days 1,2                one-off run for other days-remaining values
+       whatsapp-reminder.py --optout 9655XXXXXXX     never message this number again
        whatsapp-reminder.py --test-to 9655XXXXXXX   send the message once to one number (owner test)
        whatsapp-reminder.py --report-email          email today's follow-up list to customer service
        whatsapp-reminder.py --email-only            send today's summary email again from the ledger
 """
-import datetime, fcntl, io, json, os, re, sqlite3, subprocess, sys, time, zipfile, zoneinfo
+import datetime, fcntl, io, json, os, random, re, sqlite3, subprocess, sys, time, zipfile, zoneinfo
 from xml.sax.saxutils import escape
 
 DIR = '/opt/nutrezee/subscription-expiry'
@@ -44,26 +45,9 @@ const r=await fetch('http://127.0.0.1:3000'+q.path,{method:q.body?'POST':'GET',s
 headers:{'X-Api-Key':process.env.WAHA_API_KEY_PLAIN,'Content-Type':'application/json'},body:q.body?JSON.stringify(q.body):undefined});
 let j=null;try{j=await r.json()}catch(e){}
 console.log(JSON.stringify({status:r.status,id:j&&(j.id&&(j.id._serialized||j.id.id||j.id)||j.key&&j.key.id)||null,
-exists:j&&j.numberExists,state:j&&j.status}))});
+exists:j&&j.numberExists,state:j&&j.status,
+texts:Array.isArray(j)?j.filter(m=>!m.fromMe).map(m=>String(m.body||'').slice(0,40)):undefined}))});
 """
-BULK = r"""
-import base64, json, os, sys, urllib.request, urllib.error
-q = json.load(sys.stdin)
-auth = base64.b64encode((os.environ['BULK_USERNAME'] + ':' + os.environ['BULK_PASSWORD']).encode()).decode()
-req = urllib.request.Request('http://127.0.0.1:8080' + q['path'], method='POST' if q.get('body') is not None else 'GET',
-    headers={'Authorization': 'Basic ' + auth, 'Origin': os.environ['BULK_ORIGIN'], 'Content-Type': 'application/json'},
-    data=None if q.get('body') is None else json.dumps(q['body']).encode())
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        out = json.load(r)
-        if 'campaigns' in out:
-            out = {'campaigns': [{k: c[k] for k in ('id', 'state', 'error', 'counts', 'total')} for c in out['campaigns']]}
-        print(json.dumps({'status': r.status, 'json': out}))
-except urllib.error.HTTPError as e:
-    print(json.dumps({'status': e.code, 'json': None}))
-"""
-
-
 def now():
     return datetime.datetime.now(KW)
 
@@ -90,18 +74,12 @@ def waha(path, body=None):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 
-def bulk(path, body=None):
-    run = subprocess.run(['docker', 'exec', '-i', 'waha-bulk', 'python', '-c', BULK], input=json.dumps({'path': path, 'body': body}),
-                         capture_output=True, text=True, timeout=60)
-    return json.loads(run.stdout.strip().splitlines()[-1])
-
-
 def bulk_db():
     return sqlite3.connect(f'file:{BULK_DB}?mode=ro', uri=True)
 
 
 def settings():
-    conf = {'WHATSAPP_LIVE': 'no', 'REMIND_DAYS': '3', 'MAX_PER_RUN': '150'}
+    conf = {'WHATSAPP_LIVE': 'no', 'REMIND_DAYS': '3', 'DAILY_CAP': '40', 'GAP_MIN': '240', 'GAP_MAX': '480', 'SEND_UNTIL': '20:00'}
     try:
         for line in open(f'{DIR}/whatsapp.env'):
             if '=' in line and not line.lstrip().startswith('#'):
@@ -119,6 +97,37 @@ def normalize(mobile):
     if re.fullmatch(r'965[4569]\d{7}', digits):
         return digits
     return None
+
+
+def first_name(name):
+    """Greeting name: the first word of the legacy customer name, only when it looks like a real name."""
+    word = (name or '').strip().split(' ')[0].strip('.,-_')
+    return word if re.fullmatch(r"[^\W\d_]{2,20}", word) else ''
+
+
+def compose(template, name, days):
+    text = template.replace('{days}', DAY_PHRASE.get(days, f'{days} أيام'))
+    name = first_name(name)
+    return re.sub(r' ?\{name\}', ' ' + name if name else '', text)
+
+
+OPT_OUT = re.compile(r'إيقاف|ايقاف|أوقف|اوقف|\bstop\b|unsubscribe', re.I)
+
+
+def collect_optouts(db):
+    """Best effort: a customer we reminded in the last 14 days who replied "إيقاف"/"stop" is never messaged again."""
+    since = (now() - datetime.timedelta(days=14)).isoformat()
+    found = 0
+    for (phone,) in db.execute("SELECT DISTINCT phone FROM reminder WHERE state='sent' AND at>? AND phone NOT IN (SELECT phone FROM optout)", (since,)).fetchall():
+        try:
+            texts = waha(f'/api/{SESSION}/chats/{phone}@c.us/messages?limit=10&downloadMedia=false').get('texts') or []
+        except Exception:
+            continue
+        if any(OPT_OUT.search(t) for t in texts):
+            db.execute('INSERT OR IGNORE INTO optout VALUES(?,?,?)', (phone, now().isoformat(), 'reply'))
+            found += 1
+    db.commit()
+    return found
 
 
 def xlsx(rows):
@@ -216,7 +225,7 @@ def send_email(today, note=''):
             + (note + '\n' if note else '')
             + '\nالتفاصيل في ملف الإكسيل المرفق (التاريخ، اسم العميل، رقم التليفون).\n'
             f'\nRenewal reminders {today}: {len(sent)} customers received the WhatsApp message. Details in the attached sheet.\n'
-            'Follow the campaign: https://wa.13-140-159-201.sslip.io/dashboard/#bulk\n')
+            '')
     ok = mail(subject, body, f'renewal-reminders-{today}.xlsx', xlsx([('Date', 'Customer name', 'Phone')] + sent), MAIL_TO, MAIL_CC)
     log(f"Summary email to {', '.join(MAIL_TO)} cc {', '.join(MAIL_CC)} ({len(sent)} rows in the sheet): {'sent' if ok else 'FAILED'}")
     return ok
@@ -231,6 +240,14 @@ def main():
     template = open(f'{DIR}/whatsapp-message.txt', encoding='utf-8').read().strip()
     if not template:
         return fail('message file is empty')
+    if '--optout' in sys.argv:
+        phone = normalize(sys.argv[sys.argv.index('--optout') + 1]) or re.sub(r'\D', '', sys.argv[sys.argv.index('--optout') + 1])
+        db = sqlite3.connect(LEDGER)
+        db.execute('CREATE TABLE IF NOT EXISTS optout(phone TEXT PRIMARY KEY, at TEXT, source TEXT)')
+        db.execute('INSERT OR IGNORE INTO optout VALUES(?,?,?)', (phone, now().isoformat(), 'manual'))
+        db.commit()
+        log(f'opt-out recorded for {mask(phone)}')
+        return 0
     if '--report-email' in sys.argv:
         return report_email(today)
     if '--email-only' in sys.argv:
@@ -239,7 +256,7 @@ def main():
         phone = re.sub(r'\D', '', sys.argv[sys.argv.index('--test-to') + 1])
         if waha(f'/api/sessions/{SESSION}').get('state') != 'WORKING':
             return fail('WhatsApp session is not connected')
-        res = waha('/api/sendText', {'session': SESSION, 'chatId': phone + '@c.us', 'text': template.replace('{days}', DAY_PHRASE[3])})
+        res = waha('/api/sendText', {'session': SESSION, 'chatId': phone + '@c.us', 'text': compose(template, 'محمد', 3)})
         log(f"TEST message to {mask(phone)}: http {res['status']} id={'yes' if res.get('id') else 'no'}")
         return 0 if res['status'] in (200, 201) and res.get('id') else 2
 
@@ -251,7 +268,7 @@ def main():
         return 75
     live = conf['WHATSAPP_LIVE'] == 'yes'
     days_ok = {int(d) for d in conf['REMIND_DAYS'].split(',')}
-    cap = int(conf['MAX_PER_RUN'])
+    cap, gap_min, gap_max = int(conf['DAILY_CAP']), max(120, int(conf['GAP_MIN'])), max(180, int(conf['GAP_MAX']))
     log(f"Starting WhatsApp renewal reminders ({'LIVE' if live else 'DRY-RUN — nothing is sent'}; days {sorted(days_ok)})")
     try:
         report = json.load(open(REPORT, encoding='utf-8'))
@@ -263,6 +280,7 @@ def main():
         return fail('report has no reading behind it')
     db = sqlite3.connect(LEDGER)
     db.execute('CREATE TABLE IF NOT EXISTS reminder(phone TEXT, end_date TEXT, order_no TEXT, customer_id TEXT, state TEXT, message_id TEXT, at TEXT, PRIMARY KEY(phone,end_date))')
+    db.execute('CREATE TABLE IF NOT EXISTS optout(phone TEXT PRIMARY KEY, at TEXT, source TEXT)')
     db.commit()
     try:
         recent = {p[-8:] for (p,) in bulk_db().execute(
@@ -270,7 +288,7 @@ def main():
             (time.time() - 10 * 86400,))}
     except sqlite3.Error as exc:
         return fail(f'cannot read the Bulk history ({exc.__class__.__name__}) — refusing to send')
-    groups, skipped = {}, {}
+    queue, skipped = [], {}
 
     def skip(reason):
         skipped[reason] = skipped.get(reason, 0) + 1
@@ -281,68 +299,73 @@ def main():
         phone = normalize(c.get('mobile'))
         if not phone:
             skip('phone_not_kuwait_mobile'); continue
+        if db.execute('SELECT 1 FROM optout WHERE phone=?', (phone,)).fetchone():
+            skip('opted_out'); continue
         if db.execute('SELECT 1 FROM reminder WHERE phone=? AND end_date=?', (phone, c['end_date'])).fetchone():
             skip('already_reminded'); continue
         if phone[-8:] in recent or db.execute('SELECT 1 FROM reminder WHERE phone=? AND at>?', (phone, (now() - datetime.timedelta(days=7)).isoformat())).fetchone():
             skip('reminded_recently'); continue
-        groups.setdefault(c['days_remaining'], []).append((phone, c))
-    total = sum(len(g) for g in groups.values())
-    log(f"Customers in report: {len(report['customers'])}; to remind: {total}; skipped: {json.dumps(skipped, ensure_ascii=False)}")
-    if total > cap:
-        return fail(f'{total} recipients is above the safety cap of {cap} — nothing sent')
+        queue.append((phone, c))
+    halt = f'{OUT}/.whatsapp-halt-{today}'
+    done_today = db.execute("SELECT count(*) FROM reminder WHERE state='sent' AND substr(at,1,10)=?", (today,)).fetchone()[0]
+    room = max(0, cap - done_today)
+    over = max(0, len(queue) - room)
+    queue = queue[:room]
+    log(f"Customers in report: {len(report['customers'])}; to remind now: {len(queue)} (daily cap {cap}, already sent today {done_today}, left for the call centre: {over}); skipped: {json.dumps(skipped, ensure_ascii=False)}")
     if not live:
-        log(f'DRY-RUN complete: {total} message(s) would be sent. Job completed successfully')
+        if queue:
+            log(f"DRY-RUN sample text length {len(compose(template, queue[0][1].get('customer_name'), queue[0][1]['days_remaining']))} chars; names usable: {sum(1 for _, c in queue if first_name(c.get('customer_name')))}/{len(queue)}")
+        log(f'DRY-RUN complete: {len(queue)} message(s) would be sent over about {len(queue) * (gap_min + gap_max) // 120} minutes. Job completed successfully')
         return 0
-    if total and waha(f'/api/sessions/{SESSION}').get('state') != 'WORKING':
+    if os.path.exists(halt):
+        return fail('sending was halted earlier today after a problem — nothing sent (remove the halt file only on the owner\'s word)')
+    if not queue:
+        log('Nothing to send. Job completed successfully')
+        return 0
+    if waha(f'/api/sessions/{SESSION}').get('state') != 'WORKING':
+        open(halt, 'w').close()
         send_email(today, 'الواتساب غير متصل — لم تُرسل أي رسالة اليوم. / WhatsApp session not connected: nothing sent.')
         return fail('WhatsApp session is not connected — nothing sent')
-    problems = []
-    for days, group in sorted(groups.items(), reverse=True):
+    new_optouts = collect_optouts(db)
+    if new_optouts:
+        log(f'New opt-outs from replies: {new_optouts}')
+    until = datetime.datetime.combine(now().date(), datetime.time.fromisoformat(conf['SEND_UNTIL']), KW)
+    sent = no_whatsapp = 0
+    problem = ''
+    for i, (phone, c) in enumerate(queue):
+        if now() >= until:
+            problem = f'stopped at {conf["SEND_UNTIL"]} with {len(queue) - i} customer(s) left for the call centre'
+            break
+        if db.execute('SELECT 1 FROM optout WHERE phone=?', (phone,)).fetchone():
+            continue
         stamp = now().isoformat()
-        on_whatsapp = []
-        for phone, c in group:
-            ok = waha(f'/api/contacts/check-exists?session={SESSION}&phone={phone}').get('exists')
-            db.execute('INSERT INTO reminder VALUES(?,?,?,?,?,?,?)', (phone, c['end_date'], c['order_no'], c.get('customer_id', ''), 'pending' if ok else 'no_whatsapp', '', stamp))
-            if ok:
-                on_whatsapp.append(phone)
+        try:
+            if not waha(f'/api/contacts/check-exists?session={SESSION}&phone={phone}').get('exists'):
+                no_whatsapp += 1
+                db.execute('INSERT INTO reminder VALUES(?,?,?,?,?,?,?)', (phone, c['end_date'], c['order_no'], c.get('customer_id', ''), 'no_whatsapp', '', stamp))
+                db.commit()
+                continue
+            # ledger first: an interrupted send is recorded as uncertain and never repeated
+            db.execute('INSERT INTO reminder VALUES(?,?,?,?,?,?,?)', (phone, c['end_date'], c['order_no'], c.get('customer_id', ''), 'uncertain', '', stamp))
+            db.commit()
+            res = waha('/api/sendText', {'session': SESSION, 'chatId': phone + '@c.us', 'text': compose(template, c.get('customer_name'), c['days_remaining'])})
+        except Exception as exc:
+            problem = f'send to {mask(phone)} uncertain ({exc.__class__.__name__}); sending halted for today after {sent} sent'
+            break
+        if res['status'] not in (200, 201) or not res.get('id'):
+            problem = f"send to {mask(phone)} failed (http {res['status']}); sending halted for today after {sent} sent"
+            break
+        db.execute("UPDATE reminder SET state='sent', message_id=? WHERE phone=? AND end_date=?", (str(res['id']), phone, c['end_date']))
         db.commit()
-        if not on_whatsapp:
-            continue
-        name = f"Renewal {today} — {days} day{'s' if days != 1 else ''} — auto"
-        made = bulk('/bulk/api/campaigns', {'name': name, 'message': template.replace('{days}', DAY_PHRASE.get(days, f'{days} أيام')), 'numbers': '\n'.join(on_whatsapp)})
-        campaign = (made.get('json') or {}).get('id')
-        if made['status'] != 201 or not campaign:
-            db.execute("DELETE FROM reminder WHERE at=? AND state='pending'", (stamp,)); db.commit()
-            problems.append(f'campaign for {days} day(s) could not be created (http {made["status"]})')
-            continue
-        started = bulk(f'/bulk/api/campaigns/{campaign}/start', {'confirmed': True})
-        if started['status'] != 200:
-            db.execute("DELETE FROM reminder WHERE at=? AND state='pending'", (stamp,)); db.commit()
-            problems.append(f'campaign {campaign} could not start (http {started["status"]}) — it stays as a draft on the Bulk page')
-            continue
-        log(f'Bulk campaign {campaign} started: "{name}", {len(on_whatsapp)} recipient(s)')
-        deadline = time.time() + len(on_whatsapp) * 150 + 900
-        state = 'running'
-        while state == 'running' and time.time() < deadline:
-            time.sleep(20)
-            state = bulk_db().execute('SELECT state FROM campaign WHERE id=?', (campaign,)).fetchone()[0]
-        counts = {}
-        for phone, rstate, mid in bulk_db().execute('SELECT phone,state,message_id FROM recipient WHERE campaign_id=?', (campaign,)):
-            counts[rstate] = counts.get(rstate, 0) + 1
-            if rstate == 'pending':  # never attempted: free it so a later run may remind this customer
-                db.execute("DELETE FROM reminder WHERE phone=? AND at=?", (phone, stamp))
-            else:
-                db.execute('UPDATE reminder SET state=?, message_id=? WHERE phone=? AND at=?', (rstate, mid or '', phone, stamp))
-        db.commit()
-        log(f'Bulk campaign {campaign} ended: state {state}, {json.dumps(counts)}')
-        if state != 'complete':
-            problems.append(f'campaign {campaign} stopped in state "{state}" — open the Bulk page to review/resume')
-    for p in problems:
-        log(f'WARNING {p}')
-    note = ('تنبيه: ' + ' | '.join(problems)) if problems else ''
-    mailed = send_email(today, note)
-    log('Job completed successfully' if not problems and mailed else 'Job completed with warnings')
-    return 0 if not problems and mailed else 2
+        sent += 1
+        if i < len(queue) - 1:
+            time.sleep(random.uniform(gap_min, gap_max))
+    if problem and 'halted' in problem:
+        open(halt, 'w').close()
+    log(f'Sent: {sent}; not on WhatsApp: {no_whatsapp}' + (f'; WARNING {problem}' if problem else ''))
+    mailed = send_email(today, ('تنبيه: ' + problem) if problem else '')
+    log('Job completed successfully' if not problem and mailed else 'Job completed with warnings')
+    return 0 if not problem and mailed else 2
 
 
 if __name__ == '__main__':
