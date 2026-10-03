@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily 14:00 Asia/Kuwait — Nutreeze WhatsApp renewal reminders
+
+[Timer]
+OnCalendar=*-*-* 14:00:00 Asia/Kuwait
+Persistent=false
+Unit=nutreeze-renewal-whatsapp.service
+
+[Install]
+WantedBy=timers.target

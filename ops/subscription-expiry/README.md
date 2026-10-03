@@ -25,6 +25,19 @@ and writes the report. Never submits a form on an order; never visits action lin
 - Manual run: `systemctl start nutreeze-subscription-expiry.service` · options: `EXPIRY_DAYS_AHEAD`, `EXPIRY_TODAY`
 - Customers whose name matches test/"do not deliver" are excluded and counted in the log.
 
+## WhatsApp renewal reminders (2026-10-03, LIVE)
+
+`nutreeze-renewal-whatsapp.timer` (14:00 Asia/Kuwait) → refreshes the report (`run.sh`) → `whatsapp-reminder.py`:
+ACTION_REQUIRED customers with `REMIND_DAYS` (3) days left get `whatsapp-message.txt` once per subscription.
+The script creates and starts a campaign in the WAHA Bulk tool ("Renewal YYYY-MM-DD — 3 days — auto"), so the
+owner follows it at https://wa.13-140-159-201.sslip.io/dashboard/#bulk ; the Bulk tool sends (session `nutreeze`,
+60 s pacing, stops on a failed/uncertain send). After the campaign ends: summary email to it@nutreeze.com from the
+server mailer (hello@nutreeze.com, Fleetbase Laravel mailer) with an .xlsx (date, customer name, phone).
+Switch: `WHATSAPP_LIVE=yes|no` in `whatsapp.env`. Ledger `whatsapp-ledger.sqlite3`, log `whatsapp.log`
+(both in `/var/log/nutrezee/subscription-expiry/`). Skips anyone in a Bulk campaign of the last 10 days.
+Owner test: `whatsapp-reminder.py --test-to 965XXXXXXXX` · resend today's email: `--email-only`.
+- Customers whose name matches test/"do not deliver" are excluded and counted in the log.
+
 ## Deploy (repo → VPS)
 
 Copy `ops/subscription-expiry/` to `/opt/nutrezee/subscription-expiry/` (root, 0700; create an empty
