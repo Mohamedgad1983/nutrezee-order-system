@@ -208,9 +208,13 @@ def report(day, screen, d, fix_log, started, note=None):
 
 def resync(day, log):
     """Read the legacy screen again and re-sync the day to it (same two-step flow as daily-sync.sh)."""
-    out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
-    log.append('  screen read again: ' + (out.strip().splitlines() or ['?'])[-1][:160])
     compact = day.replace('-', '')
+    fresh = load_screen(day)
+    if fresh is not None and fresh['_age_min'] < 5:
+        log.append('  screen reading is under 5 min old: used as is')  # A70.10: saves ~90 s before 01:00
+    else:
+        out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
+        log.append('  screen read again: ' + (out.strip().splitlines() or ['?'])[-1][:160])
     manifest = f"--legacy-screen-manifest={CONTAINER_CONFIG_ROOT}/legacy-screen-{compact}.json"
     if not os.path.exists(os.path.join(CONFIG_ROOT, f"legacy-screen-{compact}.json")):
         manifest = None
