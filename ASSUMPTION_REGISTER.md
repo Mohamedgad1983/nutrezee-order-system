@@ -101,3 +101,68 @@ Risk scale:
 | 2026-08-08 | A35 superseded ASM-055's shared-credential model and added ASM-056 for the initial code-derived production usernames. |
 | 2026-08-12 | Added ASM-057 for fail-closed canonicalization of repeated rows from the authoritative Partner daily-deliveries endpoint. |
 | 2026-08-12 | Added ASM-058 for the PII-free Driver Orders membership manifest after exact set comparison found one API-only Aug-13 order. |
+
+## ASM-059 — renewal dry-run freshness and pending-renewal hold
+
+2026-10-02, A74; sponsor-review-required [NC]. Conservative default: source
+and individual updates older than 30 minutes hold; a non-cancelled later
+renewal with pending/unknown payment holds for review rather than sending a
+second promotion. Only future service dates count; today is excluded, per
+verified calendar examples. This does not certify any upstream source or
+authorize live delivery. Config/contract review required before acceptance.
+
+## ASM-060 — Admin list counter undercount [NC]
+
+2026-10-02, A74 source verification. Verified pending UI endpoint repeatedly
+reports 7987 while a bounded scan returns 7994 unique order IDs, no duplicates,
+and an empty terminal page. Counter is non-authoritative for enumeration.
+Conservative acquisition scans physical pages to an explicitly empty offset,
+rejects duplicate/conflicting IDs, count changes, over-10000 rows, or fewer rows
+than declared, and requires a second identical complete membership read. This
+improves coverage beyond stopping at the undercount; it does not certify unseen
+payment/calendar semantics or authorize a partial source. Historical pending
+orders starting before every current summary subscription cannot be a later
+renewal and may be excluded only after parsing their authoritative start date.
+
+## ASM-061 — overlapping subscription chronology hold [NC]
+
+2026-10-02, A74; sponsor-review-required. Distinct internal order IDs with the
+same normalized phone and start date cannot establish which is a later renewal.
+Retain both and set individual renewal completeness false; hold that customer
+rather than choosing a subscription or blocking otherwise valid membership.
+A matching Pending order with missing dates is likewise retained as a hold.
+Active Summary joins remain strict by unique display order number; Pending is
+keyed by unique internal ID because real IDs 3034/3035 share a display number.
+This conservative rule does not authorize delivery or certify a changing source.
+
+## ASM-062 — bounded relevant-state observations [NC]
+
+2026-10-02, A74 approved build/test continuation. This supersedes only ASM-060's
+requirement that unrelated global list membership remain identical. The actual
+Admin UI exposes an all-export action. Each bounded 10000-row response must prove
+unique internal IDs, no declared undercoverage and an empty terminal offset with
+unchanged metadata; changed terminal proofs retry the whole response at most
+three times. A real probe read Active1131/1131 and Pending7999/7992 completely.
+The seven-row metadata undercount does not discard physical rows.
+
+Three independently complete exports surround two observations of every current
+Summary calendar and each two-service-day candidate's authoritative payment,
+customer ID, lifecycle and relevant renewal facts. Unrelated global changes do
+not invalidate otherwise complete reads. Relevant semantic changes hold affected
+customers; Summary identity changes restart the full acquisition once within the
+original 25-minute budget. An excluded customer becoming a two-day candidate is
+retained as a hold. Unknown calendar/payment/identity/chronology remains held.
+This establishes bounded observed consistency, not an atomic database snapshot
+or a guarantee against changes after the observation. Actual delivery remains
+disabled; owner acceptance and live pre-send recheck/claim proof are separate.
+
+## ASM-063 — Admin selected workflow status [NC]
+
+2026-10-02, A74 real-data proof. The main Order Status cell contains a disabled
+select with six labels; the observed current Active row explicitly selects
+`success`/Success. This workflow status is distinct from subscription-list Active
+membership. Use only a single explicit selected value with the matching label;
+Success is accepted for Active and Pending for Pending. Accept/Ongoing and all
+unknown, rejected, cancelled or ambiguous options remain held pending verified
+semantics. This corrects the parser; it does not authorize delivery or reinterpret
+payment status, which remains independently sourced from Payment Status.

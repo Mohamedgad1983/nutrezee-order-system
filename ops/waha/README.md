@@ -135,3 +135,148 @@ For future changes, read the live config first and preserve unrelated routes.
 
 ### Dashboard Bulk extension
 Bulk opens within the original WAHA shell at `/dashboard/#bulk`. `/bulk/` redirects users to that panel; only `#embedded` renders the inner form. It uses WAHA's theme/font resources. The installer `/opt/waha/bulk/install-dashboard-extension.py` injects the separately identifiable extension into stock HTML entry points, retaining originals under `/opt/waha/dashboard-extension/original`. Run it before first use of the new compose HTML mounts. No WAHA bundle files are edited. For an image upgrade, verify new HTML/DOM entry points and regenerate from that image; never carry stale HTML across image versions. Rollback: restore original HTML and remove the seven extension mounts. No campaign data or sending logic is changed.
+
+### Renewal assessment — DRY-RUN only (A74)
+
+`waha-renewal.timer` runs at 13:00 Asia/Kuwait (10:00 UTC), no boot catch-up,
+`Restart=no`. The evaluator has no WAHA transport, campaign writer or live CLI
+flag. Its systemd sandbox prohibits Internet sockets. Existing Basic Auth,
+manual campaigns, credentials and all other services stay unchanged.
+
+Missing, partial or stale source data returns `blocked`. The installed source
+dependency reads the existing Admin screens; supported Partner integration lacks
+the necessary authoritative payment details. Neither aggregate BI nor archived
+imports can substitute. Capture and row observations must be within 30 minutes;
+list/detail conflicts and unpaid renewals hold.
+
+A reviewed export adapter may be configured by operations with
+`RENEWAL_SOURCE_PATH`, `RENEWAL_SOURCE_ID`, `RENEWAL_SOURCE_VERIFIED=yes`.
+The installed evaluator unit names only the protected Admin producer output;
+these flags alone do not establish source completeness. The example JSON is
+fixture-only, never an approved source. Required subscription fields are
+`subscription_id`, `phone`, `state=active`, `updated_at`, `schedule_complete`,
+`renewals_complete`, `payment_detail`, `payment_list`, `schedule` (unique dates
+and states), and `later_renewals` (state/detail/list payment). Source metadata
+requires `schema_version=1`, `source_id`, `captured_at`, `complete=true` and
+`payment_authority=order_detail`. Pending/conflicting/missing payment blocks.
+
+Today is excluded: exactly two FUTURE service dates qualify. Friday-off
+ending Oct 4 has Oct 3/4 = two; weekend-off has Oct 4 = one; pauses Oct 3/5
+through Oct 7 leave Oct 4/6/7 = three. Expiry date/Days Left presentation is
+not used. No actual eligibility claims are made while the source is blocked.
+
+Protected state is `/opt/waha/renewal-data/renewal.sqlite3` (0600 in 0700).
+Run/decision/audit records persist across restarts. A completed Kuwait-day run
+cannot repeat; source failures can be assessed again. The recheck API reads
+source again and consults suppression, previous subscription/phone deliveries,
+and the same-message manual Bulk send/uncertain ledger read-only. This is
+evaluation infrastructure, **not a completed shared live sender integration**.
+Live acceptance must add a tested transactionally shared Bulk queue/throttle,
+claim/recheck lifecycle and ambiguous-send reconciliation before enabling delivery.
+The existing bulk interval and active campaigns are not touched by assessment.
+
+The installed unit sets `RENEWAL_BULK_READER=container`. Its fixed read-only query
+runs through the existing local Docker socket in `waha-bulk` as UID10001 against
+`/data/campaigns.sqlite3`, with SQLite `mode=ro` and `query_only=ON`. This lets
+SQLite use its ordinary owner-held WAL sidecars while keeping the evaluator's
+host Bulk directory read-only. No Store constructor, application write, send or
+service restart is invoked. Phone/message parameters travel on stdin; only a
+boolean result returns. Timeouts, malformed output or unavailable history block
+the complete assessment, clearing partial decisions. A narrowly recognized older
+dry-run outcome that incorrectly marked unavailable history complete may retry,
+preserving its previous aggregate in audit; valid completed runs stay deduplicated.
+
+Operator opt-out (root SSH only, no browser permission changes):
+`python3 /opt/waha/renewal/renewal.py --opt-out --reason 'Customer requested stop'`
+then enter the phone on stdin. It is normalized, persisted and audited; never
+printed. Suppression applies to the new renewal assessment, not existing manual
+campaigns. Read summary with `journalctl -u waha-renewal.service --no-pager`;
+stdout contains counts/error codes only. No new credentials are created.
+
+To install: create `/opt/waha/renewal` and root-only `renewal-data`; copy evaluator,
+Admin source/coordinator/enumeration modules and the three source/evaluator/timer
+units; `systemd-analyze verify` all units, reload systemd and
+enable only this timer. A supervised `systemctl start waha-renewal.service`
+reads Admin and runs a dry assessment without sending or writing to Admin. Disable
+only `waha-renewal.timer` for rollback; protected audit/history stays retained.
+
+### Admin read-only acquisition (PR91; delivery stays disabled)
+
+`admin_source.py` reads only observed Admin screens over verified same-origin
+HTTPS. Authentication uses the existing root-owned canonical legacy migration
+configuration; cookies and CSRF are memory-only. Only login POST is allowed.
+Summary cohorts are full server-rendered tables. Active and pending lists use the
+observed all-export mechanism with a stricter 10000-row cap: one complete response,
+unique internal IDs, no reported undercoverage, and an empty terminal request.
+Each export retries a changed terminal proof at most three times; it never joins
+pages from changing enumerations. Actual rows may exceed the known undercounting
+metadata, but every physical row remains available for reconciliation.
+
+Collection joins Summary order numbers to Active internal IDs and verifies their
+contacts. Every Summary calendar is read twice using explicit Off Day/Freeze Day
+controls over the full future date range. Exactly-two-day candidates receive two
+independent authoritative payment/customer-ID/status checks, including relevant
+later Active/pending orders. Same-phone different-customer identity, equal starts,
+unknown chronology, payment conflicts and unknown lifecycle states hold for review.
+
+The main detail workflow status is a select, whose unselected labels must not be
+treated as its current state. Require one explicit selected option with matching
+value/label. Observed selected `success`/Success supports Active membership;
+selected `pending`/Pending supports Pending. Other workflow options remain held
+until verified, and unrelated page controls never establish order status.
+
+Root-only supervised commands:
+
+```
+python3 /opt/waha/renewal/admin_source.py
+python3 /opt/waha/renewal/admin_source.py --sample 1
+python3 /opt/waha/renewal/admin_source.py --collect
+```
+
+The first command is the older strict pagination diagnostic; `--collect` uses the
+bounded coordinator. Sampling runs the same complete checks but never marks its
+output complete. Three complete exports surround two calendar/payment observations.
+Unrelated global list changes are allowed; relevant order/calendar/payment changes
+hold the affected decision. Summary identity changes restart the whole acquisition
+once within the original 25-minute budget. Category movement alone is harmless.
+This proves bounded observed consistency, not a transactional database snapshot.
+Commands emit aggregate progress/counts/error codes,
+never rows or credentials. `--write-snapshot` additionally publishes a root-only
+`admin-source.json` after complete stable collection, protected by a retained
+exclusive lock. It removes the previous export before acquisition and never
+publishes incomplete, stale or failed results. It does not send messages.
+
+The separately predeclared `waha-renewal-source.service` can be required by the
+networkless dry-run evaluator. The existing daily 13:00 Asia/Kuwait timer starts
+the source dependency first; a failed source blocks evaluation. Root credentials
+remain in their existing canonical configuration, not copied into unit files.
+Certification scope is today's five Summary cohorts, joined to all Active and
+Pending rows, not all Active subscriptions. Explicit future calendars determine
+exactly two service dates; authoritative detail payment and later renewal status
+control individual eligibility/holds. Source metadata counters are advisory;
+every export must independently prove complete physical unique-ID enumeration.
+A matching
+pending order with unknown dates, or another subscription sharing the same start,
+holds that customer's decision without silently discarding the record.
+
+The fail-closed dry-run wiring can attempt a protected source read daily; source
+acceptance remains blocked until full real-data validation succeeds. A failed
+source dependency prevents evaluator execution, so inspect its service status
+as well as the ledger; an older ledger row is not today's completed evaluation.
+Actual renewal sending remains disabled pending owner acceptance and verified live
+claim/recheck integration; existing manual campaigns are untouched.
+
+### Disabled shared Bulk bridge (synthetic acceptance only)
+
+`renewal_bulk.py` reuses the Bulk draft transaction with separate renewal metadata,
+durable subscription/phone reservations and same-transaction review audit. Each
+prospective recipient gets a fresh source/opt-out/manual-history check. Relevant
+changes hold recipients; held recipients are never automatically restored. Both
+campaign start and worker tick hard-stop renewal campaigns before readiness,
+claim or any send call. There is no CLI, HTTP route or configuration unlock.
+
+The bridge currently has no scheduler/service caller. Tests use temporary databases;
+the deployed manual Bulk code/database is unchanged. Future wiring must reuse the
+running worker's Store instance: constructing another Store on its live database
+would run the existing startup recovery. File rechecks at draft/review time do not
+substitute for a future live Admin recheck before an actual send.

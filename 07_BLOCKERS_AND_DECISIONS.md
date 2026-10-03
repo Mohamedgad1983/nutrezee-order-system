@@ -70,3 +70,16 @@ Still standing, clearly scoped:
 > **2026-07-25 — WP-OPS-02/03 release gate verified:** provision separate least-privilege Fleetbase service identities for credential rotation and order reassignment, store their tokens only in `/opt/nutrezee/.env` mode `0600`, and identify the named human Logistics Manager account. The three required integration variables are currently unset; no dedicated Logistics Manager exists; migrations `0025/0026` are not deployed. Draft PR #43 is green and mergeable but must remain unmerged until those inputs exist and its broad operational parent diff is reviewed. Then merge PR #43, deploy migrations `0024–0026`, and run the required staging Playwright and Navigator proof. Do not use the UAT seed account or silently add logistics privileges to the existing super-admin as a substitute.
 
 **WP-14's remaining critical path** is now the non-infrastructure items per `19_Roadmap/wp14_blocker_report.md` §4: the workshop items (validator semantics L1, cancel-cascade L2, UAT values, S8 matrix), assumption-register sign-off, and the staging **restore drill** (environment_plan §4). UAT/pilot can now exercise the live staging URL.
+
+## OPS-WAHA-RENEWAL Admin source acceptance — 2026-10-02
+
+Verified corrected source/evaluator completed 2026-10-02 19:19Kuwait:875 Summary
+orders checked twice;20 eligible,3 verified renewals excluded,19 review holds.
+Protected complete snapshot, source/evaluator both terminal success; sent0.
+130 local/VPS tests and functional4e25e29 push/PR CI15/15 pass. Existing manual
+campaign1 complete/sent40 and67 container start/restart records unchanged.
+Daily13:00Kuwait assessment runs on server without the Mac. Source acquisition is
+no longer blocked. Actual delivery remains gated by owner test acceptance plus
+verified live claim/fresh pre-send Admin recheck. Shared Bulk draft/review bridge
+is implemented only in disabled synthetic tests, not deployed to active Bulk.
+See ops/waha/RENEWAL_PLAN.md; tomorrow's eligible count remains data-dependent.

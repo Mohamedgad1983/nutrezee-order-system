@@ -1,0 +1,12 @@
+[Unit]
+Description=Assess renewals daily at 13:00 Kuwait (no sending)
+
+[Timer]
+OnCalendar=*-*-* 13:00:00 Asia/Kuwait
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+Unit=waha-renewal.service
+
+[Install]
+WantedBy=timers.target

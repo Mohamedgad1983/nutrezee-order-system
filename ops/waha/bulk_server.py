@@ -2,6 +2,7 @@
 """Explicitly started WhatsApp campaigns, paced durably. Python standard library."""
 import base64
 import csv
+from collections import Counter
 from contextlib import contextmanager
 import hmac
 import io
@@ -101,6 +102,17 @@ class Store:
               CREATE TABLE IF NOT EXISTS throttle (
                 id INTEGER PRIMARY KEY CHECK(id=1), next_at REAL NOT NULL);
               INSERT OR IGNORE INTO throttle VALUES(1,0);
+              CREATE TABLE IF NOT EXISTS renewal_campaign (
+                campaign_id INTEGER PRIMARY KEY REFERENCES campaign(id));
+              CREATE TABLE IF NOT EXISTS renewal_recipient (
+                recipient_id INTEGER PRIMARY KEY REFERENCES recipient(id),
+                subscription TEXT NOT NULL, phone TEXT NOT NULL,
+                UNIQUE(subscription, phone));
+              CREATE TABLE IF NOT EXISTS renewal_review (
+                id INTEGER PRIMARY KEY, campaign_id INTEGER REFERENCES campaign(id),
+                subscription TEXT NOT NULL, phone TEXT NOT NULL, reason TEXT NOT NULL,
+                at REAL NOT NULL);
+
             ''')
             if 'actor' not in {r['name'] for r in db.execute('PRAGMA table_info(event)')}:
                 db.execute("ALTER TABLE event ADD COLUMN actor TEXT NOT NULL DEFAULT 'admin'")
@@ -128,7 +140,7 @@ class Store:
     def event(self, db, campaign, kind):
         db.execute('INSERT INTO event(campaign_id,kind,at,actor) VALUES(?,?,?,?)', (campaign, kind, self.clock(), self.actor))
 
-    def create(self, data):
+    def _campaign_data(self, data):
         phones = numbers(data.get('numbers'))
         message = data.get('message')
         name = data.get('name', '').strip() if isinstance(data.get('name', ''), str) else ''
@@ -136,13 +148,116 @@ class Store:
             raise Invalid('أدخل اسم حملة من 1 إلى 100 حرف.')
         if not isinstance(message, str) or not message.strip() or len(message) > 4000:
             raise Invalid('أدخل نص الرسالة من 1 إلى 4000 حرف.')
+        return name, message.strip(), phones
+
+    def _create_in_transaction(self, db, name, message, phones):
+        # Manual and dormant renewal preparation share the ONLY queue insertion path.
+        campaign = db.execute('INSERT INTO campaign(name,message,created) VALUES(?,?,?)',
+                              (name, message, self.clock())).lastrowid
+        db.executemany('INSERT INTO recipient(campaign_id,phone) VALUES(?,?)', [(campaign, p) for p in phones])
+        self.event(db, campaign, 'draft_created')
+        return campaign
+
+    def create(self, data):
+        name, message, phones = self._campaign_data(data)
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
-            campaign = db.execute('INSERT INTO campaign(name,message,created) VALUES(?,?,?)',
-                                  (name, message.strip(), self.clock())).lastrowid
-            db.executemany('INSERT INTO recipient(campaign_id,phone) VALUES(?,?)', [(campaign, p) for p in phones])
-            self.event(db, campaign, 'draft_created')
-        return campaign
+            return self._create_in_transaction(db, name, message, phones)
+
+    @staticmethod
+    def _review_reason(reason):
+        # Callback results are fixed reason codes, never source text or PII.
+        if not isinstance(reason, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', reason):
+            raise Invalid('Invalid renewal review result.')
+        return reason
+
+    def _renewal_blocked(self, db, subscription, normalized, message, recipient_id=None):
+        existing = db.execute('SELECT recipient_id FROM renewal_recipient WHERE subscription=? AND phone=?',
+                              (subscription, normalized)).fetchone()
+        if existing and existing[0] != recipient_id:
+            return 'renewal_already_prepared'
+        if db.execute("""SELECT 1 FROM recipient r JOIN campaign c ON c.id=r.campaign_id
+                WHERE r.phone=? AND c.message=? AND r.state IN ('sending','sent','uncertain')
+                AND (? IS NULL OR r.id!=?) LIMIT 1""", (normalized, message, recipient_id, recipient_id)).fetchone():
+            return 'same_message_in_manual_bulk'
+        return None
+
+    def prepare_renewals(self, name, message, candidates, recheck):
+        """Trusted, dormant bridge only. There is deliberately no HTTP/CLI entry point.
+
+        `recheck` must return a fresh eligibility/opt-out decision for each candidate.
+        All reviews, dedup reservations and drafts commit together, or none do.
+        This method NEVER starts a campaign; renewal delivery has no runtime unlock.
+        """
+        if not candidates:
+            return {'campaign_id': None, 'prepared': 0, 'held': {}, 'live_enabled': False}
+        name, message, phones = self._campaign_data({
+            'name': name, 'message': message, 'numbers': '\n'.join(p for _, p in candidates)})
+        if len(candidates) > MAX_RECIPIENTS or len(set(candidates)) != len(candidates):
+            raise Invalid('Invalid renewal candidates.')
+        for subscription, normalized in candidates:
+            if (not isinstance(subscription, str) or not subscription.strip() or len(subscription) > 200
+                    or numbers(normalized) != [normalized]):
+                raise Invalid('Invalid renewal identity.')
+        frequency = Counter(p for _, p in candidates)
+        with self.lock:
+            with self.db() as db:
+                db.execute('BEGIN IMMEDIATE')
+                reviews, accepted, held = [], [], {}
+                for subscription, normalized in candidates:
+                    reason = self._review_reason(recheck(subscription, normalized))
+                    if reason == 'eligible':
+                        reason = (self._renewal_blocked(db, subscription, normalized, message)
+                                  or ('multiple_subscriptions_for_phone' if frequency[normalized] > 1 else 'eligible'))
+                    reviews.append((subscription, normalized, reason))
+                    if reason == 'eligible':
+                        accepted.append((subscription, normalized))
+                    else:
+                        held[reason] = held.get(reason, 0) + 1
+                campaign = None
+                if accepted:
+                    campaign = self._create_in_transaction(db, name, message, [p for _, p in accepted])
+                    db.execute('INSERT INTO renewal_campaign VALUES(?)', (campaign,))
+                    for subscription, normalized in accepted:
+                        recipient = db.execute('SELECT id FROM recipient WHERE campaign_id=? AND phone=?',
+                                               (campaign, normalized)).fetchone()[0]
+                        db.execute('INSERT INTO renewal_recipient VALUES(?,?,?)', (recipient, subscription, normalized))
+                    self.event(db, campaign, 'renewal_delivery_locked')
+                for subscription, normalized, reason in reviews:
+                    db.execute('INSERT INTO renewal_review(campaign_id,subscription,phone,reason,at) VALUES(?,?,?,?,?)',
+                               (campaign, subscription, normalized, reason, self.clock()))
+                    self.event(db, campaign, 'renewal_review_' + reason)
+                return {'campaign_id': campaign, 'prepared': len(accepted), 'held': held, 'live_enabled': False}
+
+    def review_renewals(self, campaign, recheck):
+        """Recheck prospective recipients without claiming or invoking transport.
+
+        A later activation must call the same fresh guard in the actual claim
+        transaction. This review is NOT proof that a future send is eligible.
+        """
+        with self.lock:
+            with self.db() as db:
+                db.execute('BEGIN IMMEDIATE')
+                row = db.execute('SELECT c.* FROM campaign c JOIN renewal_campaign x ON x.campaign_id=c.id WHERE c.id=?',
+                                 (campaign,)).fetchone()
+                if not row:
+                    raise Invalid('Renewal draft not found.')
+                counts = {}
+                recipients = list(db.execute("""SELECT r.id,r.phone,x.subscription FROM recipient r
+                    JOIN renewal_recipient x ON x.recipient_id=r.id
+                    WHERE r.campaign_id=? AND r.state='pending' ORDER BY r.id""", (campaign,)))
+                for recipient in recipients:
+                    reason = self._review_reason(recheck(recipient['subscription'], recipient['phone']))
+                    if reason == 'eligible':
+                        reason = self._renewal_blocked(db, recipient['subscription'], recipient['phone'], row['message'], recipient['id']) or reason
+                    if reason != 'eligible':
+                        db.execute("UPDATE recipient SET state='held',error=? WHERE id=?", (reason, recipient['id']))
+                    counts[reason] = counts.get(reason, 0) + 1
+                    db.execute('INSERT INTO renewal_review(campaign_id,subscription,phone,reason,at) VALUES(?,?,?,?,?)',
+                               (campaign, recipient['subscription'], recipient['phone'], reason, self.clock()))
+                    self.event(db, campaign, 'renewal_recheck_' + reason)
+                self.event(db, campaign, 'renewal_delivery_locked')
+                return {'counts': counts, 'live_enabled': False, 'claimed': 0}
 
     def snapshot(self):
         with self.db() as db:
@@ -169,6 +284,8 @@ class Store:
                 if not row:
                     raise Invalid('الحملة غير موجودة.')
                 if action == 'start':
+                    if db.execute('SELECT 1 FROM renewal_campaign WHERE campaign_id=?', (campaign,)).fetchone():
+                        raise Invalid('Renewal delivery is disabled pending owner acceptance.')
                     if data.get('confirmed') is not True:
                         raise Invalid('راجع الرسالة والأرقام وأكد موافقة المستلمين قبل البدء.')
                     if row['state'] not in ('draft', 'paused'):
@@ -200,6 +317,12 @@ class Store:
                 db.execute('BEGIN IMMEDIATE')
                 campaign = db.execute("SELECT * FROM campaign WHERE state='running' ORDER BY id LIMIT 1").fetchone()
                 if not campaign:
+                    return False
+                # Independent defense: even an erroneously running renewal draft
+                # can NEVER reach ready(), claim, or send(). No runtime unlock exists.
+                if db.execute('SELECT 1 FROM renewal_campaign WHERE campaign_id=?', (campaign['id'],)).fetchone():
+                    db.execute("UPDATE campaign SET state='paused',error='renewal_delivery_disabled' WHERE id=?", (campaign['id'],))
+                    self.event(db, campaign['id'], 'renewal_delivery_locked')
                     return False
                 recipient = db.execute("SELECT * FROM recipient WHERE campaign_id=? AND state='pending' ORDER BY id LIMIT 1", (campaign['id'],)).fetchone()
                 if not recipient:
