@@ -327,6 +327,36 @@ function deleteWithoutActivity(object $model): bool
     return true;
 }
 
+// A70.10: the ownership checks below ran ~26 information_schema queries per customer (20 min for a
+// 940-order day in which nothing changed). The schema cannot change during one run, so ask once.
+function schemaHasTable(string $table): bool
+{
+    static $known = [];
+    return $known[$table] ??= Schema::hasTable($table);
+}
+
+function schemaHasColumn(string $table, string $column): bool
+{
+    static $known = [];
+    return $known[$table . '.' . $column] ??= Schema::hasColumn($table, $column);
+}
+
+/** Payloads owned by this integration prefix. Cached per run; $refresh re-reads (payloads created meanwhile). */
+function integrationPayloadUuids(string $companyUuid, string $prefix, bool $refresh = false): array
+{
+    static $known = [];
+    $key = $companyUuid . '|' . $prefix;
+    if ($refresh || !isset($known[$key])) {
+        $known[$key] = DB::table('payloads')
+            ->where('company_uuid', $companyUuid)
+            ->where('meta->integration_owner', 'nutreeze_partner_orders')
+            ->where('meta->integration_prefix', $prefix)
+            ->pluck('uuid')
+            ->all();
+    }
+    return $known[$key];
+}
+
 function hasForbiddenContactReference(array $contactUuids): bool
 {
     if ($contactUuids === []) {
@@ -346,8 +376,8 @@ function hasForbiddenContactReference(array $contactUuids): bool
         ['votes', 'customer_uuid'],
     ];
     foreach ($references as [$table, $column]) {
-        if (Schema::hasTable($table)
-            && Schema::hasColumn($table, $column)
+        if (schemaHasTable($table)
+            && schemaHasColumn($table, $column)
             && DB::table($table)->whereIn($column, $contactUuids)->exists()) {
             return true;
         }
@@ -361,30 +391,27 @@ function hasForeignOperationalContactReference(array $contactUuids, string $comp
         return false;
     }
     if ($allowedPayloadUuids === null) {
-        $allowedPayloadUuids = DB::table('payloads')
-            ->where('company_uuid', $companyUuid)
-            ->where('meta->integration_owner', 'nutreeze_partner_orders')
-            ->where('meta->integration_prefix', $prefix)
-            ->pluck('uuid')
-            ->all();
+        // A cached list can only miss payloads created during this run, which would look foreign;
+        // so a positive answer from the cached list is confirmed against a fresh list.
+        return hasForeignOperationalContactReference($contactUuids, $companyUuid, $prefix, integrationPayloadUuids($companyUuid, $prefix))
+            && hasForeignOperationalContactReference($contactUuids, $companyUuid, $prefix, integrationPayloadUuids($companyUuid, $prefix, true));
     }
+    $allowed = null;
     foreach (['entities', 'waypoints'] as $table) {
-        if (!Schema::hasTable($table)
-            || !Schema::hasColumn($table, 'customer_uuid')
-            || !Schema::hasColumn($table, 'payload_uuid')) {
+        if (!schemaHasTable($table)
+            || !schemaHasColumn($table, 'customer_uuid')
+            || !schemaHasColumn($table, 'payload_uuid')) {
             continue;
         }
-        $query = DB::table($table)->whereIn('customer_uuid', $contactUuids);
-        if ($allowedPayloadUuids === []) {
-            if ($query->exists()) {
-                return true;
+        // A70.10: same rule as before (a reference with no payload, or with a payload that is not ours, is
+        // foreign), but compared in PHP: sending ~30,000 payload ids in a NOT IN list cost 12 ms per customer.
+        $allowed ??= array_fill_keys($allowedPayloadUuids, true);
+        foreach (array_chunk($contactUuids, 500) as $chunk) {
+            foreach (DB::table($table)->whereIn('customer_uuid', $chunk)->distinct()->pluck('payload_uuid') as $payloadUuid) {
+                if ($payloadUuid === null || !isset($allowed[$payloadUuid])) {
+                    return true;
+                }
             }
-            continue;
-        }
-        if ($query->where(function ($reference) use ($allowedPayloadUuids) {
-            $reference->whereNull('payload_uuid')->orWhereNotIn('payload_uuid', $allowedPayloadUuids);
-        })->exists()) {
-            return true;
         }
     }
     return false;
@@ -415,13 +442,13 @@ function placeHasForeignReference(string $placeUuid, string $allowedPayloadUuid,
         ['vendors', 'place_uuid'],
     ];
     foreach ($directReferences as [$table, $column]) {
-        if (Schema::hasTable($table)
-            && Schema::hasColumn($table, $column)
+        if (schemaHasTable($table)
+            && schemaHasColumn($table, $column)
             && DB::table($table)->where($column, $placeUuid)->exists()) {
             return true;
         }
     }
-    if (Schema::hasTable('waypoints') && Schema::hasColumn('waypoints', 'place_uuid')) {
+    if (schemaHasTable('waypoints') && schemaHasColumn('waypoints', 'place_uuid')) {
         $waypoints = DB::table('waypoints')->where('place_uuid', $placeUuid);
         if ($forDeletion || $waypoints->where(function ($query) use ($allowedPayloadUuid) {
             $query->whereNull('payload_uuid')->orWhere('payload_uuid', '!=', $allowedPayloadUuid);

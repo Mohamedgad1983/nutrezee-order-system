@@ -135,22 +135,86 @@ def evaluate(day, screen):
     return d
 
 
-def wait_for_scheduled_sync(limit_s=1200):
-    """Never repair while a scheduled Partner sync is still writing."""
-    units = ['nutreeze-partner-daily.service', 'nutreeze-partner-sameday.service', 'nutreeze-partner-evening.service']
+UNITS = ['nutreeze-partner-daily.service', 'nutreeze-partner-sameday.service', 'nutreeze-partner-evening.service']
+
+
+def sync_running():
+    return any(state in ('active', 'activating', 'reloading') for state in sh(['systemctl', 'is-active'] + UNITS).split())
+
+
+def print_day_synced(day):
+    """A70.9 — the running rolling sync has already finished the print day (it does that day first).
+
+    The run then spends ~20 more minutes on the day after; the check must not wait for that."""
+    if sh(['systemctl', 'is-active', 'nutreeze-partner-daily.service']).strip() not in ('active', 'activating'):
+        return False
+    started = sh(['systemctl', 'show', '-p', 'ExecMainStartTimestamp', '--value', 'nutreeze-partner-daily.service']).strip()
+    if len(started.split(' ')) != 4:
+        return False
+    out = sh(['journalctl', '-u', 'nutreeze-partner-daily.service', '--since', started.rsplit(' ', 1)[0].split(' ', 1)[1],
+              '--no-pager', '-o', 'cat'])
+    return any('"event":"complete"' in l and '"dry_run":false' in l and f'"delivery_date":"{day}"' in l for l in out.splitlines())
+
+
+def wait_for_scheduled_sync(limit_s=1200, day=None):
+    """Never repair while a scheduled Partner sync is still writing. With a day: only wait for that day."""
     deadline = time.time() + limit_s
     while time.time() < deadline:
-        states = sh(['systemctl', 'is-active'] + units).split()
-        if not any(state in ('active', 'activating', 'reloading') for state in states):
+        if not sync_running() or (day and print_day_synced(day)):
             return
-        time.sleep(20)
+        time.sleep(15)
+
+
+def report(day, screen, d, fix_log, started, note=None):
+    page = d['page']
+    lines = [f'Checked {started}–{datetime.datetime.now(KW).strftime("%H:%M")} Kuwait with the Batch Labels page code.', '']
+    if note:
+        lines += [note, '']
+    if screen is None or d['diff'] is None:
+        subject = f'[CHECK] Labels {day}: could not compare — ' + ('no legacy screen reading' if screen is None else page.get('error', '?'))
+        lines.append('The legacy screen could not be read or the page check failed; Fleetbase follows Partner only.')
+    else:
+        n_screen = len(screen['order_numbers'])
+        zero = d['diff'] == 0
+        subject = (f"[{'OK' if zero else 'CHECK'}] Labels {day}: Batch Labels {page['labels']} = legacy screen {n_screen}"
+                   if zero else
+                   f"[CHECK] Labels {day}: Batch Labels {page['labels']} vs legacy screen {n_screen} — {d['diff']} difference(s)")
+        lines += [
+            f"Legacy screen / شاشة السيستم القديم: {n_screen} orders (read {screen['_age_min']} min ago)",
+            f"Batch Labels page / صفحة الطباعة: {page['labels']} labels",
+            f"Difference / الفرق: {d['diff']}",
+        ]
+        if screen.get('_empty_day'):
+            lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
+        if screen.get('test_orders_excluded'):
+            lines.append(f"Test orders removed / طلبات تجربة اتشالت: {short(screen['test_orders_excluded'])}")
+        for title, key in (('On the screen, no label / على الشاشة ومالهاش ملصق', 'no_label'),
+                           ('Label but not on the screen / ملصق ومش على الشاشة', 'extra_label'),
+                           ('Different driver / سواق مختلف', 'wrong_driver'),
+                           ('No driver in the legacy admin itself / مالوش سواق في السيستم القديم نفسه', 'no_driver_in_legacy')):
+            if d.get(key):
+                lines.append(f'{title}: {short(d[key])}')
+    if fix_log:
+        lines += ['', 'Automatic repair / تصليح تلقائي:'] + fix_log
+    body = '\n'.join(lines) + '\n'
+    os.makedirs('/root/a70', exist_ok=True)
+    with open('/root/a70/last-print-status.txt', 'w') as fh:
+        fh.write(subject + '\n\n' + body)
+    print(subject)
+    print(body)
+    if '--no-send' not in sys.argv:
+        print('mail:', 'sent' if send(subject, body) else 'FAILED')
 
 
 def resync(day, log):
     """Read the legacy screen again and re-sync the day to it (same two-step flow as daily-sync.sh)."""
-    out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
-    log.append('  screen read again: ' + (out.strip().splitlines() or ['?'])[-1][:160])
     compact = day.replace('-', '')
+    fresh = load_screen(day)
+    if fresh is not None and fresh['_age_min'] < 5:
+        log.append('  screen reading is under 5 min old: used as is')  # A70.10: saves ~90 s before 01:00
+    else:
+        out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
+        log.append('  screen read again: ' + (out.strip().splitlines() or ['?'])[-1][:160])
     manifest = f"--legacy-screen-manifest={CONTAINER_CONFIG_ROOT}/legacy-screen-{compact}.json"
     if not os.path.exists(os.path.join(CONFIG_ROOT, f"legacy-screen-{compact}.json")):
         manifest = None
@@ -209,11 +273,14 @@ def main():
     day = args[0] if args else (datetime.datetime.now(KW).date() + datetime.timedelta(days=1)).isoformat()
     fix = '--no-fix' not in sys.argv
     started = datetime.datetime.now(KW).strftime('%H:%M')
-    if fix:
-        wait_for_scheduled_sync()
-
-    screen = current_screen(day)
     fix_log = []
+    if fix:
+        wait_for_scheduled_sync(day=day)
+        # A70.9: read the screen again now, so a change made in legacy after the sync started is seen before the print.
+        out = sh([f'{INTEGRATION}/legacy-screen-manifest.py', day], timeout=900)
+        fix_log.append('  screen read now: ' + ('done' if 'legacy_screen_manifest_written' in out or 'screen_empty_day' in out
+                                                else 'FAILED — using the reading from the sync'))
+    screen = current_screen(day)
     if fix:
         feed_labels(day, fix_log)  # A70.7: always complete the label database first (≈15 s)
     if fix and screen is None:
@@ -226,6 +293,11 @@ def main():
             break
         if d['diff'] == 0 and not d.get('not_in_label_db'):
             break
+        if round_no == 1 and d['diff']:
+            # A70.9: tell the owner before 01:00 exactly which orders differ; the repair needs ~20 min.
+            report(day, screen, d, fix_log, started,
+                   'Repair is running now; a second email follows. / التصليح شغال دلوقتي وهيوصلك إيميل تاني بالنتيجة.')
+        wait_for_scheduled_sync()  # the re-sync needs the lock the scheduled run holds
         fix_log.append(f'Repair round {round_no}:')
         if d['diff'] is None or d['diff'] > 0:
             resync(day, fix_log)
@@ -233,42 +305,7 @@ def main():
         feed_labels(day, fix_log)
         d = evaluate(day, screen)
 
-    page = d['page']
-    lines = [f'Checked {started}–{datetime.datetime.now(KW).strftime("%H:%M")} Kuwait with the Batch Labels page code.', '']
-    if screen is None or d['diff'] is None:
-        subject = f'[CHECK] Labels {day}: could not compare — ' + ('no legacy screen reading' if screen is None else page.get('error', '?'))
-        lines.append('The legacy screen could not be read or the page check failed; Fleetbase follows Partner only.')
-    else:
-        n_screen = len(screen['order_numbers'])
-        zero = d['diff'] == 0
-        subject = (f"[{'OK' if zero else 'CHECK'}] Labels {day}: Batch Labels {page['labels']} = legacy screen {n_screen}"
-                   if zero else
-                   f"[CHECK] Labels {day}: Batch Labels {page['labels']} vs legacy screen {n_screen} — {d['diff']} difference(s)")
-        lines += [
-            f"Legacy screen / شاشة السيستم القديم: {n_screen} orders (read {screen['_age_min']} min ago)",
-            f"Batch Labels page / صفحة الطباعة: {page['labels']} labels",
-            f"Difference / الفرق: {d['diff']}",
-        ]
-        if screen.get('_empty_day'):
-            lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
-        if screen.get('test_orders_excluded'):
-            lines.append(f"Test orders removed / طلبات تجربة اتشالت: {short(screen['test_orders_excluded'])}")
-        for title, key in (('On the screen, no label / على الشاشة ومالهاش ملصق', 'no_label'),
-                           ('Label but not on the screen / ملصق ومش على الشاشة', 'extra_label'),
-                           ('Different driver / سواق مختلف', 'wrong_driver'),
-                           ('No driver in the legacy admin itself / مالوش سواق في السيستم القديم نفسه', 'no_driver_in_legacy')):
-            if d.get(key):
-                lines.append(f'{title}: {short(d[key])}')
-    if fix_log:
-        lines += ['', 'Automatic repair / تصليح تلقائي:'] + fix_log
-    body = '\n'.join(lines) + '\n'
-    os.makedirs('/root/a70', exist_ok=True)
-    with open('/root/a70/last-print-status.txt', 'w') as fh:
-        fh.write(subject + '\n\n' + body)
-    print(subject)
-    print(body)
-    if '--no-send' not in sys.argv:
-        print('mail:', 'sent' if send(subject, body) else 'FAILED')
+    report(day, screen, d, fix_log, started)
     return 0
 
 

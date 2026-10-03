@@ -197,3 +197,59 @@ the guard's own repair and 20 min after the 01:00 print. Journal:
   - The 10-01 regression run still compares order by order. Its 4 differences (29376, 29882, 30141, 30173) are orders Partner dropped at 18:18 Kuwait on 30 Sep, after that day's print. That is expected.
 - **Count:** night 1 had no wrong label, but the guard did not give [OK] at the time. The 3-night count therefore starts with Thu night (print 01:00 Fri, labels for Sat 3 Oct).
   - Reliance moves one night later, to 01:00 Mon 5 Oct, unless the owner counts the empty Friday.
+
+## A70.9 / A70.10 — nights 1–2 of the count, guard timing, sync 20 min → 2.4 min (2026-10-03)
+
+**Night results** (Verified from the VPS journal)
+
+| Night | Labels for | Result | Email (Kuwait) |
+|---|---|---|---|
+| Thu 1 Oct | Sat 3 Oct | [OK] 726 = 726, no repair | 00:57 |
+| Fri 2 Oct | Sun 4 Oct | [CHECK] 943 vs 942, 1 difference | 01:08 |
+
+**What went wrong on Fri night**
+
+- 00:27: the screen had 943 orders; Fleetbase was synced to 943 by 00:48.
+- After that, order 25954 was removed in the legacy admin, so the screen showed 942.
+- The guard waited for the whole rolling run (both days), which ended at 01:03.
+- Its re-sync then failed, because the 01:00 rolling run had already taken the integration lock.
+- That 01:00 run fixed the day itself at 01:25 (942 = 942).
+- Root cause of the timing: one day's sync took ~20 minutes even when no order changed.
+
+**A70.9 — guard (`print-status.py`)**
+
+- Waits only until the running rolling sync has finished the print day, not both days.
+- Reads the legacy screen again before comparing, so a late legacy change is seen before the print.
+- On a difference, sends the [CHECK] email with the order numbers straight away, then repairs and sends the final email.
+- Before a re-sync, waits for the scheduled run to release the lock.
+- **Repair path verified on a real difference** (first time): order 23316 was removed in legacy on Sat morning.
+  - The guard reported `942 vs 941 — Label but not on the screen: 23316`.
+  - It re-synced and ended `[OK] Labels 2026-10-04: Batch Labels 941 = legacy screen 941`.
+
+**A70.10 — why the sync was slow, and the fix** (measured with `strace` on the running sync)
+
+| Cause | Fix |
+|---|---|
+| ~26 `information_schema` queries per customer from `Schema::hasTable/hasColumn` in the ownership checks | `schemaHasTable` / `schemaHasColumn` ask once per run |
+| One JSON scan of all payloads per customer (owned-payload list) | `integrationPayloadUuids` caches the list per run; a "foreign" answer from the cached list is confirmed against a fresh list, so a payload created during the run can never raise a false alarm |
+| `NOT IN` list of ~30,000 payload ids sent twice per customer (12 ms each) | Same rule compared in PHP against the cached list |
+| No index for `company_uuid + internal_id` on `orders` and `contacts` (50–76 ms per lookup, full scan of ~33,000 rows) and none on `orders.facilitator_uuid` (13 ms) | Three additive indexes, `ops/fleetbase/sql/a70-10-sync-indexes.sql`, applied online |
+
+- No rule changed: the same ownership checks run, and the self-test is still 43/43.
+- **Measured on the VPS, 2026-10-04 day, 941 orders, all unchanged, write + verify:**
+
+| Step | Time |
+|---|---|
+| Before | ~1,230 s (20.5 min) |
+| Schema + payload-list cache | 888 s |
+| + `internal_id` indexes | 232 s |
+| + in-PHP payload check and facilitator index | **144 s (2.4 min)** |
+
+- Every run ended `complete`, `verified: true`, 941 assigned.
+- Installed script SHA-256 prefix: `5b6e0c22e43ac2f3`. Backup: `nutreeze-orders.php.bak-a70-9`.
+
+**Effect on the night**
+
+- The 00:25 rolling run should finish both days by about 00:33.
+- The 00:45 guard re-reads the screen and should email by about 00:48.
+- A repair round should take about 4 minutes, so it finishes before 01:00.
