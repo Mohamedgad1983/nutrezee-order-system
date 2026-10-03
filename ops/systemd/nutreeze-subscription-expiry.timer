@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily 07:30 Asia/Kuwait — Nutreeze subscription-expiry report
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Kuwait
+Persistent=true
+Unit=nutreeze-subscription-expiry.service
+
+[Install]
+WantedBy=timers.target

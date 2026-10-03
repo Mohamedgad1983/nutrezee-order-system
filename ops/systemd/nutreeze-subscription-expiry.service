@@ -1,0 +1,11 @@
+[Unit]
+Description=Nutreeze daily subscription-expiry report (read-only legacy admin reading; expiring within 3 days)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/subscription-expiry/run.sh
+TimeoutStartSec=3600
+# No [Install]: the .timer drives it.
