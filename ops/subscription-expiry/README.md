@@ -29,8 +29,8 @@ and writes the report. Never submits a form on an order; never visits action lin
 
 `nutreeze-renewal-whatsapp.timer` (14:00 Asia/Kuwait) → refreshes the report (`run.sh`) → `whatsapp-reminder.py`.
 After the 24 h WhatsApp block of 2026-10-03 the owner kept this channel with gentler rules (`whatsapp.env`):
-`DAILY_CAP=40`, random gap `GAP_MIN..GAP_MAX` (4–8 min), nothing after `SEND_UNTIL`, customers with 3 days left only.
-`whatsapp-message.txt` is personal ({name} = customer first name, {days}), has no link or promo code, and an opt-out line;
+`DAILY_CAP=20`, random gap `GAP_MIN..GAP_MAX` (4–8 min), nothing after `SEND_UNTIL`, customers with 3 days left only.
+`whatsapp-message.txt` is personal ({name} = customer first name, {days}), has the US15 promo code but no link, and an opt-out line;
 a reply "إيقاف"/"stop" (or `--optout <phone>`) stops reminders for that number. The first failed send or a
 disconnected session halts sending for the day (`.whatsapp-halt-YYYY-MM-DD`). Sent directly through the WAHA session
 (not the Bulk page: it can only send identical text every 60 s). Summary email + .xlsx to it@ (cc call centre) after each run.
