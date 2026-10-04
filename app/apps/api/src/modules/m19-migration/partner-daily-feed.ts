@@ -67,6 +67,8 @@ export interface PartnerDailyFetchResult {
   rows: PartnerDailyDelivery[];
   completeness: PartnerDailyCompleteness;
   pages: number;
+  /** A70.11: rows left out because they could not be used (unrepairable, or a repeated delivery id). */
+  rejectedRows?: number;
 }
 
 /** Flat row handed to the M19 batch runner (hashed for the apply gate, stored in the report). */
@@ -127,14 +129,21 @@ function requiredString(obj: Record<string, unknown>, field: string, max: number
   return out;
 }
 
-function optionalString(obj: Record<string, unknown>, field: string, max: number): string | null {
+/**
+ * A70.11 — free text typed by people (names, addresses) is repaired, never a reason to refuse a whole day:
+ * a line break inside one address stopped the label feed for all of 2026-10-05. Same rule as the Fleetbase
+ * bridge's row repair: control characters become spaces, the text is trimmed and cut to the limit.
+ */
+function repairedText(obj: Record<string, unknown>, field: string, max: number): string | null {
   const value = obj[field];
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'string') violation(`${field} must be a string`);
-  const out = value.trim();
-  if (!out) return null;
-  if (out.length > max || hasControlChars(out)) violation(`${field} invalid`);
-  return out;
+  if (typeof value !== 'string') return null;
+  let out = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    out += code < 0x20 || code === 0x7f ? ' ' : value[i];
+  }
+  out = out.replace(/ {2,}/g, ' ').trim().slice(0, max).trim();
+  return out || null;
 }
 
 function requiredBoolean(obj: Record<string, unknown>, field: string): boolean {
@@ -201,17 +210,20 @@ export function normalizeDailyDelivery(raw: unknown, deliveryDate: string): Part
 
   const isCancelled = requiredBoolean(row, 'is_cancelled');
   const orderStatus = requiredString(row, 'order_status', 32);
+  const orderNumber = requiredString(row, 'order_number', 255);
+  const areaEn = repairedText(address, 'area_en', 255);
+  const areaAr = repairedText(address, 'area_ar', 255);
   return {
     deliveryId: positiveInt(row['delivery_id'], 'delivery_id'),
     orderId: positiveInt(row['order_id'], 'order_id'),
-    orderNumber: requiredString(row, 'order_number', 255),
+    orderNumber,
     deliveryDate: rowDate,
     customerRef,
-    customerName: requiredString(customer, 'name', 255),
-    customerPhone: requiredString(customer, 'phone', 64),
-    addressText: requiredString(address, 'text', 2000),
-    areaEn: optionalString(address, 'area_en', 255),
-    areaAr: optionalString(address, 'area_ar', 255),
+    customerName: repairedText(customer, 'name', 255) ?? `Customer ${orderNumber}`,
+    customerPhone: repairedText(customer, 'phone', 64) ?? '-',
+    addressText: repairedText(address, 'text', 2000) ?? areaEn ?? areaAr ?? 'Unknown area',
+    areaEn,
+    areaAr,
     locationPin: typeof rawPin === 'string' && rawPin.trim() ? rawPin.trim() : null,
     isCancelled,
     isOnHold: requiredBoolean(row, 'is_on_hold'),
@@ -220,16 +232,17 @@ export function normalizeDailyDelivery(raw: unknown, deliveryDate: string): Part
     holdState: requiredString(row, 'hold_state', 64),
     mealItemCount,
     partnerDriverId: normalizePartnerDriverId(driver['id']),
-    partnerDriverName: optionalString(driver, 'name', 255),
-    deliveryMethod: optionalString(row, 'delivery_method', 255),
-    timeSlotTitle: optionalString(timeSlot, 'title', 255),
+    partnerDriverName: repairedText(driver, 'name', 255),
+    deliveryMethod: repairedText(row, 'delivery_method', 255),
+    timeSlotTitle: repairedText(timeSlot, 'title', 255),
     updatedAt,
   };
 }
 
 /**
  * Collapse repeated delivery rows of one order (Partner may emit several rows per order/day)
- * into one canonical row: the latest `updated_at` wins; identity fields must agree.
+ * into one canonical row: the latest `updated_at` wins. A70.11: rows that disagree on identity no longer
+ * refuse the whole day — the newest row is used, exactly as the Fleetbase bridge does since A70.2.
  */
 export function canonicalizeDailyDeliveries(rows: PartnerDailyDelivery[]): PartnerDailyImportRow[] {
   const groups = new Map<string, PartnerDailyDelivery[]>();
@@ -240,15 +253,7 @@ export function canonicalizeDailyDeliveries(rows: PartnerDailyDelivery[]): Partn
   }
   const out: PartnerDailyImportRow[] = [];
   for (const [orderNumber, group] of groups) {
-    const first = group[0]!;
-    for (const member of group) {
-      if (member.orderId !== first.orderId
-        || member.customerRef !== first.customerRef
-        || member.customerPhone !== first.customerPhone
-        || member.deliveryDate !== first.deliveryDate) {
-        violation(`conflicting rows for order ${orderNumber}`);
-      }
-    }
+    void orderNumber;
     const sorted = [...group].sort((a, b) =>
       (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) || (a.deliveryId - b.deliveryId));
     const selected = sorted[sorted.length - 1]!;
@@ -320,6 +325,7 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
     const date = validateDeliveryDate(deliveryDate);
     const rows: PartnerDailyDelivery[] = [];
     const seenDeliveryIds = new Set<number>();
+    let rejectedRows = 0;
     let cursor: string | number | null = null;
     let page = 0;
     let completeness: PartnerDailyCompleteness | null = null;
@@ -336,8 +342,22 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
       }
       completeness = pageCompleteness;
       for (const raw of envelope.data) {
-        const row = normalizeDailyDelivery(raw, date);
-        if (seenDeliveryIds.has(row.deliveryId)) violation(`duplicate delivery_id ${row.deliveryId}`);
+        // A70.11: one unusable row is left out (its order then shows up by number in the print check)
+        // instead of refusing every other order of the day.
+        let row: PartnerDailyDelivery;
+        try {
+          row = normalizeDailyDelivery(raw, date);
+        } catch (error) {
+          if (error instanceof PartnerDailyFeedError && error.code === 'contract_violation') {
+            rejectedRows += 1;
+            continue;
+          }
+          throw error;
+        }
+        if (seenDeliveryIds.has(row.deliveryId)) {
+          rejectedRows += 1;
+          continue;
+        }
         seenDeliveryIds.add(row.deliveryId);
         rows.push(row);
       }
@@ -347,10 +367,10 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
       cursor = envelope.nextCursor;
     } while (cursor !== null);
     if (!completeness) throw new PartnerDailyFeedError('response_invalid', 'completeness_missing');
-    if (completeness.deliveries !== rows.length) {
+    if (completeness.deliveries !== rows.length + rejectedRows) {
       throw new PartnerDailyFeedError('response_invalid', 'completeness_mismatch');
     }
-    return { rows, completeness, pages: page };
+    return { rows, completeness, pages: page, rejectedRows };
   }
 
   private async request(url: string): Promise<unknown> {

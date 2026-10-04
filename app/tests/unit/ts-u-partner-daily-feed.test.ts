@@ -66,11 +66,23 @@ describe('TS-U Partner daily-deliveries contract (WP-OPS-06)', () => {
     expect(normalizePartnerDriverId(' A9 ')).toBe('A9');
   });
 
-  it('rejects contract violations: wrong date, missing driver key, bad phone, bad ids', () => {
+  it('A70.11: repairs free text instead of refusing the day (line break in an address, empty phone or name)', () => {
+    const repaired = normalizeDailyDelivery(rawDelivery({
+      customer: { name: '  ', phone: '' },
+      address: { text: 'Block 4\nStreet 12\tHouse 30', area_en: 'Rawda', area_ar: null },
+    }), DATE);
+    expect(repaired.addressText).toBe('Block 4 Street 12 House 30');
+    expect(repaired.customerPhone).toBe('-');
+    expect(repaired.customerName).toBe(`Customer ${repaired.orderNumber}`);
+    const noAddress = normalizeDailyDelivery(rawDelivery({ address: { text: '\n', area_en: null, area_ar: null } }), DATE);
+    expect(noAddress.addressText).toBe('Unknown area');
+    expect(normalizeDailyDelivery(rawDelivery({ address: { text: 'x'.repeat(2500), area_en: 'Rawda', area_ar: null } }), DATE).addressText).toHaveLength(2000);
+  });
+
+  it('rejects contract violations: wrong date, missing driver key, bad ids', () => {
     for (const bad of [
       rawDelivery({ delivery_date: '2026-09-06' }),
       rawDelivery({ driver: { name: 'x' } }),
-      rawDelivery({ customer: { name: 'x', phone: '' } }),
       rawDelivery({ order_id: 0 }),
       rawDelivery({ meal_item_count: -1 }),
       rawDelivery({ is_cancelled: 'no' }),
@@ -92,13 +104,16 @@ describe('TS-U Partner daily-deliveries contract (WP-OPS-06)', () => {
     expect(canonical[0]).toMatchObject({ is_on_hold: true, customer_phone: '50266999' });
   });
 
-  it('flags cancellation from either is_cancelled or order_status=cancel and rejects conflicting identities', () => {
+  it('flags cancellation from either is_cancelled or order_status=cancel and uses the newest of conflicting rows', () => {
     const cancelled = canonicalizeDailyDeliveries([normalizeDailyDelivery(rawDelivery({ order_status: 'cancel' }), DATE)]);
     expect(cancelled[0]).toMatchObject({ is_cancelled: true, order_status: 'cancel' });
-    expect(() => canonicalizeDailyDeliveries([
+    // A70.11: rows of one order that disagree no longer refuse the day; the newest row is used.
+    const conflicting = canonicalizeDailyDeliveries([
       normalizeDailyDelivery(rawDelivery(), DATE),
-      normalizeDailyDelivery(rawDelivery({ delivery_id: 502, customer: { name: 'Other', phone: '99999999' } }), DATE),
-    ])).toThrowError(expect.objectContaining({ code: 'contract_violation' }));
+      normalizeDailyDelivery(rawDelivery({ delivery_id: 502, updated_at: '2030-01-01T00:00:00+03:00', customer: { name: 'Other', phone: '99999999' } }), DATE),
+    ]);
+    expect(conflicting).toHaveLength(1);
+    expect(conflicting[0]).toMatchObject({ customer_phone: '99999999' });
   });
 
   it('walks cursor pages, sends the key only as X-Api-Key, and verifies completeness', async () => {
