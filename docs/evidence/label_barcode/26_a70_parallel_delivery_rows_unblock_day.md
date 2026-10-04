@@ -253,3 +253,28 @@ the guard's own repair and 20 min after the 01:00 print. Journal:
 - The 00:25 rolling run should finish both days by about 00:33.
 - The 00:45 guard re-reads the screen and should email by about 00:48.
 - A repair round should take about 4 minutes, so it finishes before 01:00.
+
+## A70.11 — Sat night (labels for Mon 5 Oct): label feed refused the whole day over one address (2026-10-04)
+
+**Result: [CHECK], 916 labels vs 973 on the legacy screen — 57 orders with no label record.** (Verified)
+
+- The sync itself was right and fast: screen read 00:26, day 973 = 973 complete and verified at 00:29, both days done by 00:32 Kuwait.
+- The guard emailed at 00:54. Its label feed failed on every attempt, and kept failing every 30 minutes until the fix:
+  `partner_daily_failed … status 400 partner_daily_contract_violation, detail "text invalid"`.
+- **Cause:** one Partner row had an address text the feed's strict check refused (control character, such as a line break).
+  The feed refused all 974 rows of the day, so the 57 orders new for that day never got a label record.
+- The Fleetbase bridge has repaired such rows since A70.2. The label feed (`partner-daily-feed.ts`) never got the same repair.
+
+**Fix (`app/apps/api/src/modules/m19-migration/partner-daily-feed.ts`)**
+
+| Before | Now |
+|---|---|
+| Name, phone, address, area, driver name, delivery method or time-slot title with a control character, empty, or too long → whole day refused | `repairedText`: control characters become spaces, text is trimmed and cut to the limit; fallbacks `Customer <order>`, `-`, area or `Unknown area` (same as the bridge) |
+| Rows of one order that disagree on identity → whole day refused | Newest row is used |
+| A row that still fails the contract, or a repeated delivery id → whole day refused | That row is left out and counted; completeness is checked against rows + left-out rows; the order then appears by number in the print check |
+
+- Identity and status fields stay strict per row (order id and number, date, statuses, driver id).
+- Tests: `ts-u-partner-daily-feed` 8/8 and `ts-i-partner-daily-import` 5/5 locally; typecheck and lint clean.
+- Deployed: image `nutrezee-api:a70-11-3c18734`, environment fingerprint identical before and after, `/health` 200. Rollback tag: `nutrezee-api:pre-a70-11-20261004`.
+- **After the fix, 08:06 Kuwait:** the feed for 2026-10-05 created the 57 missing records (`created 57, matched 917, error 0`), and the check gave
+  `[OK] Labels 2026-10-05: Batch Labels 973 = legacy screen 973`.
