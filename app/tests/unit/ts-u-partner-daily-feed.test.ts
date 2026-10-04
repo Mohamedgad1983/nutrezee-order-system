@@ -66,11 +66,23 @@ describe('TS-U Partner daily-deliveries contract (WP-OPS-06)', () => {
     expect(normalizePartnerDriverId(' A9 ')).toBe('A9');
   });
 
-  it('rejects contract violations: wrong date, missing driver key, bad phone, bad ids', () => {
+  it('A70.11: repairs free text instead of refusing the day (line break in an address, empty phone or name)', () => {
+    const repaired = normalizeDailyDelivery(rawDelivery({
+      customer: { name: '  ', phone: '' },
+      address: { text: 'Block 4\nStreet 12\tHouse 30', area_en: 'Rawda', area_ar: null },
+    }), DATE);
+    expect(repaired.addressText).toBe('Block 4 Street 12 House 30');
+    expect(repaired.customerPhone).toBe('-');
+    expect(repaired.customerName).toBe(`Customer ${repaired.orderNumber}`);
+    const noAddress = normalizeDailyDelivery(rawDelivery({ address: { text: '\n', area_en: null, area_ar: null } }), DATE);
+    expect(noAddress.addressText).toBe('Unknown area');
+    expect(normalizeDailyDelivery(rawDelivery({ address: { text: 'x'.repeat(2500), area_en: 'Rawda', area_ar: null } }), DATE).addressText).toHaveLength(2000);
+  });
+
+  it('rejects contract violations: wrong date, missing driver key, bad ids', () => {
     for (const bad of [
       rawDelivery({ delivery_date: '2026-09-06' }),
       rawDelivery({ driver: { name: 'x' } }),
-      rawDelivery({ customer: { name: 'x', phone: '' } }),
       rawDelivery({ order_id: 0 }),
       rawDelivery({ meal_item_count: -1 }),
       rawDelivery({ is_cancelled: 'no' }),

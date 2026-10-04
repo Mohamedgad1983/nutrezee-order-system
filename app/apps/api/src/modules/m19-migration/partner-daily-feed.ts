@@ -127,14 +127,21 @@ function requiredString(obj: Record<string, unknown>, field: string, max: number
   return out;
 }
 
-function optionalString(obj: Record<string, unknown>, field: string, max: number): string | null {
+/**
+ * A70.11 — free text typed by people (names, addresses) is repaired, never a reason to refuse a whole day:
+ * a line break inside one address stopped the label feed for all of 2026-10-05. Same rule as the Fleetbase
+ * bridge's row repair: control characters become spaces, the text is trimmed and cut to the limit.
+ */
+function repairedText(obj: Record<string, unknown>, field: string, max: number): string | null {
   const value = obj[field];
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'string') violation(`${field} must be a string`);
-  const out = value.trim();
-  if (!out) return null;
-  if (out.length > max || hasControlChars(out)) violation(`${field} invalid`);
-  return out;
+  if (typeof value !== 'string') return null;
+  let out = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    out += code < 0x20 || code === 0x7f ? ' ' : value[i];
+  }
+  out = out.replace(/ {2,}/g, ' ').trim().slice(0, max).trim();
+  return out || null;
 }
 
 function requiredBoolean(obj: Record<string, unknown>, field: string): boolean {
@@ -201,17 +208,20 @@ export function normalizeDailyDelivery(raw: unknown, deliveryDate: string): Part
 
   const isCancelled = requiredBoolean(row, 'is_cancelled');
   const orderStatus = requiredString(row, 'order_status', 32);
+  const orderNumber = requiredString(row, 'order_number', 255);
+  const areaEn = repairedText(address, 'area_en', 255);
+  const areaAr = repairedText(address, 'area_ar', 255);
   return {
     deliveryId: positiveInt(row['delivery_id'], 'delivery_id'),
     orderId: positiveInt(row['order_id'], 'order_id'),
-    orderNumber: requiredString(row, 'order_number', 255),
+    orderNumber,
     deliveryDate: rowDate,
     customerRef,
-    customerName: requiredString(customer, 'name', 255),
-    customerPhone: requiredString(customer, 'phone', 64),
-    addressText: requiredString(address, 'text', 2000),
-    areaEn: optionalString(address, 'area_en', 255),
-    areaAr: optionalString(address, 'area_ar', 255),
+    customerName: repairedText(customer, 'name', 255) ?? `Customer ${orderNumber}`,
+    customerPhone: repairedText(customer, 'phone', 64) ?? '-',
+    addressText: repairedText(address, 'text', 2000) ?? areaEn ?? areaAr ?? 'Unknown area',
+    areaEn,
+    areaAr,
     locationPin: typeof rawPin === 'string' && rawPin.trim() ? rawPin.trim() : null,
     isCancelled,
     isOnHold: requiredBoolean(row, 'is_on_hold'),
@@ -220,9 +230,9 @@ export function normalizeDailyDelivery(raw: unknown, deliveryDate: string): Part
     holdState: requiredString(row, 'hold_state', 64),
     mealItemCount,
     partnerDriverId: normalizePartnerDriverId(driver['id']),
-    partnerDriverName: optionalString(driver, 'name', 255),
-    deliveryMethod: optionalString(row, 'delivery_method', 255),
-    timeSlotTitle: optionalString(timeSlot, 'title', 255),
+    partnerDriverName: repairedText(driver, 'name', 255),
+    deliveryMethod: repairedText(row, 'delivery_method', 255),
+    timeSlotTitle: repairedText(timeSlot, 'title', 255),
     updatedAt,
   };
 }
