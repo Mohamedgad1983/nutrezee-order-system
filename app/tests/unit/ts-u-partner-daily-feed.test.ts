@@ -104,13 +104,16 @@ describe('TS-U Partner daily-deliveries contract (WP-OPS-06)', () => {
     expect(canonical[0]).toMatchObject({ is_on_hold: true, customer_phone: '50266999' });
   });
 
-  it('flags cancellation from either is_cancelled or order_status=cancel and rejects conflicting identities', () => {
+  it('flags cancellation from either is_cancelled or order_status=cancel and uses the newest of conflicting rows', () => {
     const cancelled = canonicalizeDailyDeliveries([normalizeDailyDelivery(rawDelivery({ order_status: 'cancel' }), DATE)]);
     expect(cancelled[0]).toMatchObject({ is_cancelled: true, order_status: 'cancel' });
-    expect(() => canonicalizeDailyDeliveries([
+    // A70.11: rows of one order that disagree no longer refuse the day; the newest row is used.
+    const conflicting = canonicalizeDailyDeliveries([
       normalizeDailyDelivery(rawDelivery(), DATE),
-      normalizeDailyDelivery(rawDelivery({ delivery_id: 502, customer: { name: 'Other', phone: '99999999' } }), DATE),
-    ])).toThrowError(expect.objectContaining({ code: 'contract_violation' }));
+      normalizeDailyDelivery(rawDelivery({ delivery_id: 502, updated_at: '2030-01-01T00:00:00+03:00', customer: { name: 'Other', phone: '99999999' } }), DATE),
+    ]);
+    expect(conflicting).toHaveLength(1);
+    expect(conflicting[0]).toMatchObject({ customer_phone: '99999999' });
   });
 
   it('walks cursor pages, sends the key only as X-Api-Key, and verifies completeness', async () => {

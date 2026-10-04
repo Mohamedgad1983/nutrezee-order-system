@@ -233,9 +233,10 @@ describe('TS-I Partner daily feed → Nutrezee orders (WP-OPS-06)', () => {
     expect(again.last_checked_at! > applied.last_checked_at!).toBe(true);
   });
 
-  it('rejects a feed that contradicts itself and refuses apply without a same-snapshot dry-run', async () => {
+  it('uses the newest of contradicting rows and refuses apply without a same-snapshot dry-run', async () => {
     feedRows['2099-09-07'] = [delivery({ delivery_id: 701, delivery_date: '2099-09-07' }), delivery({ delivery_id: 702, delivery_date: '2099-09-07', customer: { name: 'X', phone: '11111111' } })];
-    await expect(migrations.runPartnerDaily(sa, '2099-09-07', false)).rejects.toMatchObject({ code: 'contract_violation' });
+    // A70.11: rows of one order that disagree no longer refuse the day; the newest row is used.
+    await expect(migrations.runPartnerDaily(sa, '2099-09-07', false)).resolves.toMatchObject({ source: { delivery_rows: 2, distinct_orders: 1 } });
     feedRows['2099-09-08'] = [delivery({ delivery_id: 801, delivery_date: '2099-09-08' })];
     await expect(migrations.runPartnerDaily(sa, '2099-09-08', true)).rejects.toMatchObject({ code: 'dry_run_required' });
   });

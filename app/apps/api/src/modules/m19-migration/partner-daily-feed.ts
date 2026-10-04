@@ -67,6 +67,8 @@ export interface PartnerDailyFetchResult {
   rows: PartnerDailyDelivery[];
   completeness: PartnerDailyCompleteness;
   pages: number;
+  /** A70.11: rows left out because they could not be used (unrepairable, or a repeated delivery id). */
+  rejectedRows?: number;
 }
 
 /** Flat row handed to the M19 batch runner (hashed for the apply gate, stored in the report). */
@@ -239,7 +241,8 @@ export function normalizeDailyDelivery(raw: unknown, deliveryDate: string): Part
 
 /**
  * Collapse repeated delivery rows of one order (Partner may emit several rows per order/day)
- * into one canonical row: the latest `updated_at` wins; identity fields must agree.
+ * into one canonical row: the latest `updated_at` wins. A70.11: rows that disagree on identity no longer
+ * refuse the whole day — the newest row is used, exactly as the Fleetbase bridge does since A70.2.
  */
 export function canonicalizeDailyDeliveries(rows: PartnerDailyDelivery[]): PartnerDailyImportRow[] {
   const groups = new Map<string, PartnerDailyDelivery[]>();
@@ -250,15 +253,7 @@ export function canonicalizeDailyDeliveries(rows: PartnerDailyDelivery[]): Partn
   }
   const out: PartnerDailyImportRow[] = [];
   for (const [orderNumber, group] of groups) {
-    const first = group[0]!;
-    for (const member of group) {
-      if (member.orderId !== first.orderId
-        || member.customerRef !== first.customerRef
-        || member.customerPhone !== first.customerPhone
-        || member.deliveryDate !== first.deliveryDate) {
-        violation(`conflicting rows for order ${orderNumber}`);
-      }
-    }
+    void orderNumber;
     const sorted = [...group].sort((a, b) =>
       (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) || (a.deliveryId - b.deliveryId));
     const selected = sorted[sorted.length - 1]!;
@@ -330,6 +325,7 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
     const date = validateDeliveryDate(deliveryDate);
     const rows: PartnerDailyDelivery[] = [];
     const seenDeliveryIds = new Set<number>();
+    let rejectedRows = 0;
     let cursor: string | number | null = null;
     let page = 0;
     let completeness: PartnerDailyCompleteness | null = null;
@@ -346,8 +342,22 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
       }
       completeness = pageCompleteness;
       for (const raw of envelope.data) {
-        const row = normalizeDailyDelivery(raw, date);
-        if (seenDeliveryIds.has(row.deliveryId)) violation(`duplicate delivery_id ${row.deliveryId}`);
+        // A70.11: one unusable row is left out (its order then shows up by number in the print check)
+        // instead of refusing every other order of the day.
+        let row: PartnerDailyDelivery;
+        try {
+          row = normalizeDailyDelivery(raw, date);
+        } catch (error) {
+          if (error instanceof PartnerDailyFeedError && error.code === 'contract_violation') {
+            rejectedRows += 1;
+            continue;
+          }
+          throw error;
+        }
+        if (seenDeliveryIds.has(row.deliveryId)) {
+          rejectedRows += 1;
+          continue;
+        }
         seenDeliveryIds.add(row.deliveryId);
         rows.push(row);
       }
@@ -357,10 +367,10 @@ export class PartnerDailyFeedClient implements PartnerDailyFeedGateway {
       cursor = envelope.nextCursor;
     } while (cursor !== null);
     if (!completeness) throw new PartnerDailyFeedError('response_invalid', 'completeness_missing');
-    if (completeness.deliveries !== rows.length) {
+    if (completeness.deliveries !== rows.length + rejectedRows) {
       throw new PartnerDailyFeedError('response_invalid', 'completeness_mismatch');
     }
-    return { rows, completeness, pages: page };
+    return { rows, completeness, pages: page, rejectedRows };
   }
 
   private async request(url: string): Promise<unknown> {
