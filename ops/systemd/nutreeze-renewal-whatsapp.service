@@ -1,0 +1,11 @@
+[Unit]
+Description=Nutreeze WhatsApp renewal reminders (ACTION_REQUIRED customers; dry-run unless WHATSAPP_LIVE=yes)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# fresh reading of the admin screen first; if it fails nothing is sent
+ExecStartPre=/opt/nutrezee/subscription-expiry/run.sh
+ExecStart=/usr/bin/python3 /opt/nutrezee/subscription-expiry/whatsapp-reminder.py
+TimeoutStartSec=5h

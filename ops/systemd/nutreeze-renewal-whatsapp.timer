@@ -1,0 +1,14 @@
+[Unit]
+Description=Nutreeze WhatsApp renewal reminders — 14:00 Asia/Kuwait daily (4 Oct 2026 only: 16:30, after the WhatsApp block ends)
+
+[Timer]
+# owner request 2026-10-03: tomorrow starts after 16:00; every other day 14:00
+OnCalendar=2026-10-04 16:30:00 Asia/Kuwait
+OnCalendar=2026-10-05..31 14:00:00 Asia/Kuwait
+OnCalendar=2026-11..12-* 14:00:00 Asia/Kuwait
+OnCalendar=2027..2099-*-* 14:00:00 Asia/Kuwait
+Persistent=false
+Unit=nutreeze-renewal-whatsapp.service
+
+[Install]
+WantedBy=timers.target
