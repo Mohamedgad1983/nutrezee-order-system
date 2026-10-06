@@ -69,3 +69,15 @@ Owner: "كمل تعديل العنوان الكامل … واعمل sync للع
 
 Still not on a WhatsApp label, because ERPNext does not hold it: the dish list with nutrition, delivery time slot,
 delivery method, and an exact location pin.
+
+### A71.2 deploy (staging, 2026-10-06 11:40 Kuwait)
+API `nutrezee-api:a71-2-389ee07` (rollback tag `nutrezee-api:pre-a71-2-20261006`), CI 31/31 on PR #96, container env
+fingerprint identical before/after, `/health` 200, no error lines. Labels built with the deployed `LabelService` from the
+real Fleetbase rows of 2026-10-07:
+
+| Set | before | after |
+|---|---|---|
+| WhatsApp (34 labels): block / street / house / plan printed | 12 / 13 / 13 / 0 | 34 / 34 / 34 / 34 |
+| Partner sample (60 labels): block / street / house / package | 5 / 7 / 7 / 7 | 5 / 7 / 7 / 7 (unchanged) |
+
+Night check after the deploy: `[OK] Labels 2026-10-07: Batch Labels 944 = legacy screen 944 + WhatsApp 34`.
