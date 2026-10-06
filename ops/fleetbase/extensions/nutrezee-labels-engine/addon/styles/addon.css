@@ -574,6 +574,32 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     color: var(--nz-text, #2d251f);
 }
 
+/* A72 — Order Status by customer phone */
+.nz-status-panel { padding: 1rem; color: var(--nz-text, #2d251f); max-width: 60rem; }
+.nz-status-search { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.75rem 0; }
+.nz-status-search__input { flex: 1 1 16rem; min-height: 2.75rem; font-size: 1.1rem; padding: 0.5rem 0.75rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.6rem; background: var(--nz-surface, #fff); color: inherit; }
+.nz-status-search .btn { min-height: 2.75rem; }
+.nz-status-days { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.nz-status-days__date { color: var(--nz-muted, #6b7280); font-variant-numeric: tabular-nums; }
+.nz-status-card { margin-bottom: 0.9rem; padding: 1rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.75rem; background: var(--nz-surface, #fff); box-shadow: var(--nz-shadow-sm, none); }
+.nz-status-card__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.nz-status-card__head strong { display: block; font-size: 1.05rem; }
+.nz-status-card__order { color: var(--nz-muted, #6b7280); font-size: 0.85rem; }
+.nz-status-pill { padding: 0.35rem 0.8rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--nz-border, #d1d5db); background: var(--nz-surface-soft, #f3f4f6); }
+.nz-status-pill--delivered { background: #dcfce7; border-color: #86efac; color: #14532d; }
+.nz-status-pill--on_the_way { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+.nz-status-pill--with_driver { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+.nz-status-live { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.9rem; }
+.nz-status-live > div { padding: 0.7rem; border-radius: 0.6rem; background: var(--nz-brand-soft, #f8f1ea); text-align: center; }
+.nz-status-live span { display: block; color: var(--nz-muted, #6b7280); font-size: 0.75rem; }
+.nz-status-live strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.nz-status-note { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--nz-muted, #6b7280); }
+.nz-status-note--muted { padding: 0.6rem 0.75rem; border-radius: 0.6rem; background: var(--nz-surface-soft, #f3f4f6); }
+.nz-status-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.9rem 0 0; }
+.nz-status-facts dt { color: var(--nz-muted, #6b7280); font-size: 0.75rem; }
+.nz-status-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .nz-status-live { grid-template-columns: 1fr; } }
+
 .nz-location-panel { padding: 1rem; color: var(--nz-text, #2d251f); }
 .nz-location-table-wrap { overflow-x: auto; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.75rem; background: var(--nz-surface, #fff); box-shadow: var(--nz-shadow-sm, none); }
 .nz-location-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }

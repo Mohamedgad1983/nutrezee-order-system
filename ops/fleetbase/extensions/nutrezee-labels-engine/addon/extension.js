@@ -141,6 +141,27 @@ export default {
             })
         );
 
+        // A72 — where a customer's delivery stands, searched by the customer's phone. Read-only.
+        menuService.registerMenuItem(
+            'engine:fleet-ops',
+            new MenuItem({
+                title: 'Nutrezee Order Status',
+                label: 'Order Status',
+                slug: 'nutrezee-order-status',
+                view: 'nutrezee-order-status',
+                section: 'management',
+                icon: 'magnifying-glass-location',
+                priority: 5,
+                permission: 'fleet-ops list order',
+                description: "Find a customer's delivery by phone: status, driver, distance and time.",
+                keywords: ['status', 'phone', 'customer', 'where', 'eta', 'driver'],
+                component: new ExtensionComponent(
+                    '@nutrezee/fleetops-labels-engine',
+                    'order-status'
+                ),
+            })
+        );
+
         // A30 — governed exact locations captured by the assigned driver. This stays inside the
         // same Fleet-Ops Resources surface; no second admin or Nutrezee operator login exists.
         menuService.registerMenuItem(

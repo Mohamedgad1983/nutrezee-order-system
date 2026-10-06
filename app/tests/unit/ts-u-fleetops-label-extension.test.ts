@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.16');
+    expect(packageJson.version).toBe('0.3.17');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -96,6 +96,13 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(extension).toContain("section: 'management'");
     expect(extension).toContain("permission: 'fleet-ops list order'");
     expect(extension).toContain("'batch-labels'");
+    // A72 — order status by customer phone: one read-only page in the same Resources registry.
+    expect(extension).toContain("slug: 'nutrezee-order-status'");
+    expect(extension).toContain("'order-status'");
+    expect(read('addon/components/order-status.js')).toContain('/nz/fleet-ops/order-status?');
+    expect(read('addon/components/order-status.js')).not.toMatch(/method:\s*'(POST|PUT|PATCH|DELETE)'/);
+    expect(read('addon/components/order-status.hbs')).toContain('data-test-nutrezee-order-status');
+    expect(read('addon/components/order-status.hbs')).not.toContain('<select');
     expect(routes).toContain('buildRoutes(function () {})');
     expect(extension).not.toContain('registerHeaderMenuItem');
     expect(extension).not.toContain('registerAdminMenuPanel');

@@ -8,13 +8,14 @@ import { AccessService } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { IdempotencyConflictError } from '../../platform/idempotency/idempotency.service';
 import { BarcodeError, BarcodeService } from './barcode.service';
-import { LabelError, LabelService } from './label.service';
+import { LabelError, LabelService, type BatchLabelCandidate } from './label.service';
 import { CollectionError, CollectionService } from './collection.service';
 import {
   FleetbaseIdentityError, FleetbaseIdentityService,
 } from './fleetbase-identity.service';
 import { DriverLocationError, DriverLocationService } from './driver-location.service';
 import { MigrationService } from '../m19-migration/migration.service';
+import { deliveryState, liveEstimate, parsePin, phoneDigits } from './order-status';
 
 // m25-label — exact legacy label, permanent customer barcode, daily box collection (A27/A28).
 //
@@ -47,6 +48,76 @@ export class LabelController {
       await this.fleetbaseIdentity.operatorContext(this.bearer(req));
       const date = deliveryDate?.trim() || await this.collection.currentDay();
       return this.migrations.partnerDailyFreshness(date);
+    });
+  }
+
+  /**
+   * A72: where a customer's delivery stands, found by the customer's phone. Read-only; any verified
+   * Fleetbase operator. Distance, time and "orders before it" appear only while the driver's app
+   * position is fresh — otherwise the reason is returned instead of a guess.
+   */
+  @Get('fleet-ops/order-status')
+  async fleetOpsOrderStatus(
+    @Req() req: Request, @Query('phone') phone?: string, @Query('delivery_date') requestedDate?: string,
+  ) {
+    return this.wrap(async () => {
+      const digits = phoneDigits(phone ?? '');
+      if (!digits) throw new BadRequestException({ error_code: 'validation_failed', field: 'phone' });
+      const day = await this.collection.batchDay(requestedDate);
+      const bearer = this.bearer(req);
+      const [{ orders }, positions, known] = await Promise.all([
+        this.fleetbaseIdentity.ordersForOperatorDate(bearer, day.deliveryDate),
+        this.fleetbaseIdentity.driverPositionsForOperator(bearer),
+        this.labels.ordersForPhoneDigits(digits),
+      ]);
+      const base = { delivery_date: day.deliveryDate, today: day.today, window: { from: day.from, to: day.to } };
+      if (known.length === 0) return { ...base, customer_found: false, customer_names: [], deliveries: [] };
+      const candidates = await this.labels.batchCandidates(day.deliveryDate, orders);
+      const mine = new Set(known.map((o) => o.orderId));
+      const names = new Map(known.map((o) => [o.orderId, o.customerName]));
+      const hits = candidates.filter((c) => mine.has(c.localOrderId));
+      const drivers = new Set(hits.map((c) => c.driverId).filter((id): id is string => Boolean(id)));
+      const sameDrivers = candidates.filter((c) => c.driverId && drivers.has(c.driverId));
+      const pins = await this.labels.deliveryPins(day.deliveryDate, sameDrivers.map((c) => c.localOrderId));
+      const pinOf = (c: BatchLabelCandidate) => {
+        const exact = parsePin(pins.get(c.localOrderId));
+        return { pin: exact ?? c.fallbackPin ?? null, exactPin: exact !== null };
+      };
+      const now = new Date();
+      const deliveries = await Promise.all(hits.map(async (hit) => {
+        const state = deliveryState(hit.fleetbaseStatus);
+        const fleet = sameDrivers.filter((c) => c.driverId === hit.driverId);
+        const others = fleet
+          .filter((c) => c.localOrderId !== hit.localOrderId && deliveryState(c.fleetbaseStatus) !== 'delivered')
+          .map((c) => pinOf(c).pin);
+        const estimate = liveEstimate({
+          now, position: hit.driverId ? positions.get(hit.driverId) ?? null : null,
+          target: { ...pinOf(hit), state }, others,
+        });
+        const prints = await this.labels.printHistory(hit.localOrderId, day.deliveryDate);
+        return {
+          customer_name: names.get(hit.localOrderId) ?? '',
+          order_number: hit.orderNumber,
+          area: hit.areaLabel,
+          state,
+          fleetbase_status: hit.fleetbaseStatus ?? null,
+          driver: hit.driverId ? {
+            name: hit.driverName ?? null, phone: hit.driverPhone, vehicle_number: hit.vehicleNumber,
+            color: hit.driverColor,
+          } : null,
+          driver_orders_total: hit.driverId ? fleet.length : 0,
+          driver_orders_delivered: fleet.filter((c) => deliveryState(c.fleetbaseStatus) === 'delivered').length,
+          label_printed: prints.length > 0,
+          label_printed_at: prints[0]?.printed_at ?? null,
+          live: 'live' in estimate ? estimate.live : null,
+          live_unavailable: 'unavailable' in estimate ? estimate.unavailable : null,
+        };
+      }));
+      return {
+        ...base, customer_found: true,
+        customer_names: [...new Set(known.map((o) => o.customerName).filter(Boolean))].slice(0, 5),
+        deliveries,
+      };
     });
   }
 

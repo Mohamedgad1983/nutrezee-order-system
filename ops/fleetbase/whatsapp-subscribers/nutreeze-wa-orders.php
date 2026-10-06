@@ -390,6 +390,8 @@ final class WaWriter
             'source_order_number' => $row['order_number'], 'source_customer_ref' => $row['ref'],
             'delivery_date' => $this->day, 'routing_area' => $areaEn, 'area_en' => $areaEn,
             'pin_source' => 'area_fallback', 'call_customer_required' => true,
+            // A72: the area centre used as the dropoff, so the order-status page can estimate distance.
+            'fallback_source' => 'area_fallback', 'fallback_latitude' => $pin['lat'], 'fallback_longitude' => $pin['lng'],
             'dispatch_state' => $driver === null ? 'held_no_driver_for_area' : 'dispatched_call_customer_required',
             'hold_reason' => $holdReason, 'driver_source' => $driverSource,
             'dispatch_time_local' => $this->pickup['dispatch_time'], 'dispatch_timezone' => 'Asia/Kuwait',

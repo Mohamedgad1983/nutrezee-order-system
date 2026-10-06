@@ -460,6 +460,27 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
     expect(byNumber.get('N-LBL-A712-2')?.package_name).toBe(stored.package_name);
   });
 
+  it('A72: finds a customer\'s orders by the last digits of the phone and reads the day\'s pin', async () => {
+    const found = await seed('Phone Lookup', 'N-LBL-A72-1', { phone: '+96555123456' });
+    const hits = await labels.ordersForPhoneDigits('55123456');
+    expect(hits).toEqual([{ orderId: found.orderId, orderNumber: 'N-LBL-A72-1', customerName: 'Phone Lookup' }]);
+    expect(await labels.ordersForPhoneDigits('5512345')).toEqual([]); // not the end of the number
+    expect(await labels.ordersForPhoneDigits('12')).toEqual([]);
+    await pool.query(
+      `UPDATE fulfillment_day SET address_frozen = address_frozen || '{"location_pin":"29.3,48.0"}'::jsonb
+        WHERE order_id=$1 AND date=$2`, [found.orderId, DATE_B],
+    );
+    const pins = await labels.deliveryPins(DATE_B, [found.orderId]);
+    expect(pins.get(found.orderId)).toBe('29.3,48.0');
+    const candidates = await labels.batchCandidates(DATE_B, [{
+      id: 'fleetbase_a72_1', status: 'dispatched',
+      meta: { delivery_date: DATE_B, nutrezee_order_id: found.orderId, fallback_latitude: 29.1, fallback_longitude: 48.1 },
+    }]);
+    expect(candidates[0]).toMatchObject({
+      fleetbaseOrderId: 'fleetbase_a72_1', fleetbaseStatus: 'dispatched', fallbackPin: { lat: 29.1, lng: 48.1 },
+    });
+  });
+
   it('builds a selected driver batch and records one audited batch only after confirmation', async () => {
     const first = await seed('Batch Driver One', 'N-LBL-BATCH-1');
     const second = await seed('Batch Driver Two', 'N-LBL-BATCH-2');
