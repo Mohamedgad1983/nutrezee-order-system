@@ -126,6 +126,10 @@ def evaluate(day, screen):
     numbers = set(screen['order_numbers'])
     drivers = screen['drivers']
     labels = set(page['label_numbers'])
+    # A71: WhatsApp-system subscribers (ERPNext, order numbers WA-…) are not on the legacy screen by design.
+    d['whatsapp_labels'] = sorted(n for n in labels if n.startswith(WA_PREFIX))
+    labels -= set(d['whatsapp_labels'])
+    d['legacy_labels'] = len(labels)
     d['no_label'] = sorted(numbers - labels)                     # on the screen, no label on the page
     d['extra_label'] = sorted(labels - numbers)                  # label on the page, not on the screen
     d['wrong_driver'] = sorted(n for n in numbers & labels if n in drivers and fb.get(n, {}).get('driver') != drivers[n])
@@ -133,6 +137,24 @@ def evaluate(day, screen):
     d['no_driver_in_legacy'] = sorted(n for n in numbers if n not in drivers)
     d['diff'] = len(d['no_label']) + len(d['extra_label']) + len(d['wrong_driver'])
     return d
+
+
+WA_PREFIX = 'WA-'
+WA_SYNC = '/opt/fleetbase/integrations/whatsapp-subscribers/wa-labels-sync.sh'
+
+
+def whatsapp_labels(day, log):
+    """A71: put the day's WhatsApp-system subscribers on Batch Labels (driver = the area's driver that day)."""
+    if not os.path.exists(WA_SYNC):
+        return None
+    out = sh([WA_SYNC, day, 'apply'], timeout=600)
+    done = [json.loads(l) for l in out.splitlines() if l.startswith('{"event":"complete"')]
+    fed = '"event":"wa_label_feed_complete"' in out and '"failures":0' in out.split('"event":"wa_label_feed_complete"')[-1]
+    if not done or not fed:
+        log.append('  WhatsApp subscribers: FAILED — their labels may be missing')
+        return {'failed': True}
+    log.append(f"  WhatsApp subscribers: {done[-1]['rows']} active, {done[-1]['with_driver']} with a driver")
+    return done[-1]
 
 
 UNITS = ['nutreeze-partner-daily.service', 'nutreeze-partner-sameday.service', 'nutreeze-partner-evening.service']
@@ -165,7 +187,7 @@ def wait_for_scheduled_sync(limit_s=1200, day=None):
         time.sleep(15)
 
 
-def report(day, screen, d, fix_log, started, note=None):
+def report(day, screen, d, fix_log, started, note=None, wa=None):
     page = d['page']
     lines = [f'Checked {started}–{datetime.datetime.now(KW).strftime("%H:%M")} Kuwait with the Batch Labels page code.', '']
     if note:
@@ -176,14 +198,24 @@ def report(day, screen, d, fix_log, started, note=None):
     else:
         n_screen = len(screen['order_numbers'])
         zero = d['diff'] == 0
-        subject = (f"[{'OK' if zero else 'CHECK'}] Labels {day}: Batch Labels {page['labels']} = legacy screen {n_screen}"
+        n_labels, n_wa = d['legacy_labels'], len(d['whatsapp_labels'])
+        subject = (f"[{'OK' if zero else 'CHECK'}] Labels {day}: Batch Labels {n_labels} = legacy screen {n_screen}"
                    if zero else
-                   f"[CHECK] Labels {day}: Batch Labels {page['labels']} vs legacy screen {n_screen} — {d['diff']} difference(s)")
+                   f"[CHECK] Labels {day}: Batch Labels {n_labels} vs legacy screen {n_screen} — {d['diff']} difference(s)")
         lines += [
             f"Legacy screen / شاشة السيستم القديم: {n_screen} orders (read {screen['_age_min']} min ago)",
-            f"Batch Labels page / صفحة الطباعة: {page['labels']} labels",
+            f"Batch Labels page / صفحة الطباعة: {n_labels} labels",
             f"Difference / الفرق: {d['diff']}",
         ]
+        if wa is not None or n_wa:
+            expected = None if not wa or wa.get('failed') else wa['with_driver']
+            wa_ok = wa is None or (expected is not None and expected == n_wa)  # wa is None: check-only run
+            subject += f" + WhatsApp {n_wa}" if wa_ok else ' + WhatsApp CHECK'
+            lines.append(f"WhatsApp subscribers / مشتركين الواتساب: {n_wa} labels"
+                         + ('' if wa_ok else f" — expected {expected if expected is not None else '?'} / المتوقع {expected if expected is not None else '?'}"))
+            if wa and wa.get('no_driver'):
+                lines.append(f"WhatsApp subscribers without a label (no address or unknown area) / مشتركين واتساب من غير ملصق: "
+                             f"{wa['no_driver']} — areas: {', '.join(wa.get('no_driver_areas') or [])}")
         if screen.get('_empty_day'):
             lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
         if screen.get('test_orders_excluded'):
@@ -283,6 +315,7 @@ def main():
     screen = current_screen(day)
     if fix:
         feed_labels(day, fix_log)  # A70.7: always complete the label database first (≈15 s)
+    wa = whatsapp_labels(day, fix_log) if fix else None
     if fix and screen is None:
         fix_log.append('No screen reading found → reading the legacy screen now')
         resync(day, fix_log)
@@ -296,16 +329,17 @@ def main():
         if round_no == 1 and d['diff']:
             # A70.9: tell the owner before 01:00 exactly which orders differ; the repair needs ~20 min.
             report(day, screen, d, fix_log, started,
-                   'Repair is running now; a second email follows. / التصليح شغال دلوقتي وهيوصلك إيميل تاني بالنتيجة.')
+                   'Repair is running now; a second email follows. / التصليح شغال دلوقتي وهيوصلك إيميل تاني بالنتيجة.', wa=wa)
         wait_for_scheduled_sync()  # the re-sync needs the lock the scheduled run holds
         fix_log.append(f'Repair round {round_no}:')
         if d['diff'] is None or d['diff'] > 0:
             resync(day, fix_log)
             screen = current_screen(day)
         feed_labels(day, fix_log)
+        wa = whatsapp_labels(day, fix_log)  # a repair can change an area's driver
         d = evaluate(day, screen)
 
-    report(day, screen, d, fix_log, started)
+    report(day, screen, d, fix_log, started, wa=wa)
     return 0
 
 
