@@ -54,6 +54,9 @@ export interface BatchLabelCandidate {
   driverName?: string | null;
   vehicleNumber: string | null;
   driverColor: DriverLabelColorToken | null;
+  labelAddress?: Partial<LabelAddressContract> | null;
+  labelPackage?: string | null;
+  labelDaysRemaining?: number | null;
 }
 
 export interface FleetbaseDriverLabelSource {
@@ -62,6 +65,15 @@ export interface FleetbaseDriverLabelSource {
   driverName?: string | null;
   vehicleNumber: string | null;
   driverColor: DriverLabelColorToken | null;
+  /**
+   * A71.2: delivery address and plan carried by the Fleetbase order itself (`meta.label_address`,
+   * `meta.label_package`). Set only by sources whose customers are not in the Partner feed
+   * (WhatsApp-system subscribers); when present it replaces the locally stored address, which can
+   * be an older one for a returning customer.
+   */
+  labelAddress?: Partial<LabelAddressContract> | null;
+  labelPackage?: string | null;
+  labelDaysRemaining?: number | null;
 }
 
 export interface BatchLabelFilter {
@@ -152,7 +164,17 @@ export class LabelService {
       : await this.driverRef(orderId, deliveryDate);
     const barcode = await this.barcodes.issueFor(actor, r.customer_id as string);
 
-    const address: LabelAddressContract = {
+    const sourceAddress = source?.labelAddress ?? null;
+    const address: LabelAddressContract = sourceAddress ? {
+      // A71.2: the order's own source address wins as a whole; no field is mixed with a stored one.
+      area: sourceAddress.area ?? (r.delivery_area_frozen as string) ?? (r.area_name as string) ?? null,
+      block: sourceAddress.block ?? null,
+      street: sourceAddress.street ?? null,
+      building: sourceAddress.building ?? null,
+      floor: null,
+      flat: sourceAddress.flat ?? null,
+      direction: sourceAddress.direction ?? null,
+    } : {
       area: (r.area_name as string) ?? (r.delivery_area_frozen as string) ?? null,
       block: (r.block as string) ?? null,
       street: (r.street as string) ?? null,
@@ -171,10 +193,10 @@ export class LabelService {
       full_name: (r.full_name_en as string) ?? '',
       subscription_date_display: formatLabelDate(deliveryDate),
       delivery_time: (r.delivery_time_frozen as string) ?? null,
-      days_remaining: r.days_remaining === null || r.days_remaining === undefined
-        ? null : Number(r.days_remaining),
+      days_remaining: source?.labelDaysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
+        ? null : Number(r.days_remaining)),
       delivery_method: (r.delivery_method_frozen as string) ?? null,
-      package_name: (r.package_name as string) ?? null,
+      package_name: source?.labelPackage ?? (r.package_name as string) ?? null,
       meals_per_day: r.meals_per_day === null || r.meals_per_day === undefined
         ? null : Number(r.meals_per_day),
       // No snacks-per-day column exists anywhere in the schema (documented gap, A27 discovery §2).
@@ -249,14 +271,19 @@ export class LabelService {
    */
   fleetbaseDriverSource(order: FleetbaseOrderProjection): FleetbaseDriverLabelSource {
     const driver = order.driver_assigned;
+    const overrides = labelOverrides(order.meta);
     if (!driver) {
-      return { driverRef: null, driverName: null, driverPhone: null, vehicleNumber: null, driverColor: null };
+      return {
+        driverRef: null, driverName: null, driverPhone: null, vehicleNumber: null, driverColor: null, ...overrides,
+      };
     }
     const driverRef = this.fleetbaseDriverRef(order);
     const driverPhone = driver.phone?.trim() || null;
     const vehicleNumber = driver.vehicle?.plate_number?.trim() || null;
     const driverColor = driver.label_color ?? null;
-    return { driverRef, driverName: driver.name?.trim() || null, driverPhone, vehicleNumber, driverColor };
+    return {
+      driverRef, driverName: driver.name?.trim() || null, driverPhone, vehicleNumber, driverColor, ...overrides,
+    };
   }
 
   /**
@@ -388,6 +415,9 @@ export class LabelService {
             driverName: candidate.driverName,
             vehicleNumber: candidate.vehicleNumber,
             driverColor: candidate.driverColor,
+            labelAddress: candidate.labelAddress,
+            labelPackage: candidate.labelPackage,
+            labelDaysRemaining: candidate.labelDaysRemaining,
           }),
           this.printHistory(candidate.localOrderId, deliveryDate),
         ]);
@@ -806,4 +836,31 @@ export function totalsOf(meals: LabelMealRowContract[]): LabelNutritionTotalsCon
   const fat = sum((m) => m.fat);
   const calories = sum((m) => m.calories);
   return { protein, carbs, fat, calories, complete };
+}
+
+/** A71.2: `meta.label_address` / `meta.label_package` of a Fleetbase order, cleaned for printing. */
+function labelOverrides(
+  meta: Record<string, unknown> | null | undefined,
+): { labelAddress?: Partial<LabelAddressContract>; labelPackage?: string; labelDaysRemaining?: number } {
+  const clean = (value: unknown): string | null => {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    // eslint-disable-next-line no-control-regex
+    const text = String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+    return text.length > 0 ? text : null;
+  };
+  const out: { labelAddress?: Partial<LabelAddressContract>; labelPackage?: string; labelDaysRemaining?: number } = {};
+  const raw = meta?.label_address;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const a = raw as Record<string, unknown>;
+    const address = {
+      area: clean(a.area), block: clean(a.block), street: clean(a.street),
+      building: clean(a.building), flat: clean(a.flat), direction: clean(a.direction),
+    };
+    if (Object.values(address).some((v) => v !== null)) out.labelAddress = address;
+  }
+  const plan = clean(meta?.label_package);
+  if (plan) out.labelPackage = plan;
+  const days = meta?.label_days_remaining;
+  if (typeof days === 'number' && Number.isInteger(days) && days >= 0 && days <= 3660) out.labelDaysRemaining = days;
+  return out;
 }

@@ -11,7 +11,7 @@ and addresses, so the list and that report always agree. Nothing is written to E
 import json
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 import frappe
 
@@ -29,12 +29,12 @@ def main(site, day_text, output):
     else:
         customers = {r['customer']: r for r in customer_rows({'source': 'WhatsApp'})}
         subscriptions = frappe.db.sql(
-            """select customer, item_name, custom_ntz_freeze_log as freeze_log
+            """select customer, item_name, end_date, custom_ntz_freeze_log as freeze_log
                from `tabNTZ POS Subscription`
                where removed=0 and invoice_status=1 and is_return=0
                  and ifnull(custom_ntz_addon_for,'')='' and start_date<=%s and end_date>=%s
                order by end_date desc, name asc""", (day, day), as_dict=True)
-        plans, frozen = {}, set()
+        plans, ends, frozen = {}, {}, set()
         for sub in subscriptions:
             if sub.customer not in customers:
                 continue
@@ -43,6 +43,7 @@ def main(site, day_text, output):
                 frozen.add(sub.customer)
                 continue
             plans.setdefault(sub.customer, sub.item_name)
+            ends.setdefault(sub.customer, sub.end_date)
         skipped['frozen'] = len(frozen - set(plans))
         seen = set()
         for customer, plan in sorted(plans.items()):
@@ -67,6 +68,11 @@ def main(site, day_text, output):
                 'area': (row['area'] or '').strip(),
                 'address_text': address,
                 'plan': (plan or '').split('|')[0].strip(),
+                'block': row['block'] or '', 'street': row['street'] or '', 'house': row['house'] or '',
+                'details': row['details'] or '',
+                # service days left including this one; Friday is never a delivery day
+                'days_remaining': sum((day + timedelta(days=i)).weekday() != 4
+                                      for i in range((ends[customer] - day).days + 1)),
                 'has_address': bool(row['address']),
             })
     if not rows and day.weekday() != 4 and os.environ.get('WA_ALLOW_EMPTY') != 'yes':

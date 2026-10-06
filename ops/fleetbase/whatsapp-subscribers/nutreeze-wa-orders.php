@@ -393,6 +393,10 @@ final class WaWriter
             'dispatch_state' => $driver === null ? 'held_no_driver_for_area' : 'dispatched_call_customer_required',
             'hold_reason' => $holdReason, 'driver_source' => $driverSource,
             'dispatch_time_local' => $this->pickup['dispatch_time'], 'dispatch_timezone' => 'Asia/Kuwait',
+            // A71.2: printed on the label as they are in ERPNext today (the label database may hold an older address).
+            'label_address' => ['area' => $areaEn, 'block' => $row['block'], 'street' => $row['street'],
+                'flat' => $row['house'], 'direction' => $row['details']],
+            'label_package' => $row['plan'], 'label_days_remaining' => $row['days_remaining'],
         ]);
         $order->setAttribute('deleted_at', null);
         $changed = quietSave($order) || $changed;
@@ -513,6 +517,9 @@ try {
             'customer_name' => trim((string) $row['customer_name']), 'customer_phone' => trim((string) $row['customer_phone']),
             'area' => trim((string) ($row['area'] ?? '')), 'address_text' => trim((string) ($row['address_text'] ?? '')),
             'plan' => trim((string) ($row['plan'] ?? '')),
+            'block' => trim((string) ($row['block'] ?? '')), 'street' => trim((string) ($row['street'] ?? '')),
+            'house' => trim((string) ($row['house'] ?? '')), 'details' => trim((string) ($row['details'] ?? '')),
+            'days_remaining' => is_int($row['days_remaining'] ?? null) ? $row['days_remaining'] : null,
         ];
     }
     $lock = fopen('/tmp/nutreeze-wa-orders.lock', 'c');

@@ -52,3 +52,32 @@ No API or console code changed; nothing deployed except these scripts. Nothing i
 - The two subscribers without an address get no label until their address is entered in ERPNext.
 - Server copy of the scripts: `/opt/fleetbase/integrations/whatsapp-subscribers/`; work files and log `/root/a71/`;
   previous night-check script kept as `print-status.py.bak-a70-11`.
+
+## A71.2 — ERPNext address, plan and days left on the label; 30-minute sync (2026-10-06)
+Owner: "كمل تعديل العنوان الكامل … واعمل sync للعملاء دول باستمرار علشان الطباعة تكون updated".
+
+- **Label (`m25-label/label.service.ts`)**: a Fleetbase order may carry `meta.label_address` (area, block, street,
+  building, flat, direction), `meta.label_package` and `meta.label_days_remaining`. When present they are printed
+  instead of the stored address / package / computed days. Values are cleaned (control characters, 120 chars). Partner
+  orders carry none of these keys, so their labels are unchanged (asserted in TS-I `ts-i-label-barcode`, 24/24).
+- **Writer**: `nutreeze-wa-orders.php` sets those keys on every run from the ERPNext export (block, street, house,
+  extra details, plan, service days left excluding Fridays), so an address edited in ERPNext reaches the next print.
+- **Timer**: `nutreeze-wa-labels.timer` (every 30 minutes, `wa-labels-sync.sh auto apply`) keeps Kuwait tomorrow and
+  the day after current; installed and enabled at the owner's request. The night check still runs the step itself for
+  the print day and waits up to 5 minutes for a run in progress.
+- First timer run: 2026-10-07 → 36 rows (34 with driver); 2026-10-08 → 34 rows (32 with driver); exit 0.
+
+Still not on a WhatsApp label, because ERPNext does not hold it: the dish list with nutrition, delivery time slot,
+delivery method, and an exact location pin.
+
+### A71.2 deploy (staging, 2026-10-06 11:40 Kuwait)
+API `nutrezee-api:a71-2-389ee07` (rollback tag `nutrezee-api:pre-a71-2-20261006`), CI 31/31 on PR #96, container env
+fingerprint identical before/after, `/health` 200, no error lines. Labels built with the deployed `LabelService` from the
+real Fleetbase rows of 2026-10-07:
+
+| Set | before | after |
+|---|---|---|
+| WhatsApp (34 labels): block / street / house / plan printed | 12 / 13 / 13 / 0 | 34 / 34 / 34 / 34 |
+| Partner sample (60 labels): block / street / house / package | 5 / 7 / 7 / 7 | 5 / 7 / 7 / 7 (unchanged) |
+
+Night check after the deploy: `[OK] Labels 2026-10-07: Batch Labels 944 = legacy screen 944 + WhatsApp 34`.

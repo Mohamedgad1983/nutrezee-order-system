@@ -2,14 +2,23 @@
 # WP-OPS-A71 — WhatsApp-system subscribers on Batch Labels, for one delivery day.
 #   wa-labels-sync.sh YYYY-MM-DD            dry-run (nothing written)
 #   wa-labels-sync.sh YYYY-MM-DD apply      write Fleetbase orders + label database rows
+#   wa-labels-sync.sh auto apply            the same for Kuwait tomorrow and the day after (timer)
 # 1) read the day's active subscribers from ERPNext (read-only)
 # 2) Fleetbase orders under the NUTREEZE-WA prefix, driver = the area's driver that day
 # 3) label database rows through the governed M19 import
 # The customer list stays in a root-only file; logs carry counts only.
 set -euo pipefail
 umask 077
-DAY="${1:?delivery date YYYY-MM-DD}"
+DAY="${1:?delivery date YYYY-MM-DD, or auto}"
 MODE="${2:-dry-run}"
+if [[ "$DAY" == auto ]]; then
+  # The periodic run: the two days whose labels are printed next (Kuwait tomorrow and the day after).
+  rc=0
+  for offset in 1 2; do
+    "$0" "$(TZ=Asia/Kuwait date -d "+${offset} day" +%F)" "$MODE" || rc=1
+  done
+  exit "$rc"
+fi
 [[ "$DAY" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo 'invalid date' >&2; exit 2; }
 [[ "$MODE" == dry-run || "$MODE" == apply ]] || { echo 'mode must be dry-run or apply' >&2; exit 2; }
 
@@ -21,7 +30,7 @@ API_CONTAINER="${API_CONTAINER:-nutrezee-api-1}"
 WORK="${WORK:-/root/a71}"
 LOG="$WORK/wa-labels-sync.log"
 mkdir -p "$WORK"
-exec 9>"$WORK/.lock"; flock -n 9 || { echo 'another run is active' >&2; exit 3; }
+exec 9>"$WORK/.lock"; flock -w 300 9 || { echo 'another run is still active after 5 minutes' >&2; exit 3; }
 say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 say "START day=$DAY mode=$MODE"
 
