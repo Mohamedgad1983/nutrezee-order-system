@@ -1,0 +1,9 @@
+[Unit]
+Description=A71 — WhatsApp-system subscribers on Batch Labels (ERPNext → Fleetbase + label database, next two print days)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fleetbase/integrations/whatsapp-subscribers/wa-labels-sync.sh auto apply
+TimeoutStartSec=15min

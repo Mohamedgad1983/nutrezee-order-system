@@ -1,0 +1,11 @@
+[Unit]
+Description=A71 — keep WhatsApp-system subscribers' labels current, every 30 minutes
+
+[Timer]
+# owner request 2026-10-06: sync these customers continuously so their labels are always up to date
+OnCalendar=*:10,40
+Persistent=false
+Unit=nutreeze-wa-labels.service
+
+[Install]
+WantedBy=timers.target

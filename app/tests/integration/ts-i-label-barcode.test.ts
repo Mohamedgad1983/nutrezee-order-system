@@ -429,6 +429,37 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
     expect(new Set(docs.map((d) => d.barcode_value)).size).toBe(docs.length); // no shared barcodes
   });
 
+  it('A71.2: a Fleetbase order that carries its own address and plan prints those, not the stored address', async () => {
+    const own = await seed('WhatsApp Subscriber', 'WA-50000001');
+    const plain = await seed('Partner Customer', 'N-LBL-A712-2');
+    const driver = {
+      public_id: 'driver_ahmed', internal_id: 'AHMED', name: 'Ahmed', phone: '+96550000001',
+      vehicle: { plate_number: 'KWT-101' }, label_color: 'teal' as const,
+    };
+    const candidates = await labels.batchCandidates(DATE_B, [
+      {
+        id: 'fleetbase_a712_1',
+        meta: {
+          delivery_date: DATE_B, nutrezee_order_id: own.orderId, label_package: ' Athletic ', label_days_remaining: 12,
+          label_address: { area: 'Qurain', block: 1, street: '18\u0007', flat: 'House 428', direction: '', floor: 'ignored' },
+        },
+        driver_assigned: driver,
+      },
+      { id: 'fleetbase_a712_2', meta: { delivery_date: DATE_B, nutrezee_order_id: plain.orderId, label_address: [] }, driver_assigned: driver },
+    ]);
+    const built = await labels.buildCandidateBatch(actor, DATE_B, candidates);
+    const byNumber = new Map(built.map((item) => [item.order_number, item.label]));
+    const stored = await labels.build(actor, plain.orderId, DATE_B);
+    expect(byNumber.get('WA-50000001')?.address).toEqual({
+      area: 'Qurain', block: '1', street: '18', building: null, floor: null, flat: 'House 428', direction: null,
+    });
+    expect(byNumber.get('WA-50000001')?.package_name).toBe('Athletic');
+    expect(byNumber.get('WA-50000001')?.days_remaining).toBe(12);
+    expect(byNumber.get('N-LBL-A712-2')?.days_remaining).toBe(stored.days_remaining);
+    expect(byNumber.get('N-LBL-A712-2')?.address).toEqual(stored.address);
+    expect(byNumber.get('N-LBL-A712-2')?.package_name).toBe(stored.package_name);
+  });
+
   it('builds a selected driver batch and records one audited batch only after confirmation', async () => {
     const first = await seed('Batch Driver One', 'N-LBL-BATCH-1');
     const second = await seed('Batch Driver Two', 'N-LBL-BATCH-2');
