@@ -29,3 +29,20 @@ A read-only page `Order Status` in the console's Resources sidebar (same place a
 TS-U `ts-u-order-status` 5/5, TS-I `ts-i-label-barcode` 25/25 (phone lookup, day pin, candidate status/pin),
 TS-U extension boundary test (page registered, GET only, no `<select>`), all TS-U 199 passed; typecheck, lint,
 no-GET-mutation scan clean.
+
+## Deploy (staging, 2026-10-06, owner: "كمل ونزلها")
+- CI 31/31 on PR #97.
+- **API** `nutrezee-api:a72-d0c64b5` at 11:53 Kuwait (rollback `nutrezee-api:pre-a72-20261006`): env fingerprint
+  identical, `/health` 200; label check unchanged (WhatsApp 34/34 with address, Partner sample identical); night check
+  `[OK] … 944 = legacy screen 944 + WhatsApp 34`. `GET /nz/fleet-ops/order-status` without a token → 401.
+- **Lookup on real data** (deployed code, day 2026-10-07, 978 candidates): 51 phones (40 random Partner, 10 WhatsApp,
+  1 fake) → 50 customers found, 49 with a delivery that day (55 deliveries), fake number not found; pins: 37 exact,
+  9 area centre, 9 none; 21 ms average per lookup; with no driver position the answer is `driver_position_missing`.
+- **Console** `fleetbase-console:a72-1` (release `0.7.48-a72.1`, extension `0.3.17`), rollback
+  `fleetbase-console:pre-a72-20261006`; previous extension source kept at
+  `/opt/fleetbase/backups/nutrezee-labels-engine-0.3.16-20261006`. Isolated-container gate 10/10: nginx syntax,
+  production metadata, 10 extensions with Nutrezee 0.3.17, theme alias, Order Status in the bundle, Batch Labels still
+  in the bundle, page styles, gzip, immutable fingerprinted assets, no Clear-Site-Data. Only the console container was
+  recreated; `ops.nutreeze.com`, `/extensions.json`, `/nz/health`, the fleet host and the app health all 200.
+- **Not verified [NC → owner]**: the page rendered inside a signed-in console session (the assistant has no console
+  login). Owner to open Fleet-Ops → Resources → Order Status and search one phone.
