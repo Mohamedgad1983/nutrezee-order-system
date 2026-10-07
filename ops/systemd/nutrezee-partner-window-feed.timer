@@ -1,0 +1,10 @@
+[Unit]
+Description=A75 — refresh future delivery days every 2 hours (the 20:35 UTC run is 23:35 Kuwait, before the night check)
+
+[Timer]
+OnCalendar=*-*-* 00/2:35:00 UTC
+Persistent=false
+Unit=nutrezee-partner-window-feed.service
+
+[Install]
+WantedBy=timers.target

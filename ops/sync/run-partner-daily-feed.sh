@@ -8,11 +8,12 @@ set -euo pipefail
 CONTAINER="${CONTAINER:-nutrezee-api-1}"
 SCRIPT="${SCRIPT:-/opt/nutrezee/sync/partner-daily-feed.mjs}"
 LOG_DIR="${LOG_DIR:-/opt/nutrezee/sync/logs}"
-LOG="${LOG_DIR}/partner-daily-feed.log"
+LOG="${LOG_DIR}/${FEED_LOG_NAME:-partner-daily-feed}.log"
 mkdir -p "${LOG_DIR}"
 [[ -f "${SCRIPT}" ]] || { echo "missing ${SCRIPT}" >&2; exit 2; }
 docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null | grep -qx true || { echo "${CONTAINER} not running" >&2; exit 2; }
-docker cp "${SCRIPT}" "${CONTAINER}:/srv/partner-daily-feed.mjs" >/dev/null
+IN_CONTAINER="/srv/${FEED_SCRIPT_NAME:-partner-daily-feed}.mjs"
+docker cp "${SCRIPT}" "${CONTAINER}:${IN_CONTAINER}" >/dev/null
 echo "$(date -u +%FT%TZ) START mode=${FEED_MODE:-dry-run} dates=${FEED_DATES:-auto}" >>"${LOG}"
 set +e
 docker exec \
@@ -21,7 +22,8 @@ docker exec \
   -e ALLOW_APPLY="${ALLOW_APPLY:-no}" \
   -e API="${API:-http://127.0.0.1:3000}" \
   -e FEED_DATES="${FEED_DATES:-}" \
-  "${CONTAINER}" node /srv/partner-daily-feed.mjs 2>&1 | tee -a "${LOG}"
+  -e FEED_TEMP_EMAIL="${FEED_TEMP_EMAIL:-}" \
+  "${CONTAINER}" node "${IN_CONTAINER}" 2>&1 | tee -a "${LOG}"
 rc=${PIPESTATUS[0]}
 set -e
 echo "$(date -u +%FT%TZ) END rc=${rc}" >>"${LOG}"
