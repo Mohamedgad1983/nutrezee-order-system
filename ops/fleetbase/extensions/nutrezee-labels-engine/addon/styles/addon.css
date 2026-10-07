@@ -574,6 +574,32 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     color: var(--nz-text, #2d251f);
 }
 
+/* A77 — Move Area between drivers */
+.nz-move-panel { padding: 1rem; color: var(--nz-text, #2d251f); max-width: 72rem; }
+.nz-move-step { margin: 1.1rem 0 0.5rem; font-size: 0.95rem; }
+.nz-move-drivers { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+.nz-move-driver { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 0.5rem; padding: 0.7rem 0.8rem; text-align: start; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.7rem; background: var(--nz-surface, #fff); color: inherit; cursor: pointer; }
+.nz-move-driver__name { font-weight: 700; overflow-wrap: anywhere; }
+.nz-move-driver__sub { grid-column: 1; color: var(--nz-muted, #6b7280); font-size: 0.75rem; }
+.nz-move-driver__count { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nz-move-driver__bar { grid-column: 1 / -1; height: 0.35rem; border-radius: 999px; background: var(--nz-surface-soft, #f3f4f6); overflow: hidden; }
+.nz-move-driver__bar > span { display: block; height: 100%; background: var(--nz-brand, #956132); }
+.nz-move-driver--source { border-color: #b45309; box-shadow: 0 0 0 2px #fcd34d; }
+.nz-move-driver--target { border-color: #15803d; box-shadow: 0 0 0 2px #86efac; }
+.nz-move-areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.45rem; }
+.nz-move-area { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.6rem; background: var(--nz-surface, #fff); color: inherit; text-align: start; cursor: pointer; }
+.nz-move-area strong { font-variant-numeric: tabular-nums; }
+.nz-move-area--chosen { border-color: #b45309; box-shadow: 0 0 0 2px #fcd34d; }
+.nz-move-area--blocked { opacity: 0.55; cursor: not-allowed; }
+.nz-move-confirm { margin-top: 1rem; padding: 1rem; border: 1px solid var(--nz-brand-line, #c9a27c); border-radius: 0.75rem; background: var(--nz-brand-soft, #f8f1ea); font-variant-numeric: tabular-nums; }
+.nz-move-confirm__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.7rem; }
+.nz-move-list { margin: 0.75rem 0; padding: 0.8rem 1rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.75rem; background: var(--nz-surface, #fff); }
+.nz-move-list h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.nz-move-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-top: 1px solid var(--nz-border, #e5e7eb); }
+.nz-move-row:first-of-type { border-top: 0; }
+.nz-move-status { font-size: 0.8rem; color: #92400e; }
+.nz-move-status--done { color: #166534; }
+
 /* A74 — Leaflet's attribution prefix carries a small flag that operators read as "the map shows another country".
    The map library and OpenStreetMap credits stay visible. */
 .leaflet-control-attribution .leaflet-attribution-flag { display: none !important; }

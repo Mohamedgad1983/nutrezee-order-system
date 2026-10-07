@@ -198,6 +198,27 @@ export default {
             })
         );
 
+        // A77 — the drivers' manager moves one area to another driver for one delivery day.
+        menuService.registerMenuItem(
+            'engine:fleet-ops',
+            new MenuItem({
+                title: 'Nutrezee Move Area',
+                label: 'Move Area',
+                slug: 'nutrezee-move-area',
+                view: 'nutrezee-move-area',
+                section: 'management',
+                icon: 'right-left',
+                priority: 6,
+                permission: 'fleet-ops update order',
+                description: 'Give one area to another driver for one day.',
+                keywords: ['move', 'area', 'driver', 'balance', 'reassign', 'load'],
+                component: new ExtensionComponent(
+                    '@nutrezee/fleetops-labels-engine',
+                    'move-area'
+                ),
+            })
+        );
+
         // A30 — governed exact locations captured by the assigned driver. This stays inside the
         // same Fleet-Ops Resources surface; no second admin or Nutrezee operator login exists.
         menuService.registerMenuItem(

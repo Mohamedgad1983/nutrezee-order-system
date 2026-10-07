@@ -1,0 +1,9 @@
+[Unit]
+Description=A77 — apply a manager's area move between drivers right away (re-syncs only a day whose moves changed)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/fleetbase/integrations/area-moves/area-moves-apply.py
+TimeoutStartSec=20min

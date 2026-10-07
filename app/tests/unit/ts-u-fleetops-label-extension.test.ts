@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.19');
+    expect(packageJson.version).toBe('0.3.20');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -103,6 +103,13 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(read('addon/components/order-status.js')).not.toMatch(/method:\s*'(POST|PUT|PATCH|DELETE)'/);
     expect(read('addon/components/order-status.hbs')).toContain('data-test-nutrezee-order-status');
     expect(read('addon/components/order-status.hbs')).not.toContain('<select');
+    // A77 — move an area between drivers: one page, edits need the order-update permission.
+    expect(extension).toContain("slug: 'nutrezee-move-area'");
+    expect(extension).toContain("permission: 'fleet-ops update order'");
+    expect(read('addon/components/move-area.js')).toContain('/nz/fleet-ops/area-moves');
+    expect(read('addon/components/move-area.js')).not.toMatch(/^import [^;]*from\s+['"]\.{1,2}\//m);
+    expect(read('addon/components/move-area.hbs')).toContain('data-test-nutrezee-move-area');
+    expect(read('addon/components/move-area.hbs')).not.toContain('<select');
     expect(routes).toContain('buildRoutes(function () {})');
     expect(extension).not.toContain('registerHeaderMenuItem');
     expect(extension).not.toContain('registerAdminMenuPanel');

@@ -262,6 +262,24 @@ export class FleetbaseIdentityService {
     return positions;
   }
 
+  /** A77: every company driver with the identity a label needs (public id, name, phone, plate). */
+  async driverDirectoryForOperator(token: string): Promise<Array<{
+    id: string; name: string | null; phone: string | null; vehicle_number: string | null;
+  }>> {
+    const safeToken = requireToken(token);
+    await this.operatorContext(safeToken);
+    const directory: Array<{ id: string; name: string | null; phone: string | null; vehicle_number: string | null }> = [];
+    for (const driver of await this.client().drivers(safeToken)) {
+      const id = cleanString(driver.public_id) ?? cleanString(driver.id);
+      if (!id) continue;
+      directory.push({
+        id, name: cleanString(driver.name) ?? null, phone: cleanString(driver.phone) ?? null,
+        vehicle_number: cleanString(driver.vehicle?.plate_number) ?? null,
+      });
+    }
+    return directory;
+  }
+
   /** Delivery date is sourced from the server-fetched Fleetbase order, never from the browser. */
   deliveryDateForOrder(order: FleetbaseOrderProjection): string {
     const deliveryDate = fleetbaseOrderDate(order);

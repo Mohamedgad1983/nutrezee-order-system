@@ -1,0 +1,11 @@
+[Unit]
+Description=A77 — check every minute for a new or undone area move
+
+[Timer]
+OnCalendar=*:0/1
+AccuracySec=5s
+Persistent=false
+Unit=nutreeze-area-moves.service
+
+[Install]
+WantedBy=timers.target

@@ -12,8 +12,22 @@ CAPTURE_CONFIG=''
 NUTREEZEE_DB_CONTAINER=nutrezee-postgres-1
 CAPTURE_HOST=''
 LOCATION_RECOVERY_DATE=''
+DELIVERY_DATE=''
+CANCEL_ONLY=0
+AREA_MOVES_HOST=''
+AREA_MOVES_CONFIG=''
+
+cleanup_area_moves() {
+  if [ -n "$AREA_MOVES_HOST" ]; then
+    rm -f "$AREA_MOVES_HOST"
+  fi
+  if [ -n "$AREA_MOVES_CONFIG" ]; then
+    docker exec "$CONTAINER" rm -f "$AREA_MOVES_CONFIG" >/dev/null 2>&1 || true
+  fi
+}
 
 cleanup_location_captures() {
+  cleanup_area_moves
   if [ -n "$CAPTURE_HOST" ]; then
     find /var/tmp -maxdepth 1 -type f -name "$(basename "$CAPTURE_HOST")" -delete
   fi
@@ -43,9 +57,10 @@ fi
 DAILY=0
 for ARG in "$@"; do
   case "$ARG" in
-    --limit=*|--verify|--dry-run|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*|--confirm-address-call-dispatch=*|--driver-orders-manifest=*|--legacy-screen-manifest=*|--cancel-only=*) ;;
+    --limit=*|--verify|--dry-run|--expected-count=*|--expected-digest=*|--confirm-daily-sync=*|--confirm-zero-day=*|--confirm-address-call-dispatch=*|--driver-orders-manifest=*|--legacy-screen-manifest=*) ;;
+    --cancel-only=*) CANCEL_ONLY=1 ;;
     --confirm-location-recovery=*) LOCATION_RECOVERY_DATE=${ARG#*=} ;;
-    --delivery-date=*) DAILY=1 ;;
+    --delivery-date=*) DAILY=1; DELIVERY_DATE=${ARG#*=} ;;
     *)
       printf '%s\n' 'unsupported runtime option' >&2
       exit 23
@@ -76,6 +91,25 @@ if [ -n "$LOCATION_RECOVERY_DATE" ]; then
   docker exec "$CONTAINER" chown 0:0 "$CAPTURE_CONFIG"
   docker exec "$CONTAINER" chmod 600 "$CAPTURE_CONFIG"
   set -- "$@" "--location-captures=$CAPTURE_CONFIG"
+fi
+
+# A77 — one-day area moves decided on the Fleet-Ops "Move Area" page. Read-only export of the active
+# rows of this delivery day; no rows, no table or any error here means the sync runs exactly as before.
+if [ "$CANCEL_ONLY" -eq 0 ] && printf '%s' "$DELIVERY_DATE" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+  AREA_MOVES_HOST="$(mktemp /var/tmp/nutrezee-area-moves.XXXXXX)"
+  chmod 600 "$AREA_MOVES_HOST"
+  if docker exec "$NUTREEZEE_DB_CONTAINER" psql -U nutrezee -d nutrezee -Atc \
+      "SELECT CASE WHEN to_regclass('public.delivery_area_move') IS NULL THEN '' ELSE (SELECT CASE WHEN count(*) = 0 THEN '' ELSE json_build_object('delivery_date','$DELIVERY_DATE','moves',json_agg(json_build_object('id',m.id,'area_key',m.area_key,'to_driver_public_id',m.to_driver_id,'to_driver_name',m.to_driver_name) ORDER BY m.created_at))::text END FROM delivery_area_move m WHERE m.delivery_date = DATE '$DELIVERY_DATE' AND m.cancelled_at IS NULL) END;" \
+      > "$AREA_MOVES_HOST" 2>/dev/null </dev/null && [ "$(wc -c < "$AREA_MOVES_HOST")" -gt 2 ]; then
+    AREA_MOVES_CONFIG="/fleetbase/api/storage/app/integrations/config/$(basename "$AREA_MOVES_HOST").json"
+    if docker cp "$AREA_MOVES_HOST" "$CONTAINER:$AREA_MOVES_CONFIG" >/dev/null 2>&1 \
+        && docker exec "$CONTAINER" chown 0:0 "$AREA_MOVES_CONFIG" \
+        && docker exec "$CONTAINER" chmod 600 "$AREA_MOVES_CONFIG"; then
+      set -- "$@" "--area-moves=$AREA_MOVES_CONFIG"
+    else
+      AREA_MOVES_CONFIG=''
+    fi
+  fi
 fi
 
 if docker exec -i "$CONTAINER" php "$SCRIPT" --token-stdin "$@" < "$KEY_FILE"; then
