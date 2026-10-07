@@ -1,6 +1,6 @@
 # 30 — WP-OPS-A78: the customer part of the label read from Partner
 
-**Date:** 2026-10-07 · **Branch:** `build/wp-ops-a78-label-partner-profile` · **API image:** `nutrezee-api:a78-cb41855` (rollback tag `pre-a78-20261007`)
+**Date:** 2026-10-07 · **Branch:** `build/wp-ops-a78-label-partner-profile` · **API image:** `nutrezee-api:a78-d93f010` (rollback tag `pre-a78-20261007`) · **Console:** `fleetbase-console:a78-1`, extension 0.3.21 (rollback tag `pre-a78-20261007`)
 
 ## Trigger
 
@@ -37,7 +37,7 @@ Partner integration endpoints `subscriptions`, `customer-addresses`, `customers`
 - `m25-label/partner-label-profile.ts` — `PartnerLabelProfileSource`: per day one `daily-deliveries` read (5 min cache) plus the two lists (19 + 13 pages, about 11 s, 20 min cache, refreshed in the background, last good copy kept, empty answer refused). Any failure returns null — the label prints with its previous fields (A70: printing never stops).
 - `label.service.ts` — order of precedence for the address: the order's own source address (WhatsApp subscribers) → Partner profile → stored address. Phone always printed as the local number. A phone is never printed as User ID.
 - `nutreeze-wa-orders.php` — WhatsApp subscribers: house number goes to "Building" (was "Flat").
-- No console change, no migration, nothing written to Partner or legacy.
+- No migration, nothing written to Partner or legacy.
 
 ## Verification
 
@@ -53,6 +53,19 @@ Partner integration endpoints `subscriptions`, `customer-addresses`, `customers`
   WhatsApp labels 2026-10-08: 32/32 with block, street and building; phone local 32/32.
 - 943 labels build in about 13 s including the first load of the lists.
 - Deploy: env fingerprint identical, health 200, 0 restarts.
+
+## A78.2 — notes (same day)
+
+Owner: "notes are written often — is the existing part clear?" It was not:
+
+- **No note was printed at all**: the label read `customer.notes`, empty for every Partner customer (0 of 937 on 2026-10-08), while Partner's `daily-deliveries.driver_instructions` carries a note for 267 of 927 deliveries that day (median 10 characters, longest 164, 15 with line breaks). Examples: "Thursday Double Box", "85G CARBS", "call number …".
+- **No room**: the info column is a fixed 45.2 mm above the barcode with one free line; a longer note would have been painted over the barcode.
+
+Change: the note of the day comes from Partner with the rest of the profile; a written note prints bold in a boxed area beside the barcode (footer split 44 mm barcode / rest notes, box clipped to its own area, smaller type above 100 characters — room for about 215 characters). Without a note the label is unchanged (`Notes: -`, barcode centred). The barcode's size and bar width are unchanged.
+
+Checked: local render of the real template + stylesheet with a short, a 57-character, a 160-character and an Arabic note, and a long block text; release gate 13/13; candidate booted in a real browser before the swap ("Nutreeze | Fleet-Ops", no missing module); live console loads. Deployed labels 2026-10-08: **251 of 908 carry a note**, longest 159 characters, 10 above 100.
+
+[Inferred] that legacy "Notes" is this field — the sample label has none on both sides. Not yet seen on paper.
 
 ## Open (Needs Confirmation)
 
