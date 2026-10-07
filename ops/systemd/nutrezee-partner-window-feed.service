@@ -1,0 +1,9 @@
+[Unit]
+Description=A75 — future Partner delivery days into the label database (so labels print the real Days Remaining)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nutrezee/sync/run-partner-window-feed.sh
+TimeoutStartSec=30min

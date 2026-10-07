@@ -11,7 +11,8 @@ import crypto from 'node:crypto';
 
 const API = process.env.API || 'http://127.0.0.1:3000';
 const DB = process.env.DATABASE_URL;
-const TEMP_EMAIL = 'sync-temp@nutrezee.local';
+// A75: a second, longer run (the future window) uses its own temporary admin so the two never collide.
+const TEMP_EMAIL = /^[a-z0-9-]+@nutrezee\.local$/.test(process.env.FEED_TEMP_EMAIL || '') ? process.env.FEED_TEMP_EMAIL : 'sync-temp@nutrezee.local';
 const MODE = (process.env.FEED_MODE || 'dry-run').toLowerCase();
 const log = (o) => console.log(JSON.stringify({ t: new Date().toISOString(), ...o }));
 
