@@ -397,7 +397,8 @@ final class WaWriter
             'dispatch_time_local' => $this->pickup['dispatch_time'], 'dispatch_timezone' => 'Asia/Kuwait',
             // A71.2: printed on the label as they are in ERPNext today (the label database may hold an older address).
             'label_address' => ['area' => $areaEn, 'block' => $row['block'], 'street' => $row['street'],
-                'flat' => $row['house'], 'direction' => $row['details']],
+                // A78: the legacy label prints the house number as "Building".
+                'building' => $row['house'], 'direction' => $row['details']],
             'label_package' => $row['plan'], 'label_days_remaining' => $row['days_remaining'],
         ]);
         $order->setAttribute('deleted_at', null);
