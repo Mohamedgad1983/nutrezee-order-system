@@ -86,7 +86,7 @@
                             <div><strong>Area:</strong> {{this.label.area}}, <strong>Block:</strong> {{this.label.block}}, <strong>Street:</strong> {{this.label.street}}</div>
                             <div><strong>Building:</strong> {{this.label.building}}, <strong>Floor:</strong> {{this.label.floor}}, <strong>Flat:</strong> {{this.label.flat}}, <strong>Direction:</strong> {{this.label.direction}}</div>
                             <div><strong>Phone:</strong> {{this.label.phone}}</div>
-                            <div><strong>Notes:</strong> {{this.label.notes}}</div>
+                            {{#unless this.label.hasNotes}}<div><strong>Notes:</strong> -</div>{{/unless}}
                         </div>
                     </section>
 
@@ -126,9 +126,14 @@
                     </section>
                 </div>
 
-                <footer class="nz-legacy-label__barcode">
-                    <div class="nz-barcode-svg">{{this.label.barcodeSvg}}</div>
-                    <div class="nz-barcode-value">{{this.label.barcodeValue}}</div>
+                <footer class="nz-legacy-label__barcode {{if this.label.hasNotes 'nz-legacy-label__barcode--notes'}}">
+                    <div class="nz-barcode-cell">
+                        <div class="nz-barcode-svg">{{this.label.barcodeSvg}}</div>
+                        <div class="nz-barcode-value">{{this.label.barcodeValue}}</div>
+                    </div>
+                    {{#if this.label.hasNotes}}
+                        <div class="nz-label-notes {{if this.label.notesLong 'nz-label-notes--long'}}" data-test-label-notes><strong>Notes:</strong> {{this.label.notes}}</div>
+                    {{/if}}
                 </footer>
             </article>
         </div>

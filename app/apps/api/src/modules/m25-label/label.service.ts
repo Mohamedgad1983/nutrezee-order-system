@@ -225,7 +225,7 @@ export class LabelService {
       address,
       // The legacy label prints the local number, without a country prefix.
       phone: profile?.phone ?? localPhone(r.phone_normalized),
-      notes: (r.customer_notes as string) ?? null,
+      notes: profile?.notes ?? (r.customer_notes as string) ?? null,
       meals,
       meal_source: mealSource,
       totals: totalsOf(meals),

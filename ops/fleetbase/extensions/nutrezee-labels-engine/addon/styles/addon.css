@@ -1267,6 +1267,35 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     text-align: center;
 }
 
+/* A78 (owner, 2026-10-07): notes are written often. The info column has room for one line and
+   anything longer would run over the barcode, so a written note gets a boxed area beside it. */
+.nz-legacy-label__barcode--notes {
+    display: grid;
+    grid-template-columns: 44mm minmax(0, 1fr);
+    gap: 1.2mm;
+    align-items: start;
+}
+
+.nz-label-notes {
+    height: 9.4mm;
+    box-sizing: border-box;
+    padding: 0.4mm 0.9mm;
+    border: 0.3mm solid #000;
+    border-radius: 0.6mm;
+    overflow: hidden;
+    font-size: 2.05mm;
+    font-weight: 600;
+    line-height: 1.14;
+    text-align: start;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+}
+
+.nz-label-notes--long {
+    font-size: 1.7mm;
+    line-height: 1.1;
+}
+
 .nz-barcode-svg svg {
     display: block;
     width: auto;

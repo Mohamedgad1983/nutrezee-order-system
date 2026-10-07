@@ -12,6 +12,7 @@ const page = (data: unknown[], next: string | null = null) =>
 const daily = {
   order_id: 28251, order_number: '29203', delivery_date: DATE, updated_at: '2026-09-30T12:53:57+03:00',
   customer: { code: '1119', name: 'jasem', phone: '98992558' },
+  driver_instructions: 'Thursday Double Box\nif no answer call 97504160',
   address: { text: '2, 314, 13, home', area_en: 'Abdullah Al Mubarak ', area_ar: 'عبد الله المبارك' },
 };
 const subscription = {
@@ -66,6 +67,7 @@ describe('TS-U partner label profile (A78)', () => {
       userId: '1119', phone: '98992558',
       packageName: '(تقريبا) 720- 1920 سعرة حرارية', mealsPerDay: 3, snacksPerDay: 2,
       address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
+      notes: 'Thursday Double Box if no answer call 97504160',
     });
     await expect(instance.profileForOrder('WA-98992558', DATE)).resolves.toBeNull();
     await instance.profileForOrder('29203', DATE);
@@ -85,6 +87,7 @@ describe('TS-U partner label profile (A78)', () => {
     });
     await expect(lists.instance.profileForOrder('29203', DATE)).resolves.toEqual({
       userId: '1119', phone: '98992558', packageName: null, mealsPerDay: null, snacksPerDay: null, address: null,
+      notes: 'Thursday Double Box if no answer call 97504160',
     });
     const down = source({});
     await expect(down.instance.profileForOrder('29203', DATE)).resolves.toBeNull();

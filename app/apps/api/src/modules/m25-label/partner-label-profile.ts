@@ -27,6 +27,8 @@ export interface PartnerLabelProfile {
   mealsPerDay: number | null;
   snacksPerDay: number | null;
   address: LabelAddressContract | null;
+  /** The day's note typed in legacy for this delivery (`driver_instructions`). */
+  notes: string | null;
 }
 
 export interface PartnerLabelProfileGateway {
@@ -58,7 +60,7 @@ interface Reference {
   addresses: Map<string, LabelAddressContract>;
 }
 
-interface DayRow { subscriptionId: string; userId: string | null; phone: string | null; area: string | null }
+interface DayRow { subscriptionId: string; userId: string | null; phone: string | null; area: string | null; notes: string | null }
 
 interface Cached<T> { loadedAt: number; value: T }
 
@@ -178,6 +180,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         snacksPerDay: subscription?.snacksPerDay ?? null,
         // The area of the day is the one the driver was assigned by; the rest is the stored address.
         address: stored ? { ...stored, area: day.area ?? stored.area } : null,
+        notes: day.notes,
       };
     } catch {
       return null;
@@ -253,6 +256,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           userId: labelText(customer.code, 40),
           phone: localPhone(customer.phone),
           area: labelText(address.area_en) ?? labelText(address.area_ar),
+          notes: labelText(raw.driver_instructions, 240),
         });
       }
       if (this.days.size > 40) this.days.clear();

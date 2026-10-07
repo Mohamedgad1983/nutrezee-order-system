@@ -204,7 +204,7 @@
                                 <div><strong>Area:</strong> {{item.label.area}}, <strong>Block:</strong> {{item.label.block}}, <strong>Street:</strong> {{item.label.street}}</div>
                                 <div><strong>Building:</strong> {{item.label.building}}, <strong>Floor:</strong> {{item.label.floor}}, <strong>Flat:</strong> {{item.label.flat}}, <strong>Direction:</strong> {{item.label.direction}}</div>
                                 <div><strong>Phone:</strong> {{item.label.phone}}</div>
-                                <div><strong>Notes:</strong> {{item.label.notes}}</div>
+                                {{#unless item.label.hasNotes}}<div><strong>Notes:</strong> -</div>{{/unless}}
                             </div>
                         </section>
 
@@ -244,9 +244,14 @@
                         </section>
                     </div>
 
-                    <footer class="nz-legacy-label__barcode">
-                        <div class="nz-barcode-svg">{{item.label.barcodeSvg}}</div>
-                        <div class="nz-barcode-value">{{item.label.barcodeValue}}</div>
+                    <footer class="nz-legacy-label__barcode {{if item.label.hasNotes 'nz-legacy-label__barcode--notes'}}">
+                        <div class="nz-barcode-cell">
+                            <div class="nz-barcode-svg">{{item.label.barcodeSvg}}</div>
+                            <div class="nz-barcode-value">{{item.label.barcodeValue}}</div>
+                        </div>
+                        {{#if item.label.hasNotes}}
+                            <div class="nz-label-notes {{if item.label.notesLong 'nz-label-notes--long'}}" data-test-label-notes><strong>Notes:</strong> {{item.label.notes}}</div>
+                        {{/if}}
                     </footer>
                 </article>
             {{/each}}
