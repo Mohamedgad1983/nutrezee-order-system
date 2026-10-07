@@ -14,6 +14,7 @@ import type { FleetbaseOrderProjection } from './fleetbase-identity.service';
 import {
   type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
+import { validPin } from './order-status';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -57,6 +58,10 @@ export interface BatchLabelCandidate {
   labelAddress?: Partial<LabelAddressContract> | null;
   labelPackage?: string | null;
   labelDaysRemaining?: number | null;
+  /** A72: the Fleetbase order's own id, status and (fallback) pin, for the order-status page. */
+  fleetbaseOrderId?: string;
+  fleetbaseStatus?: string | null;
+  fallbackPin?: { lat: number; lng: number } | null;
 }
 
 export interface FleetbaseDriverLabelSource {
@@ -350,8 +355,42 @@ export class LabelService {
           ? `${driverSource.driverName || 'Name unavailable / الاسم غير متوفر'} · ${driverSource.driverPhone} · ${driverSource.vehicleNumber}`
           : null,
         ...driverSource,
+        fleetbaseOrderId: order.id,
+        fleetbaseStatus: order.status ?? null,
+        fallbackPin: validPin(order.meta?.fallback_latitude, order.meta?.fallback_longitude),
       };
     });
+  }
+
+  /** A72: every order of the customers whose phone ends with these digits (newest first). */
+  async ordersForPhoneDigits(digits: string): Promise<Array<{ orderId: string; orderNumber: string; customerName: string }>> {
+    if (!/^\d{7,15}$/.test(digits)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT co.id AS order_id, co.order_number, c.full_name_en
+         FROM customer_phone p
+         JOIN customer c ON c.id = p.customer_id
+         JOIN customer_order co ON co.customer_id = c.id
+        WHERE right(regexp_replace(p.phone_normalized, '\\D', '', 'g'), $2) = $1
+        ORDER BY co.created_at DESC
+        LIMIT 200`,
+      [digits, digits.length],
+    );
+    return rows.map((r) => ({
+      orderId: r.order_id as string, orderNumber: r.order_number as string, customerName: (r.full_name_en as string) ?? '',
+    }));
+  }
+
+  /** A72: the source's own location pin of each order on the day (read-only; null when it has none). */
+  async deliveryPins(deliveryDate: string, orderIds: string[]): Promise<Map<string, string | null>> {
+    const pins = new Map<string, string | null>();
+    if (orderIds.length === 0) return pins;
+    const { rows } = await this.pool.query(
+      `SELECT order_id, address_frozen->>'location_pin' AS pin
+         FROM fulfillment_day WHERE date = $1 AND order_id = ANY($2::text[])`,
+      [deliveryDate, orderIds],
+    );
+    for (const r of rows) pins.set(r.order_id as string, (r.pin as string) ?? null);
+    return pins;
   }
 
   selectBatchCandidates(

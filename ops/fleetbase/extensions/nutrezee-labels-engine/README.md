@@ -92,3 +92,12 @@ tracked Console serve overlay keeps a stable theme alias if Ember fingerprints t
 enables gzip, revalidates HTML/runtime manifests, caches fingerprinted assets immutably, and never
 sends an origin-wide `Clear-Site-Data` header. These serving changes do not alter the approved design,
 Fleetbase application/vendor source, routes, permissions or workflows.
+
+## Order Status by customer phone (A72)
+
+`Order Status` in the Fleet-Ops **Resources** sidebar is read-only: one `GET /nz/fleet-ops/order-status?phone=…`
+with the operator's Fleetbase bearer. It shows, for the chosen day, the customer's order, its state, the driver
+(name, phone, plate), how many of the driver's orders are delivered, and whether the label was printed. Distance,
+time and "orders before it" are estimates from the driver's last app position; they appear only while that position
+is at most 15 minutes old, otherwise the page says why there is no estimate. Console release `0.7.48-a72.1`,
+extension `0.3.17`.

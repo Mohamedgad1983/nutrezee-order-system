@@ -84,6 +84,9 @@ export interface FleetbaseDriverProjection {
   vehicle_uuid?: string | null;
   vehicle?: { plate_number?: string | null } | null;
   created_at?: string | null;
+  location?: { type?: string; coordinates?: unknown } | null;
+  online?: boolean | number | null;
+  updated_at?: string | null;
 }
 
 export interface FleetbaseIdentityGateway {
@@ -235,6 +238,28 @@ export class FleetbaseIdentityService {
       }
     }
     return { actor, orders };
+  }
+
+  /**
+   * A72: last app position of every company driver, keyed by driver public id. Fleetbase stores the
+   * point as GeoJSON [longitude, latitude]; a never-reported (0,0) point is treated as no position.
+   */
+  async driverPositionsForOperator(token: string): Promise<Map<string, {
+    lat: number; lng: number; updatedAt: string | null; online: boolean;
+  }>> {
+    const safeToken = requireToken(token);
+    await this.operatorContext(safeToken);
+    const positions = new Map<string, { lat: number; lng: number; updatedAt: string | null; online: boolean }>();
+    for (const driver of await this.client().drivers(safeToken)) {
+      const id = cleanString(driver.public_id) ?? cleanString(driver.id);
+      const coordinates = driver.location?.coordinates;
+      if (!id || !Array.isArray(coordinates) || coordinates.length < 2) continue;
+      const [lng, lat] = coordinates as unknown[];
+      if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) continue;
+      positions.set(id, { lat, lng, updatedAt: cleanString(driver.updated_at) ?? null, online: Boolean(driver.online) });
+    }
+    return positions;
   }
 
   /** Delivery date is sourced from the server-fetched Fleetbase order, never from the browser. */

@@ -1,0 +1,70 @@
+<section class="nz-status-panel" data-test-nutrezee-order-status>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Order Status / حالة الطلب</h2>
+            <p>Search by the customer's phone. / ابحث بتليفون العميل.</p>
+        </div>
+    </header>
+
+    <form class="nz-status-search" {{on "submit" this.submit}}>
+        <input
+            type="tel"
+            inputmode="tel"
+            class="form-input nz-status-search__input"
+            placeholder="Customer phone / تليفون العميل"
+            aria-label="Customer phone"
+            value={{this.phone}}
+            data-test-order-status-phone
+            {{on "input" this.updatePhone}}
+        />
+        <button type="submit" class="btn btn-primary" disabled={{this.loading}} data-test-order-status-search>
+            {{if this.loading "Searching… / جاري البحث" "Search / بحث"}}
+        </button>
+    </form>
+
+    {{#if this.result}}
+        <div class="nz-status-days">
+            <button type="button" class="btn btn-sm {{if this.isYesterday "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.searchYesterday}}>Yesterday / امبارح</button>
+            <button type="button" class="btn btn-sm {{if this.isToday "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.searchToday}}>Today / النهارده</button>
+            <button type="button" class="btn btn-sm {{if this.isTomorrow "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.searchTomorrow}}>Tomorrow / بكره</button>
+            <span class="nz-status-days__date">{{this.result.delivery_date}}</span>
+        </div>
+    {{/if}}
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Reading the day's orders… this can take a few seconds. / بنقرا طلبات اليوم… ثواني.</div>
+    {{else if this.error}}
+        <div class="nz-label-state nz-label-state--error">{{this.error}}</div>
+    {{else if this.emptyText}}
+        <div class="nz-label-state nz-label-state--warning" data-test-order-status-empty>{{this.emptyText}}</div>
+    {{else}}
+        {{#each this.deliveries as |item|}}
+            <article class="nz-status-card" data-test-order-status-card>
+                <div class="nz-status-card__head">
+                    <div>
+                        <strong>{{item.customer_name}}</strong>
+                        <span class="nz-status-card__order">Order {{item.order_number}} · {{item.area}}</span>
+                    </div>
+                    <span class={{item.stateClass}}>{{item.stateText}}</span>
+                </div>
+
+                {{#if item.hasLive}}
+                    <div class="nz-status-live">
+                        <div><span>Distance / المسافة</span><strong>{{item.distanceText}}</strong></div>
+                        <div><span>Time / الوقت</span><strong>{{item.etaText}}</strong></div>
+                        <div><span>Orders before it / طلبات قبله</span><strong>{{item.aheadText}}</strong></div>
+                    </div>
+                    <p class="nz-status-note">Approximate. {{item.liveNote}}</p>
+                {{else if item.noEstimateText}}
+                    <p class="nz-status-note nz-status-note--muted">{{item.noEstimateText}}</p>
+                {{/if}}
+
+                <dl class="nz-status-facts">
+                    <div><dt>Driver / السواق</dt><dd>{{item.driverText}}</dd></div>
+                    {{#if item.driverLoad}}<div><dt>Driver's day / يوم السواق</dt><dd>{{item.driverLoad}}</dd></div>{{/if}}
+                    <div><dt>Label / الملصق</dt><dd>{{item.printedText}}</dd></div>
+                </dl>
+            </article>
+        {{/each}}
+    {{/if}}
+</section>
