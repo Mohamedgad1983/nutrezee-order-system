@@ -278,3 +278,19 @@ the guard's own repair and 20 min after the 01:00 print. Journal:
 - Deployed: image `nutrezee-api:a70-11-3c18734`, environment fingerprint identical before and after, `/health` 200. Rollback tag: `nutrezee-api:pre-a70-11-20261004`.
 - **After the fix, 08:06 Kuwait:** the feed for 2026-10-05 created the 57 missing records (`created 57, matched 917, error 0`), and the check gave
   `[OK] Labels 2026-10-05: Batch Labels 973 = legacy screen 973`.
+
+## A70.12 — an order without a driver in the legacy admin is reported, not counted as a difference (2026-10-07)
+Night of Tue 6 Oct (labels for Thu 8 Oct): `[CHECK] Batch Labels 909 vs legacy screen 910 — 1 difference`. Order 30013
+was on the legacy screen with **no driver in the legacy admin itself** at 00:45, so by the owner's rule it had no label;
+two repair rounds could change nothing. A driver was set in legacy later and the 02:00 run synced it (02:04 Kuwait);
+by morning `[OK] 910 = 910`. The other 909 labels were right all along, so [CHECK] sent the whole night to the legacy
+print for nothing.
+
+Change (owner approved 2026-10-07): such orders go to a separate `needs_driver` list and no longer count in the
+difference. Subject: `[OK] … Batch Labels 909 = legacy screen 909 — 1 order(s) need a driver in legacy: 30013`, with a
+line telling the operator to set the driver in legacy; the label then appears with the next sync. An order that has a
+driver in legacy but no label is still a difference.
+
+Replayed on staging with the day's real data (no email): no driver + no label → `[OK] … 909 = 909 — 1 order(s) need a
+driver in legacy: 30013`, diff 0, no repair; driver + no label → `[CHECK] … 1 difference(s)`; all matching →
+`[OK] … 910 = 910`. Installed on the server (previous script kept as `print-status.py.bak-a71`).
