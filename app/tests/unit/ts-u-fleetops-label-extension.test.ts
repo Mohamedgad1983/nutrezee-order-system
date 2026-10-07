@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.17');
+    expect(packageJson.version).toBe('0.3.19');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -106,6 +106,48 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(routes).toContain('buildRoutes(function () {})');
     expect(extension).not.toContain('registerHeaderMenuItem');
     expect(extension).not.toContain('registerAdminMenuPanel');
+  });
+
+  it('A74: serves the hard-coded CARTO map tiles from OpenStreetMap and nothing else', () => {
+    // A74.2: extension.js is copied alone into the Console app, so it may import packages only. A relative
+    // import here stopped the whole Console at "Starting up…" (a74.1, rolled back within two minutes).
+    expect(extension).not.toMatch(/^import [^;]*from\s+['"]\.{1,2}\//m);
+    const source = /\/\/ <map-tiles>[^\n]*\n([\s\S]*?)\/\/ <\/map-tiles>/.exec(extension)?.[1] ?? '';
+    expect(source).toContain('function rewriteTileUrl');
+    const { rewriteTileUrl, installMapTileSource } = new Function(
+      `${source}\nreturn { rewriteTileUrl, installMapTileSource };`,
+    )() as {
+      rewriteTileUrl: (url: unknown) => unknown;
+      installMapTileSource: (prototype: object) => boolean;
+    };
+    expect(rewriteTileUrl('https://a.basemaps.cartocdn.com/light_all/12/2594/1721.png'))
+      .toBe('https://tile.openstreetmap.org/12/2594/1721.png');
+    expect(rewriteTileUrl('https://c.basemaps.cartocdn.com/dark_all/7/81/53@2x.png'))
+      .toBe('https://tile.openstreetmap.org/7/81/53.png');
+    expect(rewriteTileUrl('https://basemaps.cartocdn.com/rastertiles/voyager/3/4/2.png?x=1'))
+      .toBe('https://tile.openstreetmap.org/3/4/2.png');
+    for (const other of [
+      'https://ops.nutreeze.com/assets/logo.png',
+      'https://evil.example/a.basemaps.cartocdn.com/light_all/1/1/1.png',
+      'https://a.basemaps.cartocdn.com.evil.example/light_all/1/1/1.png',
+      'https://a.basemaps.cartocdn.com/light_all/1/1/1.jpg',
+      'data:image/png;base64,AAAA',
+    ]) expect(rewriteTileUrl(other)).toBe(other);
+    expect(rewriteTileUrl(undefined)).toBeUndefined();
+
+    let stored = '';
+    const prototype = {};
+    Object.defineProperty(prototype, 'src', { configurable: true, enumerable: true, get: () => stored, set: (v: string) => { stored = v; } });
+    expect(installMapTileSource(prototype)).toBe(true);
+    expect(installMapTileSource(prototype)).toBe(false); // installed once
+    const image = Object.create(prototype) as { src: string };
+    image.src = 'https://b.basemaps.cartocdn.com/light_all/10/5/6.png';
+    expect(image.src).toBe('https://tile.openstreetmap.org/10/5/6.png');
+    image.src = '/local.png';
+    expect(image.src).toBe('/local.png');
+
+    expect(extension).toContain('installMapTileSource();');
+    expect(styles).toContain('.leaflet-attribution-flag { display: none !important; }');
   });
 
   it('documents both Fleetbase enablement layers and cache invalidation', () => {

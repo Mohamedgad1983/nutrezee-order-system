@@ -46,3 +46,29 @@ no-GET-mutation scan clean.
   recreated; `ops.nutreeze.com`, `/extensions.json`, `/nz/health`, the fleet host and the app health all 200.
 - **Not verified [NC → owner]**: the page rendered inside a signed-in console session (the assistant has no console
   login). Owner to open Fleet-Ops → Resources → Order Status and search one phone.
+
+## A72 seen in a signed-in console + A74 map tiles (2026-10-07)
+Through the owner's own signed-in browser (with permission):
+- **Order Status renders and answers**: Resources → Nutrezee Order Status; one real phone → customer, order 30051,
+  area, "with the driver, not delivered yet", driver name/phone/plate, 0 of 123 delivered, label "not printed yet",
+  and "the driver's app has never sent a location". First search of the minute ≈ 15 s. Closes the [NC] above.
+- **Finding**: `label_print_event` has no row since 2026-09-28 — the owner confirmed the nightly print still runs from
+  the legacy admin. No real print from Batch Labels has happened yet; a one-driver paper trial was proposed.
+
+**A74 — "API KEY REQUIRED" on the dashboard map, and "it shows Ukraine".** Fleet-Ops 0.6.56 hard-codes CARTO basemap
+tiles; CARTO now stamps them without a paid key. The flag is Leaflet's attribution prefix, not the map position (the
+map was on Kuwait). Fix in the extension only: CARTO basemap tile addresses are rewritten to the same z/x/y tile on
+OpenStreetMap; the flag is hidden, credits stay. Extension 0.3.19, console `0.7.48-a74.2`.
+
+**Incident (mine):** the first build (a74.1, extension 0.3.18) put the rewrite in `addon/utils/map-tiles.js` and imported
+it from `extension.js`. Fleetbase copies `extension.js` alone into the Console app, so the import could not be
+resolved and the Console stopped at "Starting up…" for every user. Live for under two minutes at 11:25 Kuwait; rolled
+back to `fleetbase-console:pre-a74-20261007`. The 12 static gate checks had all passed — none of them loaded the app.
+
+**Correction:** the rewrite lives inside `extension.js`; a unit test forbids relative imports there; the gate got a
+static check for it (fails on a74.1, passes on a74.2) and is now in the repo as `ops/fleetbase/console/release-gate.sh`
+with the rule to open the candidate in a real browser before the swap. Done for a74.2 over an SSH tunnel with a74.1
+as the control: a74.1 → "Starting up…" + `Could not find module …/utils/map-tiles`; a74.2 → title "Nutreeze |
+Fleet-Ops", no module error, and in that page a CARTO tile address resolves to `tile.openstreetmap.org` while another
+image address is unchanged. After the swap, in the owner's browser: dashboard map shows Kuwait from OpenStreetMap with
+no stamp and no flag; Batch Labels (977 orders, 9 drivers) and the Fleet-Ops live map load.
