@@ -11,6 +11,7 @@ Order numbers only; no customer data.
 Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix]
 """
 import datetime
+import collections
 import json
 import os
 import subprocess
@@ -87,10 +88,16 @@ def current_screen(day):
 def fleetbase_state(day):
     rows = mysql(
         "select coalesce(json_unquote(json_extract(meta,'$.source_order_number')),''), status, "
-        "coalesce(json_unquote(json_extract(meta,'$.partner_driver_id')),''), driver_assigned_uuid is not null "
+        # A77: while a manager's area move covers an order, the legacy driver is kept in
+        # legacy_partner_driver_id — that is the one to compare with the legacy screen.
+        "coalesce(nullif(json_unquote(json_extract(meta,'$.legacy_partner_driver_id')),'null'),"
+        "json_unquote(json_extract(meta,'$.partner_driver_id')),''), driver_assigned_uuid is not null, "
+        "coalesce(nullif(json_unquote(json_extract(meta,'$.area_move_id')),'null'),''), "
+        "coalesce(json_unquote(json_extract(meta,'$.routing_area')),'') "
         f"from fleetbase.orders where company_uuid='{COMPANY}' and deleted_at is null "
         f"and internal_id like 'NUTREEZE-PARTNER-DAY-{day.replace('-', '')}-ORDER-%'")
-    return {r[0]: {'status': r[1], 'driver': r[2], 'assigned': r[3] == '1'} for r in rows}
+    return {r[0]: {'status': r[1], 'driver': r[2], 'assigned': r[3] == '1',
+                   'move': r[4] if len(r) > 4 else '', 'area': r[5] if len(r) > 5 else ''} for r in rows}
 
 
 def batch_labels(day):
@@ -135,6 +142,8 @@ def evaluate(day, screen):
     d['wrong_driver'] = sorted(n for n in numbers & labels if n in drivers and fb.get(n, {}).get('driver') != drivers[n])
     d['not_in_label_db'] = sorted(set(page['unmapped']) & numbers)
     d['no_driver_in_legacy'] = sorted(n for n in numbers if n not in drivers)
+    moved = collections.Counter(v['area'] for n, v in fb.items() if v.get('move') and n in labels)
+    d['area_moves'] = sorted(moved.items())
     # A70.12: an order the legacy admin itself has not given a driver cannot have a label (owner rule:
     # no order without a driver). That is a job for the legacy admin, not a difference to repair here.
     waiting = set(d['no_driver_in_legacy'])
@@ -227,6 +236,10 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
             lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
         if screen.get('test_orders_excluded'):
             lines.append(f"Test orders removed / طلبات تجربة اتشالت: {short(screen['test_orders_excluded'])}")
+        if d.get('area_moves'):
+            lines.append("Areas moved to another driver by the drivers' manager for this day (not a difference) / "
+                         "مناطق منقولة لسواق تاني من مدير السواقين لليوم ده (مش فرق): "
+                         + ', '.join(f'{area} ({count})' for area, count in d['area_moves']))
         if n_wait:
             lines.append(f"{n_screen} on the screen, {n_wait} of them without a driver in the legacy admin: no label until a "
                          f"driver is set there, then it appears with the next sync. / {n_wait} طلب على الشاشة من غير سواق في "

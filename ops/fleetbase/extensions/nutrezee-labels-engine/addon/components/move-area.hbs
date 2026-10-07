@@ -1,0 +1,93 @@
+<section class="nz-move-panel" data-test-nutrezee-move-area>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Move Area / نقل منطقة</h2>
+            <p>Give one area to another driver for one day. / انقل منطقة لسواق تاني ليوم واحد.</p>
+        </div>
+        <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.reload}}>Reload / تحديث</button>
+    </header>
+
+    {{#if this.data}}
+        <div class="nz-status-days">
+            <button type="button" class="btn btn-sm {{if this.isToday "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.showToday}}>Today / النهارده</button>
+            <button type="button" class="btn btn-sm {{if this.isTomorrow "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.showTomorrow}}>Tomorrow / بكره</button>
+            <button type="button" class="btn btn-sm {{if this.isAfterTomorrow "btn-primary" "btn-default"}}" disabled={{this.loading}} {{on "click" this.showAfterTomorrow}}>After tomorrow / بعد بكره</button>
+            <span class="nz-status-days__date">{{this.data.delivery_date}}</span>
+        </div>
+    {{/if}}
+
+    {{#if this.notice}}<div class="nz-label-state nz-label-state--success">{{this.notice}}</div>{{/if}}
+    {{#if this.error}}<div class="nz-label-state nz-label-state--error">{{this.error}}</div>{{/if}}
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Reading the day's orders… / بنقرا طلبات اليوم…</div>
+    {{else if this.data}}
+        {{#if this.moves.length}}
+            <div class="nz-move-list" data-test-move-area-moves>
+                <h3>Moves for this day / النقل المسجل لليوم ده</h3>
+                {{#each this.moves as |move|}}
+                    <div class="nz-move-row">
+                        <div>
+                            <strong>{{move.line}}</strong>
+                            <div class={{move.statusClass}}>{{move.status}}</div>
+                        </div>
+                        {{#if this.canEdit}}
+                            <button type="button" class="btn btn-default btn-sm" disabled={{this.saving}} {{on "click" (fn this.undo move)}}>Undo / إلغاء</button>
+                        {{/if}}
+                    </div>
+                {{/each}}
+            </div>
+        {{/if}}
+
+        <h3 class="nz-move-step">1. Choose the driver who has too many orders / اختار السواق اللي عليه ضغط</h3>
+        <div class="nz-move-drivers">
+            {{#each this.drivers as |driver|}}
+                <button type="button" class={{driver.cardClass}} {{on "click" (fn this.chooseSource driver)}}>
+                    <span class="nz-move-driver__name">{{driver.title}}</span>
+                    <span class="nz-move-driver__sub">{{driver.subtitle}}</span>
+                    <span class="nz-move-driver__count">{{driver.orders}}</span>
+                    <span class="nz-move-driver__bar"><span style={{driver.barStyle}}></span></span>
+                </button>
+            {{/each}}
+        </div>
+
+        {{#if this.source}}
+            <h3 class="nz-move-step">2. Choose the area to move / اختار المنطقة</h3>
+            <div class="nz-move-areas">
+                {{#each this.sourceAreas as |area|}}
+                    <button type="button" class={{area.rowClass}} disabled={{not this.canEdit}} {{on "click" (fn this.chooseArea area)}}>
+                        <span>{{area.area_label}}</span><strong>{{area.orders}}</strong>
+                    </button>
+                {{else}}
+                    <div class="nz-label-state">This driver has no orders on this day. / السواق ده مالوش طلبات في اليوم ده.</div>
+                {{/each}}
+            </div>
+        {{/if}}
+
+        {{#if this.area}}
+            <h3 class="nz-move-step">3. Choose the driver who takes it / اختار السواق اللي هياخدها</h3>
+            <div class="nz-move-areas">
+                {{#each this.targets as |driver|}}
+                    <button type="button" class="nz-move-area {{if driver.usable "" "nz-move-area--blocked"}}" disabled={{not driver.usable}} {{on "click" (fn this.chooseTarget driver)}}>
+                        <span>{{driver.title}}{{#unless driver.usable}} — no phone or vehicle / من غير تليفون أو عربية{{/unless}}</span><strong>{{driver.orders}}</strong>
+                    </button>
+                {{/each}}
+            </div>
+        {{/if}}
+
+        {{#if this.summary}}
+            <div class="nz-move-confirm" data-test-move-area-confirm>
+                <strong>{{this.summary.text}}</strong>
+                <div>{{this.summary.from}}</div>
+                <div>{{this.summary.to}}</div>
+                <div class="nz-move-confirm__actions">
+                    <button type="button" class="btn btn-primary" disabled={{this.saving}} {{on "click" this.confirmMove}}>
+                        {{if this.saving "Saving… / جاري الحفظ" "Move for this day / انقل لليوم ده"}}
+                    </button>
+                    <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" this.cancelChoice}}>Cancel / رجوع</button>
+                </div>
+                <p class="nz-status-note">Only this day changes. The next day follows the legacy admin again. Labels already printed keep the old driver and must be reprinted. / اليوم ده بس اللي بيتغير، واليوم اللي بعده يرجع لتوزيع السيستم القديم. الملصقات اللي اتطبعت قبل النقل لازم تتطبع تاني.</p>
+            </div>
+        {{/if}}
+    {{/if}}
+</section>

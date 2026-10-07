@@ -1669,6 +1669,80 @@ function loadPartnerDriverMap(string $path, string $companyUuid, array $rosterDr
  * Partner driver id even when unmapped so the hold is explainable; only ids
  * (never names) are reported back for the operational log.
  */
+/**
+ * A77 — one-day area moves decided by the drivers' manager (Fleet-Ops "Move Area" page).
+ * The same key the label API stores: lower case, spaces collapsed.
+ */
+function areaMoveKey(?string $area): string
+{
+    return trim((string) preg_replace('/\s+/u', ' ', mb_strtolower((string) $area, 'UTF-8')));
+}
+
+/** @return array<string, array{id: string, to_driver_public_id: string, to_driver_name: ?string}> */
+function loadAreaMoves(string $path, string $deliveryDate): array
+{
+    $data = loadLockedJson($path, 'area_moves');
+    if (($data['delivery_date'] ?? null) !== $deliveryDate || !is_array($data['moves'] ?? null)) {
+        throw new RuntimeException('area_moves_shape');
+    }
+    $moves = [];
+    foreach ($data['moves'] as $move) {
+        $key = is_array($move) ? areaMoveKey(is_string($move['area_key'] ?? null) ? $move['area_key'] : null) : '';
+        $target = is_array($move) && is_string($move['to_driver_public_id'] ?? null) ? trim($move['to_driver_public_id']) : '';
+        $id = is_array($move) && is_string($move['id'] ?? null) ? trim($move['id']) : '';
+        if ($key === '' || $id === '' || !preg_match('/^driver_[A-Za-z0-9]+$/', $target) || isset($moves[$key])) {
+            throw new RuntimeException('area_moves_entry');
+        }
+        $moves[$key] = [
+            'id' => $id,
+            'to_driver_public_id' => $target,
+            'to_driver_name' => is_string($move['to_driver_name'] ?? null) ? mb_substr(trim($move['to_driver_name']), 0, 200) : null,
+        ];
+    }
+    return $moves;
+}
+
+/**
+ * Every delivery of a moved area goes to the manager's driver for this day; the legacy driver is
+ * kept beside it so the night check can still compare with the legacy screen. A move whose target
+ * is not a mapped driver is skipped (the area simply stays with its legacy driver) and reported.
+ * An order the legacy admin left without a driver is not given one here.
+ */
+function applyAreaMoves(array $dailyRows, array $moves, array $drivers): array
+{
+    $partnerIdByPublicId = [];
+    foreach ($drivers as $driver) {
+        if (is_string($driver['public_id'] ?? null) && is_string($driver['partner_driver_id'] ?? null)) {
+            $partnerIdByPublicId[$driver['public_id']] = $driver['partner_driver_id'];
+        }
+    }
+    $moved = [];
+    $skipped = [];
+    foreach ($moves as $key => $move) {
+        if (!isset($partnerIdByPublicId[$move['to_driver_public_id']])) {
+            $skipped[$move['id']] = 'target_driver_not_mapped';
+            unset($moves[$key]);
+        }
+    }
+    foreach ($dailyRows as $index => $row) {
+        $move = $moves[areaMoveKey($row['routing_area'] ?? null)] ?? null;
+        $legacyDriver = $row['partner_driver_id'] ?? null;
+        if ($move === null || $legacyDriver === null) {
+            continue;
+        }
+        $target = $partnerIdByPublicId[$move['to_driver_public_id']];
+        $row['area_move_id'] = $move['id'];
+        $row['legacy_partner_driver_id'] = $legacyDriver;
+        if ($target !== $legacyDriver) {
+            $row['partner_driver_id'] = $target;
+            $row['partner_driver_name'] = $move['to_driver_name'] ?? ($row['partner_driver_name'] ?? null);
+        }
+        $dailyRows[$index] = $row;
+        $moved[$move['id']] = ($moved[$move['id']] ?? 0) + 1;
+    }
+    return ['rows' => $dailyRows, 'moved' => $moved, 'skipped' => $skipped];
+}
+
 function applyPartnerDriverAssignments(array $dailyRows, array $drivers): array
 {
     $byPartnerId = [];
@@ -4343,6 +4417,9 @@ final class DailyDispatchWriter
                 : ($routable ? PARTNER_DRIVER_ASSIGNMENT_MODE : 'none'),
             'partner_driver_id' => $row['partner_driver_id'] ?? null,
             'partner_driver_name' => $row['partner_driver_name'] ?? null,
+            // A77: set only while a manager's area move covers this order; null puts it back.
+            'area_move_id' => $row['area_move_id'] ?? null,
+            'legacy_partner_driver_id' => $row['legacy_partner_driver_id'] ?? null,
             'partner_driver_public_id' => $routable ? ($row['partner_driver_public_id'] ?? null) : null,
             'dispatch_state' => $dispatchState,
             'hold_reason' => $holdReason,
@@ -4949,6 +5026,31 @@ function runSelfTest(): array
         || rowRequiresCustomerCall($driverless['rows'][1], true)
         || allocateDailyDrivers($driverless['rows'], $syntheticDrivers)['assignments'] !== []) {
         throw new RuntimeException('self_test_daily_no_partner_driver_hold');
+    }
+    // A77 area moves: only the moved area changes driver, the legacy driver is remembered, an order
+    // without a legacy driver gets none, and an unmapped target leaves the area alone.
+    $moveRows = [
+        ['routing_area' => 'Salmiya', 'partner_driver_id' => '7', 'partner_driver_name' => 'A'],
+        ['routing_area' => ' salmiya  ', 'partner_driver_id' => '7', 'partner_driver_name' => 'A'],
+        ['routing_area' => 'Hateen', 'partner_driver_id' => '7', 'partner_driver_name' => 'A'],
+        ['routing_area' => 'Salmiya', 'partner_driver_id' => null, 'partner_driver_name' => null],
+    ];
+    $movedRows = applyAreaMoves($moveRows, [
+        'salmiya' => ['id' => 'm1', 'to_driver_public_id' => 'driver_BBBBBB', 'to_driver_name' => 'B'],
+        'hateen' => ['id' => 'm2', 'to_driver_public_id' => 'driver_UNKNOWN', 'to_driver_name' => 'X'],
+    ], $syntheticDrivers);
+    if ($movedRows['moved'] !== ['m1' => 2]
+        || $movedRows['skipped'] !== ['m2' => 'target_driver_not_mapped']
+        || $movedRows['rows'][0]['partner_driver_id'] !== '9'
+        || $movedRows['rows'][0]['partner_driver_name'] !== 'B'
+        || $movedRows['rows'][0]['legacy_partner_driver_id'] !== '7'
+        || $movedRows['rows'][0]['area_move_id'] !== 'm1'
+        || $movedRows['rows'][1]['partner_driver_id'] !== '9'
+        || $movedRows['rows'][2] !== $moveRows[2]
+        || $movedRows['rows'][3] !== $moveRows[3]
+        || areaMoveKey('  Sabah   AL Salem ') !== 'sabah al salem'
+        || applyAreaMoves($moveRows, [], $syntheticDrivers)['rows'] !== $moveRows) {
+        throw new RuntimeException('self_test_area_moves');
     }
     $unmappedRows = array_map(fn (array $row): array => ['partner_driver_id' => '42'] + $row, $daily);
     $unmapped = applyPartnerDriverAssignments($unmappedRows, $syntheticDrivers);
@@ -5622,7 +5724,7 @@ function runSelfTest(): array
             throw new RuntimeException('self_test_daily_withdrawal_reasons');
         }
     }
-    return ['passed' => 43, 'total' => 43];
+    return ['passed' => 44, 'total' => 44];
 }
 
 $stage = 'startup';
@@ -5638,6 +5740,7 @@ try {
         'expected-count:', 'expected-digest:', 'confirm-daily-sync:', 'confirm-zero-day:',
         'confirm-address-call-dispatch:', 'confirm-location-recovery:', 'location-captures:',
         'driver-orders-manifest:', 'partner-driver-map:', 'cancel-only:', 'legacy-screen-manifest:',
+        'area-moves:',
     ]);
 
     if (isset($options['self-test'])) {
@@ -5861,6 +5964,22 @@ try {
         // misrepresented as a changed Partner snapshot.
         $sourceDigest = dailySourceDigest($dailyRows);
         $stage = 'daily_driver_assignment';
+        // A77: applied after the digest on purpose (the digest stays Partner-only, so a move made
+        // between the dry-run and the write cannot fail the run). Any problem with the moves file
+        // is reported and ignored: the day then follows the legacy drivers exactly as before.
+        if (isset($options['area-moves'])) {
+            try {
+                $areaMoves = applyAreaMoves($dailyRows, loadAreaMoves((string) $options['area-moves'], $deliveryDate), $drivers);
+                $dailyRows = $areaMoves['rows'];
+                safeLog('area_moves_applied', [
+                    'delivery_date' => $deliveryDate,
+                    'orders_per_move' => $areaMoves['moved'],
+                    'moves_skipped' => $areaMoves['skipped'],
+                ]);
+            } catch (RuntimeException $areaMoveError) {
+                safeLog('area_moves_ignored', ['delivery_date' => $deliveryDate, 'reason' => $areaMoveError->getMessage()]);
+            }
+        }
         $partnerDriverAssignment = applyPartnerDriverAssignments($dailyRows, $drivers);
         $dailyRows = $partnerDriverAssignment['rows'];
         $locationCaptures = [];
