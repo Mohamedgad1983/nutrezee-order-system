@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.20');
+    expect(packageJson.version).toBe('0.3.21');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -286,6 +286,19 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toContain('grid-template-columns: minmax(0, 51%) minmax(0, 49%)');
     expect(styles).toContain('border-bottom: 0.18mm dashed');
     expect(styles).toMatch(/\.nz-legacy-label__barcode\s*\{/);
+  });
+
+  it('A78: a written note prints in its own box beside the barcode, never over it', () => {
+    const source = normalize.replace(/^import .*;\n/gm, '')
+      .replace('export default function', 'function').replace(/export function/g, 'function');
+    const render = new Function('htmlSafe', `${source}; return normalizeLabel;`)((value: string) => value);
+    expect(render({ notes: 'Thursday Double Box' })).toMatchObject({ hasNotes: true, notesLong: false });
+    expect(render({ notes: 'x'.repeat(150) }).notesLong).toBe(true);
+    expect(render({}).hasNotes).toBe(false);
+    expect(template).toContain("{{#unless this.label.hasNotes}}<div><strong>Notes:</strong> -</div>{{/unless}}");
+    expect(template).toMatch(/nz-legacy-label__barcode--notes[\s\S]*nz-barcode-cell[\s\S]*nz-label-notes[\s\S]*this\.label\.notes/);
+    expect(styles).toMatch(/\.nz-label-notes \{[^}]*height: 9\.4mm;[^}]*overflow: hidden;/);
+    expect(styles).toMatch(/\.nz-legacy-label__barcode--notes \{[^}]*grid-template-columns: 44mm minmax\(0, 1fr\);/);
   });
 
   it('prints the driver box black-on-white with car number, name and phone only (A58)', () => {

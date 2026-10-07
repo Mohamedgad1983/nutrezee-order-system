@@ -59,6 +59,7 @@ import { DeliveryService } from './modules/m21-delivery/delivery.service';
 import { LabelController } from './modules/m25-label/label.controller';
 import { BarcodeService } from './modules/m25-label/barcode.service';
 import { LabelService } from './modules/m25-label/label.service';
+import { PartnerLabelProfileSource, type PartnerLabelProfileGateway } from './modules/m25-label/partner-label-profile';
 import { CollectionService } from './modules/m25-label/collection.service';
 import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
 import { DriverLocationService } from './modules/m25-label/driver-location.service';
@@ -72,6 +73,7 @@ import {
 // WP-04 onward; the transition engine arrives with WP-03 (M16).
 export const POOL = 'POOL';
 export const PARTNER_LABEL_SOURCE = 'PARTNER_LABEL_SOURCE';
+export const PARTNER_LABEL_PROFILE = 'PARTNER_LABEL_PROFILE';
 const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
 
 @Module({
@@ -296,13 +298,19 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
       provide: PARTNER_LABEL_SOURCE,
       useFactory: (): PartnerLabelMealSourceGateway | null => PartnerLabelSource.fromEnv(),
     },
+    // A78: customer code, local phone, plan and structured address of the legacy label (read-only).
+    {
+      provide: PARTNER_LABEL_PROFILE,
+      useFactory: (): PartnerLabelProfileGateway | null => PartnerLabelProfileSource.fromEnv(),
+    },
     {
       provide: LabelService,
       useFactory: (
         pool: Pool, audit: AuditService, barcodes: BarcodeService,
         partnerMeals: PartnerLabelMealSourceGateway | null,
-      ) => new LabelService(pool, audit, barcodes, partnerMeals),
-      inject: [POOL, AuditService, BarcodeService, PARTNER_LABEL_SOURCE],
+        partnerProfile: PartnerLabelProfileGateway | null,
+      ) => new LabelService(pool, audit, barcodes, partnerMeals, partnerProfile),
+      inject: [POOL, AuditService, BarcodeService, PARTNER_LABEL_SOURCE, PARTNER_LABEL_PROFILE],
     },
     {
       provide: CollectionService,

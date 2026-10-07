@@ -59,6 +59,9 @@ export default function normalizeLabel(document) {
         direction: value(document?.address?.direction),
         phone: value(document?.phone),
         notes: value(document?.notes),
+        // A78: a written note gets its own box beside the barcode; long ones print smaller to fit.
+        hasNotes: value(document?.notes) !== DASH,
+        notesLong: value(document?.notes).length > 100,
         meals,
         hasMeals: meals.length > 0,
         nutritionMissing: document?.meal_source === 'no_dish_source',
