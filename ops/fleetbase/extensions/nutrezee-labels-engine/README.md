@@ -105,7 +105,8 @@ extension `0.3.17`.
 ## Map tiles (A74)
 
 Fleet-Ops 0.6.56 hard-codes CARTO basemap tiles in its map components, and CARTO now returns tiles stamped
-"API KEY REQUIRED" without a paid key. `addon/utils/map-tiles.js` rewrites only those tile addresses to the same
+"API KEY REQUIRED" without a paid key. `addon/extension.js` (it must stay self-contained: Fleetbase copies that file alone into the Console app, so it
+cannot import a sibling module) rewrites only those tile addresses to the same
 z/x/y tile on `tile.openstreetmap.org` by wrapping the image `src` setter once at extension setup; no vendor file is
 changed. The small flag in Leaflet's attribution prefix is hidden; the Leaflet and OpenStreetMap credits remain.
-Console release `0.7.48-a74.1`, extension `0.3.18`.
+Console release `0.7.48-a74.2`, extension `0.3.19`.

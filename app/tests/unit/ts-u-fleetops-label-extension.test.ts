@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.18');
+    expect(packageJson.version).toBe('0.3.19');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -109,7 +109,11 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   });
 
   it('A74: serves the hard-coded CARTO map tiles from OpenStreetMap and nothing else', () => {
-    const source = read('addon/utils/map-tiles.js').replace(/^export /gm, '');
+    // A74.2: extension.js is copied alone into the Console app, so it may import packages only. A relative
+    // import here stopped the whole Console at "Starting up…" (a74.1, rolled back within two minutes).
+    expect(extension).not.toMatch(/^import [^;]*from\s+['"]\.{1,2}\//m);
+    const source = /\/\/ <map-tiles>[^\n]*\n([\s\S]*?)\/\/ <\/map-tiles>/.exec(extension)?.[1] ?? '';
+    expect(source).toContain('function rewriteTileUrl');
     const { rewriteTileUrl, installMapTileSource } = new Function(
       `${source}\nreturn { rewriteTileUrl, installMapTileSource };`,
     )() as {

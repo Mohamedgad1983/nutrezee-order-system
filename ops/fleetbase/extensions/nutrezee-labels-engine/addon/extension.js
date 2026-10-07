@@ -1,11 +1,42 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
-import { installMapTileSource } from './utils/map-tiles';
 
 const BRAND_THEME_VERSION = 'a45.1';
 const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
 const BRAND_THEME_STYLESHEET = `/engines-dist/@nutrezee/fleetops-labels-engine/assets/engine.css?v=${BRAND_THEME_VERSION}`;
 const BRAND_MARK_DATA_URL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 418.364 370.498'%3E%3Cg fill='%23956132' fill-rule='evenodd'%3E%3Cpath d='M116.788 17.028h184.788l97.12 168.215-97.12 168.222H116.788L19.661 185.243Zm194.619-17.028H106.958L0 185.243l106.95 185.255h204.457l106.957-185.255Z'/%3E%3Cpath d='M147.381 70.015h123.598l66.534 115.231-66.534 115.234H147.381L80.847 185.246Zm133.447-17.051H137.539L61.164 185.246l76.375 132.293h143.286l76.372-132.293Z'/%3E%3C/g%3E%3C/svg%3E";
+
+// <map-tiles> — kept in this file on purpose: Fleetbase copies extension.js alone into the Console app
+// (`@fleetbase/console/extensions/<name>`), so a relative import from here cannot be resolved at boot.
+// A74 — Fleet-Ops hard-codes CARTO basemap tiles, and CARTO now stamps "API KEY REQUIRED" on them
+// without a paid key. The same tile (z/x/y) is served by OpenStreetMap's standard layer, whose
+// attribution Leaflet already shows. Only CARTO basemap tile addresses are rewritten; every other
+// image address passes through unchanged.
+const CARTO_TILE = /^https:\/\/(?:[a-d]\.)?basemaps\.cartocdn\.com\/(?:rastertiles\/)?[a-z_]+\/(\d{1,2})\/(\d+)\/(\d+)(?:@2x)?\.png(?:\?.*)?$/;
+
+function rewriteTileUrl(url) {
+    if (typeof url !== 'string') return url;
+    const match = CARTO_TILE.exec(url);
+    return match ? `https://tile.openstreetmap.org/${match[1]}/${match[2]}/${match[3]}.png` : url;
+}
+
+function installMapTileSource(imagePrototype) {
+    const prototype = imagePrototype ?? globalThis.HTMLImageElement?.prototype;
+    if (!prototype || prototype.nutrezeeMapTiles) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'src');
+    if (!descriptor?.set || !descriptor.get) return false;
+    Object.defineProperty(prototype, 'src', {
+        configurable: true,
+        enumerable: descriptor.enumerable,
+        get: descriptor.get,
+        set(value) {
+            descriptor.set.call(this, rewriteTileUrl(value));
+        },
+    });
+    Object.defineProperty(prototype, 'nutrezeeMapTiles', { value: true });
+    return true;
+}
+// </map-tiles>
 
 function applyApprovedLightTheme() {
     const body = document.body;
