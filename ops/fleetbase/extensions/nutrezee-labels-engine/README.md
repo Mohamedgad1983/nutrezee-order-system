@@ -101,3 +101,11 @@ with the operator's Fleetbase bearer. It shows, for the chosen day, the customer
 time and "orders before it" are estimates from the driver's last app position; they appear only while that position
 is at most 15 minutes old, otherwise the page says why there is no estimate. Console release `0.7.48-a72.1`,
 extension `0.3.17`.
+
+## Map tiles (A74)
+
+Fleet-Ops 0.6.56 hard-codes CARTO basemap tiles in its map components, and CARTO now returns tiles stamped
+"API KEY REQUIRED" without a paid key. `addon/utils/map-tiles.js` rewrites only those tile addresses to the same
+z/x/y tile on `tile.openstreetmap.org` by wrapping the image `src` setter once at extension setup; no vendor file is
+changed. The small flag in Leaflet's attribution prefix is hidden; the Leaflet and OpenStreetMap credits remain.
+Console release `0.7.48-a74.1`, extension `0.3.18`.

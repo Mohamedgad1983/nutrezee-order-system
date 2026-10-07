@@ -1,4 +1,5 @@
 import { MenuItem, ExtensionComponent } from '@fleetbase/ember-core/contracts';
+import { installMapTileSource } from './utils/map-tiles';
 
 const BRAND_THEME_VERSION = 'a45.1';
 const BRAND_THEME_STYLESHEET_ID = 'nutrezee-fleetops-brand-theme';
@@ -94,6 +95,10 @@ export default {
         // Fleetbase remains free to retain its own body class/data attribute and no competing theme
         // observer or preference write is installed. Routes, permissions and workflows are unchanged.
         installBrandTheme();
+
+        // A74 — the vendor map components request CARTO tiles, which now carry an "API KEY REQUIRED"
+        // stamp. Serve the same tiles from OpenStreetMap instead; no vendor file is changed.
+        installMapTileSource();
 
         // `UniverseService#getService()` accepts the Fleetbase service alias, not the Ember
         // container registration name. This is the same supported wiring used by Fleet-Ops.

@@ -574,6 +574,10 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     color: var(--nz-text, #2d251f);
 }
 
+/* A74 — Leaflet's attribution prefix carries a small flag that operators read as "the map shows another country".
+   The map library and OpenStreetMap credits stay visible. */
+.leaflet-control-attribution .leaflet-attribution-flag { display: none !important; }
+
 /* A72 — Order Status by customer phone */
 .nz-status-panel { padding: 1rem; color: var(--nz-text, #2d251f); max-width: 60rem; }
 .nz-status-search { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.75rem 0; }
