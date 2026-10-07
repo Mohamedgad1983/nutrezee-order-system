@@ -135,6 +135,11 @@ def evaluate(day, screen):
     d['wrong_driver'] = sorted(n for n in numbers & labels if n in drivers and fb.get(n, {}).get('driver') != drivers[n])
     d['not_in_label_db'] = sorted(set(page['unmapped']) & numbers)
     d['no_driver_in_legacy'] = sorted(n for n in numbers if n not in drivers)
+    # A70.12: an order the legacy admin itself has not given a driver cannot have a label (owner rule:
+    # no order without a driver). That is a job for the legacy admin, not a difference to repair here.
+    waiting = set(d['no_driver_in_legacy'])
+    d['needs_driver'] = sorted(n for n in d['no_label'] if n in waiting)
+    d['no_label'] = sorted(n for n in d['no_label'] if n not in waiting)
     d['diff'] = len(d['no_label']) + len(d['extra_label']) + len(d['wrong_driver'])
     return d
 
@@ -199,7 +204,9 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         n_screen = len(screen['order_numbers'])
         zero = d['diff'] == 0
         n_labels, n_wa = d['legacy_labels'], len(d['whatsapp_labels'])
-        subject = (f"[{'OK' if zero else 'CHECK'}] Labels {day}: Batch Labels {n_labels} = legacy screen {n_screen}"
+        n_wait = len(d.get('needs_driver') or [])
+        subject = (f"[OK] Labels {day}: Batch Labels {n_labels} = legacy screen {n_screen - n_wait}"
+                   + (f" — {n_wait} order(s) need a driver in legacy: {short(d['needs_driver'], 5)}" if n_wait else '')
                    if zero else
                    f"[CHECK] Labels {day}: Batch Labels {n_labels} vs legacy screen {n_screen} — {d['diff']} difference(s)")
         lines += [
@@ -220,10 +227,16 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
             lines.append('No deliveries on this day in the legacy admin / مفيش توصيل اليوم ده في السيستم القديم')
         if screen.get('test_orders_excluded'):
             lines.append(f"Test orders removed / طلبات تجربة اتشالت: {short(screen['test_orders_excluded'])}")
+        if n_wait:
+            lines.append(f"{n_screen} on the screen, {n_wait} of them without a driver in the legacy admin: no label until a "
+                         f"driver is set there, then it appears with the next sync. / {n_wait} طلب على الشاشة من غير سواق في "
+                         f"السيستم القديم: حدد له سواق هناك وملصقه يظهر مع المزامنة الجاية: {short(d['needs_driver'])}")
         for title, key in (('On the screen, no label / على الشاشة ومالهاش ملصق', 'no_label'),
                            ('Label but not on the screen / ملصق ومش على الشاشة', 'extra_label'),
                            ('Different driver / سواق مختلف', 'wrong_driver'),
                            ('No driver in the legacy admin itself / مالوش سواق في السيستم القديم نفسه', 'no_driver_in_legacy')):
+            if key == 'no_driver_in_legacy' and n_wait:
+                continue
             if d.get(key):
                 lines.append(f'{title}: {short(d[key])}')
     if fix_log:
