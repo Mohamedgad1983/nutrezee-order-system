@@ -62,6 +62,8 @@ import { LabelService } from './modules/m25-label/label.service';
 import { CollectionService } from './modules/m25-label/collection.service';
 import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity.service';
 import { DriverLocationService } from './modules/m25-label/driver-location.service';
+import { AreaMoveService } from './modules/m25-label/area-move.service';
+import { AreaMoveController } from './modules/m25-label/area-move.controller';
 import {
   PartnerLabelSource, type PartnerLabelMealSourceGateway,
 } from './modules/m25-label/partner-label-source';
@@ -79,7 +81,7 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
-    PackingController, DeliveryController, LabelController,
+    PackingController, DeliveryController, LabelController, AreaMoveController,
     FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
@@ -313,6 +315,12 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
       // driver's assignments directly from Fleetbase. No second Nutrezee driver identity exists.
       provide: FleetbaseIdentityService,
       useFactory: () => new FleetbaseIdentityService(),
+    },
+    {
+      // A77 — one-day area moves between drivers (decision ledger only; the Fleetbase sync applies them).
+      provide: AreaMoveService,
+      useFactory: (pool: Pool, audit: AuditService) => new AreaMoveService(pool, audit),
+      inject: [POOL, AuditService],
     },
     {
       // A30 — append-only exact locations captured only by the currently assigned Fleetbase
