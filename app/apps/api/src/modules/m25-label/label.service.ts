@@ -15,6 +15,7 @@ import {
   type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
 import { validPin } from './order-status';
+import { localPhone, type PartnerLabelProfileGateway } from './partner-label-profile';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -108,6 +109,7 @@ export class LabelService {
     private readonly audit: AuditService,
     private readonly barcodes: BarcodeService,
     private readonly partnerMeals: PartnerLabelMealSourceGateway | null = null,
+    private readonly partnerProfile: PartnerLabelProfileGateway | null = null,
   ) {}
 
   /**
@@ -169,6 +171,12 @@ export class LabelService {
       : await this.driverRef(orderId, deliveryDate);
     const barcode = await this.barcodes.issueFor(actor, r.customer_id as string);
 
+    // A78: the customer part of the legacy label (code, local phone, plan, structured address)
+    // comes from Partner at print time; null for orders Partner does not know or when it is down.
+    const profile = this.partnerProfile
+      ? await this.partnerProfile.profileForOrder(r.order_number as string, deliveryDate)
+      : null;
+    const storedUserId = (r.legacy_user_id as string) ?? null;
     const sourceAddress = source?.labelAddress ?? null;
     const address: LabelAddressContract = sourceAddress ? {
       // A71.2: the order's own source address wins as a whole; no field is mixed with a stored one.
@@ -179,7 +187,7 @@ export class LabelService {
       floor: null,
       flat: sourceAddress.flat ?? null,
       direction: sourceAddress.direction ?? null,
-    } : {
+    } : profile?.address ? profile.address : {
       area: (r.area_name as string) ?? (r.delivery_area_frozen as string) ?? null,
       block: (r.block as string) ?? null,
       street: (r.street as string) ?? null,
@@ -201,12 +209,13 @@ export class LabelService {
       days_remaining: source?.labelDaysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
         ? null : Number(r.days_remaining)),
       delivery_method: (r.delivery_method_frozen as string) ?? null,
-      package_name: source?.labelPackage ?? (r.package_name as string) ?? null,
+      package_name: source?.labelPackage ?? profile?.packageName ?? (r.package_name as string) ?? null,
       meals_per_day: r.meals_per_day === null || r.meals_per_day === undefined
-        ? null : Number(r.meals_per_day),
-      // No snacks-per-day column exists anywhere in the schema (documented gap, A27 discovery §2).
-      snacks_per_day: null,
-      legacy_user_id: (r.legacy_user_id as string) ?? null,
+        ? profile?.mealsPerDay ?? null : Number(r.meals_per_day),
+      // No snacks-per-day column exists in the schema (A27 discovery §2); Partner's plan carries it.
+      snacks_per_day: profile?.snacksPerDay ?? null,
+      // Imported customers are keyed by phone, which is not a user id: print the code or nothing.
+      legacy_user_id: profile?.userId ?? (storedUserId && !storedUserId.startsWith('+') ? storedUserId : null),
       driver_ref: driverRef,
       driver_color: source?.driverColor ?? null,
       driver_phone: source?.driverPhone ?? null,
@@ -214,7 +223,8 @@ export class LabelService {
       vehicle_number: source?.vehicleNumber ?? null,
       order_number: r.order_number as string,
       address,
-      phone: (r.phone_normalized as string) ?? null,
+      // The legacy label prints the local number, without a country prefix.
+      phone: profile?.phone ?? localPhone(r.phone_normalized),
       notes: (r.customer_notes as string) ?? null,
       meals,
       meal_source: mealSource,

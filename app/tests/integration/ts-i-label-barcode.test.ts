@@ -306,6 +306,35 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
     expect(doc.totals.complete).toBe(false);
   });
 
+  it('A78: prints the Partner customer code, local phone, plan and structured address', async () => {
+    const s = await seed('jasem', 'N-LBL-A78', { phone: '+96698992558' });
+    const profile = {
+      userId: '1119', phone: '98992558', packageName: 'Plan AR', mealsPerDay: 3, snacksPerDay: 2,
+      address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
+    };
+    const gateway = { profileForOrder: vi.fn(async () => profile) };
+    const doc = await new LabelService(pool, audit, barcodes, null, gateway).build(actor, s.orderId, DATE_A);
+    expect(gateway.profileForOrder).toHaveBeenCalledWith('N-LBL-A78', DATE_A);
+    expect(doc).toMatchObject({
+      legacy_user_id: '1119', phone: '98992558', package_name: 'Plan AR', meals_per_day: 3, snacks_per_day: 2,
+      address: profile.address,
+    });
+
+    // An order's own source address (WhatsApp subscribers) still wins as a whole.
+    const own = await new LabelService(pool, audit, barcodes, null, gateway).build(actor, s.orderId, DATE_A, {
+      labelAddress: { area: 'Salwa', block: '8' }, labelPackage: 'WA plan',
+    });
+    expect(own.address).toMatchObject({ area: 'Salwa', block: '8', street: null });
+    expect(own.package_name).toBe('WA plan');
+
+    // Without Partner: local number, and the phone is never printed as the user id.
+    const plain = await new LabelService(pool, audit, barcodes, null, { profileForOrder: async () => null })
+      .build(actor, s.orderId, DATE_A);
+    expect(plain.phone).toBe('98992558');
+    expect(plain.legacy_user_id).toBeNull();
+    expect(plain.snacks_per_day).toBeNull();
+  });
+
   it('uses exact Partner v2 rows only when the local authoritative dish day is absent', async () => {
     const remoteOnly = await seed('Partner Source', 'N-LBL-PARTNER');
     const partnerMeals = {
