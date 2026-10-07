@@ -124,4 +124,5 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m unittest discover -s ops/waha -p test_bulk.py -v
+      - run: python -m unittest discover -s ops/waha/otp-relay -p test_relay.py -v
       - run: node --check ops/waha/bulk.js
