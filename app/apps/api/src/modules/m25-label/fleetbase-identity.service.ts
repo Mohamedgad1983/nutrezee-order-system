@@ -360,7 +360,38 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
 
+  /**
+   * The day's orders: the scheduled ones, plus (A82) the ones only waiting for a driver. The sync
+   * keeps a held order unscheduled on purpose — Fleetbase's own scheduler would dispatch it — so the
+   * date filter cannot see it; they are read by status instead (a few hundred rows at most). A
+   * failure of this second read never blocks the scheduled labels.
+   */
   async orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
+    const scheduled = await this.scheduledOrders(token, deliveryDate);
+    const waiting = await this.ordersWaitingForDriver(token, deliveryDate).catch(() => []);
+    const seen = new Set(scheduled.map((order) => order.id));
+    return [...scheduled, ...waiting.filter((order) => !seen.has(order.id))];
+  }
+
+  private async ordersWaitingForDriver(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
+    const waiting: FleetbaseOrderProjection[] = [];
+    const seen = new Set<string>();
+    for (let page = 1; page <= 20; page += 1) {
+      const pageOrders = arrayPayload<FleetbaseOrderProjection>(await this.request<unknown>(
+        'GET', `/v1/orders?status=created&limit=${this.orderPageSize}&page=${page}${ORDER_COLUMNS_QUERY}`, token,
+      ));
+      for (const order of pageOrders) {
+        if (!order.id || seen.has(order.id)) continue;
+        seen.add(order.id);
+        if (order.meta?.delivery_date === deliveryDate && order.meta?.hold_reason === 'no_partner_driver'
+          && !order.scheduled_at) waiting.push(order);
+      }
+      if (pageOrders.length < this.orderPageSize) break;
+    }
+    return waiting;
+  }
+
+  private async scheduledOrders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
     const orders: FleetbaseOrderProjection[] = [];
     const seen = new Set<string>();
 

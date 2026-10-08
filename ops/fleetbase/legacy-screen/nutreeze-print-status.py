@@ -113,7 +113,10 @@ def batch_labels(day):
     query = ('select json_object("id",public_id,"internal_id",internal_id,"status",status,'
              '"scheduled_at",if(scheduled_at is null,null,date_format(scheduled_at,"%Y-%m-%dT%H:%i:%sZ")),"meta",meta) '
              f'from fleetbase.orders where company_uuid="{COMPANY}" and deleted_at is null '
-             'and scheduled_at >= date_sub("DAY", interval 1 day) and scheduled_at < date_add("DAY", interval 1 day)'
+             'and ((scheduled_at >= date_sub("DAY", interval 1 day) and scheduled_at < date_add("DAY", interval 1 day)) '
+             # A82: orders only waiting for a driver are kept unscheduled; the page reads them by status.
+             'or (scheduled_at is null and status="created" and json_unquote(json_extract(meta,"$.delivery_date"))="DAY" '
+             'and json_unquote(json_extract(meta,"$.hold_reason"))="no_partner_driver"))'
              ).replace('DAY', day)
     out = sh(['docker', 'exec', 'fleetbase-database-1', 'mysql', '-uroot', '-N', '-B', '--raw', '-e', query])
     rows = []

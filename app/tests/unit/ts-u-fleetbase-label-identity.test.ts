@@ -444,7 +444,37 @@ describe('TS-U Fleetbase identity boundary', () => {
         `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=1${columns}`,
         `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=2${columns}`,
         `https://fleetbase.test/v1/orders?scheduled_at=2099-05-12&limit=2&page=3${columns}`,
+        // A82: then the unscheduled orders that only wait for a driver, read by status
+        `https://fleetbase.test/v1/orders?status=created&limit=2&page=1${columns}`,
+        `https://fleetbase.test/v1/orders?status=created&limit=2&page=2${columns}`,
       ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('A82: adds the day\'s orders that only wait for a driver, and survives a failure of that read', async () => {
+    const originalFetch = globalThis.fetch;
+    let failWaiting = false;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.searchParams.get('status') === 'created') {
+        if (failWaiting) return new Response('{}', { status: 500 });
+        return new Response(JSON.stringify({ data: [
+          { id: 'wait_1', status: 'created', scheduled_at: null, meta: { delivery_date: '2099-05-12', hold_reason: 'no_partner_driver' } },
+          { id: 'other_day', status: 'created', scheduled_at: null, meta: { delivery_date: '2099-05-11', hold_reason: 'no_partner_driver' } },
+          { id: 'other_hold', status: 'created', scheduled_at: null, meta: { delivery_date: '2099-05-12', hold_reason: 'no_driver_for_area' } },
+          { id: 'sched_1', status: 'created', scheduled_at: '2099-05-12T06:00:00Z', meta: { delivery_date: '2099-05-12', hold_reason: 'no_partner_driver' } },
+        ] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ data: [{ id: 'sched_1', meta: { delivery_date: '2099-05-12' } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const gateway = new HttpFleetbaseIdentityGateway('https://fleetbase.test', 15_000, 100);
+      expect((await gateway.orders('token', '2099-05-12')).map((o) => o.id)).toEqual(['sched_1', 'wait_1']);
+      failWaiting = true;
+      expect((await gateway.orders('token', '2099-05-12')).map((o) => o.id)).toEqual(['sched_1']);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -475,6 +505,10 @@ describe('TS-U Fleetbase identity boundary', () => {
     let peak = 0;
     let active = 0;
     globalThis.fetch = (async (input: string | URL | Request) => {
+      // A82: the separate read of orders waiting for a driver is not part of this paging proof.
+      if (new URL(String(input)).searchParams.get('status') === 'created') {
+        return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
       const page = Number(new URL(String(input)).searchParams.get('page'));
       pagesInFlight.push(page);
       active += 1;
