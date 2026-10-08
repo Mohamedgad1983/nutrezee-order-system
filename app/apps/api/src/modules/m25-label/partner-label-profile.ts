@@ -29,6 +29,9 @@ export interface PartnerLabelProfile {
   address: LabelAddressContract | null;
   /** The day's note typed in legacy for this delivery (`driver_instructions`). */
   notes: string | null;
+  /** A78.3: the time slot and handover instruction of this delivery day (they can differ from the order's first day). */
+  deliveryTime: string | null;
+  deliveryMethod: string | null;
 }
 
 export interface PartnerLabelProfileGateway {
@@ -60,7 +63,10 @@ interface Reference {
   addresses: Map<string, LabelAddressContract>;
 }
 
-interface DayRow { subscriptionId: string; userId: string | null; phone: string | null; area: string | null; notes: string | null }
+interface DayRow {
+  subscriptionId: string; userId: string | null; phone: string | null; area: string | null; notes: string | null;
+  deliveryTime: string | null; deliveryMethod: string | null;
+}
 
 interface Cached<T> { loadedAt: number; value: T }
 
@@ -181,6 +187,8 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         // The area of the day is the one the driver was assigned by; the rest is the stored address.
         address: stored ? { ...stored, area: day.area ?? stored.area } : null,
         notes: day.notes,
+        deliveryTime: day.deliveryTime,
+        deliveryMethod: day.deliveryMethod,
       };
     } catch {
       return null;
@@ -257,6 +265,8 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           phone: localPhone(customer.phone),
           area: labelText(address.area_en) ?? labelText(address.area_ar),
           notes: labelText(raw.driver_instructions, 240),
+          deliveryTime: labelText(isRecord(raw.time_slot) ? raw.time_slot.title : null),
+          deliveryMethod: labelText(raw.delivery_method),
         });
       }
       if (this.days.size > 40) this.days.clear();

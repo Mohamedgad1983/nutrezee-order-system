@@ -311,7 +311,7 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
     const profile = {
       userId: '1119', phone: '98992558', packageName: 'Plan AR', mealsPerDay: 3, snacksPerDay: 2,
       address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
-      notes: 'Thursday Double Box',
+      notes: 'Thursday Double Box', deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box',
     };
     const gateway = { profileForOrder: vi.fn(async () => profile) };
     const doc = await new LabelService(pool, audit, barcodes, null, gateway).build(actor, s.orderId, DATE_A);
@@ -319,6 +319,7 @@ describe('TS-I label — exact legacy content, honest nutrition', () => {
     expect(doc).toMatchObject({
       legacy_user_id: '1119', phone: '98992558', package_name: 'Plan AR', meals_per_day: 3, snacks_per_day: 2,
       address: profile.address, notes: 'Thursday Double Box',
+      delivery_time: 'Before 1 day', delivery_method: 'Leave the box',
     });
 
     // An order's own source address (WhatsApp subscribers) still wins as a whole.
