@@ -8,10 +8,15 @@ screen's driver in Fleetbase. On any difference it repairs automatically and che
   - an order has no label record yet   → run the Partner label feed for that day.
 Then one short email to it@nutreeze.com (Fleetbase Laravel mailer, hello@nutreeze.com).
 Order numbers only; no customer data.
-Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix]
+Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix] [--follow-up]
+
+A81 (owner, 2026-10-08): drivers are often completed in the legacy admin around 01:00, after the
+00:45 check. `--follow-up` (timer every 15 min until 02:30 Kuwait) repeats the same check and
+repair so those labels appear the same night, and emails only when the result changed.
 """
 import datetime
 import collections
+import fcntl
 import json
 import os
 import subprocess
@@ -27,6 +32,9 @@ READING_DIR = '/root/a68'
 CONTAINER_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config'
 COMPANY = '2db920aa-d0d4-42a7-a0a3-c9d4c6dd487c'
 FIX_ROUNDS = 2
+FOLLOW_UP = '--follow-up' in sys.argv
+STATE_DIR = '/root/a70'
+LOCK_FILE = '/run/lock/nutreeze-print-status.lock'
 
 
 def sh(cmd, inp=None, timeout=300, env=None):
@@ -260,8 +268,23 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         fh.write(subject + '\n\n' + body)
     print(subject)
     print(body)
-    if '--no-send' not in sys.argv:
-        print('mail:', 'sent' if send(subject, body) else 'FAILED')
+    if '--no-send' in sys.argv:
+        return
+    sent_file = os.path.join(STATE_DIR, f'print-status-sent-{day}.txt')
+    if FOLLOW_UP:
+        # A81: a follow-up run is silent unless the result differs from the last email of that day.
+        last = open(sent_file).read().strip() if os.path.isfile(sent_file) else None
+        if note or last == subject:
+            print('mail: skipped (no change since the last email)')
+            return
+        subject_out = f'{subject} (update {datetime.datetime.now(KW).strftime("%H:%M")})'
+    else:
+        subject_out = subject
+    ok = send(subject_out, body)
+    print('mail:', 'sent' if ok else 'FAILED')
+    if ok and not note:
+        with open(sent_file, 'w') as fh:
+            fh.write(subject + '\n')
 
 
 def resync(day, log):
@@ -327,6 +350,13 @@ def send(subject, body):
 
 
 def main():
+    # A81: one check at a time. A follow-up never queues behind a running check; the others wait.
+    lock = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if FOLLOW_UP else 0))
+    except BlockingIOError:
+        print('another check is running; this follow-up is skipped')
+        return 0
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     day = args[0] if args else (datetime.datetime.now(KW).date() + datetime.timedelta(days=1)).isoformat()
     fix = '--no-fix' not in sys.argv

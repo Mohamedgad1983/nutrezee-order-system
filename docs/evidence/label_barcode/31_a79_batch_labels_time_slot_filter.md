@@ -33,3 +33,13 @@ All of them printed "From 5 AM to 4 PM" where legacy says "Before 1 day". Fix: t
 - Not yet used on paper by the print team.
 - The night check covers "tomorrow" only. If Saturday's stickers are printed on Thursday, the check and sync for Saturday must also run on Thursday — to confirm with the owner.
 - "First Day" filter of the legacy screen is not built (owner asked for the time filter only).
+
+## A81 — follow-up checks after 00:45 (2026-10-08)
+
+Owner: drivers are often completed in the legacy admin around 01:00. Saturday 2026-10-10 at 17:04 Kuwait: 774 orders on the screen, 187 without a driver → 587 labels. The guard read the screen once (00:45), so drivers set later reached Batch Labels only the next night.
+
+Change: `nutreeze-print-status.py --follow-up` — the same check and repair, run by `nutreeze-print-status-followup.timer` every 15 minutes 01:00–02:30 Kuwait (22:00–23:30 UTC). It emails only when the subject differs from the last email of that day (subject then ends with `(update HH:MM)`). One check at a time (file lock): a follow-up that finds a check running exits.
+
+Tested on the server for 2026-10-10 without sending: unchanged result → `mail: skipped`; a second run started 5 s later → `another check is running`. Installed and enabled by the assistant at the owner's request. Rollback: `systemctl disable --now nutreeze-print-status-followup.timer`; previous script kept as `print-status.py.bak-a81`.
+
+Not yet seen through a real night.
