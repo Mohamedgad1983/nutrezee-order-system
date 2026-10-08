@@ -267,8 +267,8 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
                            ('Label but not on the screen / ملصق ومش على الشاشة', 'extra_label'),
                            ('Different driver / سواق مختلف', 'wrong_driver'),
                            ('No driver in the legacy admin itself / مالوش سواق في السيستم القديم نفسه', 'no_driver_in_legacy')):
-            if key == 'no_driver_in_legacy' and n_wait:
-                continue
+            if key == 'no_driver_in_legacy' and (n_wait or d.get('printed_without_driver')):
+                continue  # already listed above
             if d.get(key):
                 lines.append(f'{title}: {short(d[key])}')
     if fix_log:
