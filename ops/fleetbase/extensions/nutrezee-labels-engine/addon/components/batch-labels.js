@@ -102,8 +102,10 @@ export default class BatchLabelsComponent extends Component {
             { id: 'driver', label: 'Driver / السائق' },
             { id: 'area', label: 'Area / المنطقة' },
             { id: 'time', label: 'Delivery time / وقت التوصيل' },
+            { id: 'source', label: 'WhatsApp subscribers / مشتركين الواتساب' },
             { id: 'order', label: 'Orders / الطلبات' },
-        ].filter((option) => (option.id !== 'driver' || this.hasDriverOptions) && (option.id !== 'time' || this.timeSlots.length > 0));
+        ].filter((option) => (option.id !== 'driver' || this.hasDriverOptions) && (option.id !== 'time' || this.timeSlots.length > 0)
+            && (option.id !== 'source' || this.sources.length > 0));
     }
 
     get isOrderFilter() {
@@ -112,7 +114,13 @@ export default class BatchLabelsComponent extends Component {
 
     get filterLabel() {
         if (this.filterType === 'time') return 'Delivery time / وقت التوصيل';
+        if (this.filterType === 'source') return 'Group / المجموعة';
         return this.filterType === 'driver' ? 'Driver / السائق' : 'Area / المنطقة';
+    }
+
+    /** A83: WhatsApp subscribers are printed as their own group, never mixed into the legacy lists. */
+    get sources() {
+        return (this.options?.sources ?? []).map((source) => ({ id: source.id, label: `${source.label} (${source.count})` }));
     }
 
     get timeSlots() {
@@ -131,18 +139,22 @@ export default class BatchLabelsComponent extends Component {
     get filterOptions() {
         if (!this.options || this.isOrderFilter) return [];
         if (this.filterType === 'time') return this.timeSlots;
+        if (this.filterType === 'source') return this.sources;
         return (this.filterType === 'driver' ? this.options.drivers : this.options.areas) ?? [];
     }
 
     get scopedOrders() {
         const orders = Array.isArray(this.options?.orders) ? this.options.orders : [];
         if (this.isOrderFilter) return orders;
+        const byDriverThenArea = (a, b) =>
+            String(a.driver_label ?? '').localeCompare(String(b.driver_label ?? '')) || String(a.area ?? '').localeCompare(String(b.area ?? ''));
+        if (this.filterType === 'source') return orders.filter((order) => order.source === this.filterValue).sort(byDriverThenArea);
+        const legacy = orders.filter((order) => order.source !== 'whatsapp');
         if (this.filterType === 'time') {
             // One time slot across the day prints grouped by driver, then area.
-            return orders.filter((order) => order.time_id === this.filterValue).sort((a, b) =>
-                String(a.driver_label ?? '').localeCompare(String(b.driver_label ?? '')) || String(a.area ?? '').localeCompare(String(b.area ?? '')));
+            return legacy.filter((order) => order.time_id === this.filterValue).sort(byDriverThenArea);
         }
-        return orders.filter((order) => (
+        return legacy.filter((order) => (
             this.filterType === 'driver' ? order.driver_id === this.filterValue : order.area_id === this.filterValue
         ) && (!this.showTimeDropdown || !this.timeValue || order.time_id === this.timeValue));
     }

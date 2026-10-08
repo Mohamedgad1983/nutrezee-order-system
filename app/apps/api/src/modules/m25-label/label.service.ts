@@ -53,6 +53,8 @@ export interface BatchLabelCandidate {
   /** A79: the delivery time slot of the day (legacy "Time Slots" filter). */
   timeKey: string;
   timeLabel: string;
+  /** A83: WhatsApp-system subscribers (order numbers WA-…) are printed apart from the legacy orders. */
+  source: 'partner' | 'whatsapp';
   driverId: string | null;
   driverLabel: string | null;
   driverRef: string | null;
@@ -87,7 +89,7 @@ export interface FleetbaseDriverLabelSource {
 }
 
 export interface BatchLabelFilter {
-  filterType: 'driver' | 'area' | 'time';
+  filterType: 'driver' | 'area' | 'time' | 'source';
   filterValue: string;
   selectionIds?: string[];
 }
@@ -378,6 +380,7 @@ export class LabelService {
         orderNumber,
         areaKey: area || NO_AREA_KEY,
         areaLabel: area || 'No area / بدون منطقة',
+        source: orderNumber.startsWith('WA-') ? 'whatsapp' as const : 'partner' as const,
         timeKey: time || NO_TIME_KEY,
         timeLabel: time || 'No time / بدون وقت',
         driverId,
@@ -427,7 +430,7 @@ export class LabelService {
     candidates: BatchLabelCandidate[],
     filter: BatchLabelFilter,
   ): BatchLabelCandidate[] {
-    if (filter.filterType !== 'driver' && filter.filterType !== 'area' && filter.filterType !== 'time') {
+    if (!['driver', 'area', 'time', 'source'].includes(filter.filterType)) {
       throw new LabelError('validation_failed', { field: 'filter_type' });
     }
     const filterValue = String(filter.filterValue ?? '').trim();
@@ -438,7 +441,9 @@ export class LabelService {
         ? candidate.driverId === filterValue
         : filter.filterType === 'time'
           ? candidate.timeKey === filterValue
-          : candidate.areaKey === filterValue,
+          : filter.filterType === 'source'
+            ? candidate.source === filterValue
+            : candidate.areaKey === filterValue,
     );
     if (filtered.length === 0) {
       throw new LabelError('not_found', { reason: 'batch_filter_has_no_current_day_orders' });
