@@ -200,6 +200,9 @@ describe('TS-U Fleetbase identity boundary', () => {
     gateway.orderResults = [
       { id: 'today', meta: { delivery_date: '2099-05-12' }, status: 'dispatched' },
       { id: 'held', meta: { delivery_date: '2099-05-12', hold_reason: 'no_pin' }, status: 'created' },
+      // A82: only waiting for its driver in legacy -> still printable, without a driver
+      { id: 'driverless', meta: { delivery_date: '2099-05-12', hold_reason: 'no_partner_driver' }, status: 'created' },
+      { id: 'unmapped', meta: { delivery_date: '2099-05-12', hold_reason: 'unmapped_partner_driver' }, status: 'created' },
       { id: 'cancelled', meta: { delivery_date: '2099-05-12' }, status: 'canceled' },
       { id: 'tomorrow', meta: { delivery_date: '2099-05-13' }, status: 'dispatched' },
     ];
@@ -207,7 +210,7 @@ describe('TS-U Fleetbase identity boundary', () => {
 
     await expect(identity.ordersForOperatorDate('token', '2099-05-12')).resolves.toMatchObject({
       actor: { staffId: 'fleetbase:ops-1' },
-      orders: [{ id: 'today' }],
+      orders: [{ id: 'today' }, { id: 'driverless' }],
     });
   });
 

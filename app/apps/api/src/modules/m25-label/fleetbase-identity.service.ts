@@ -204,7 +204,8 @@ export class FleetbaseIdentityService {
   /**
    * The operator-visible Fleetbase orders for one server-selected delivery date. The response is
    * the complete operational batch authority; held/cancelled orders can never become printable
-   * driver work and a partial local fulfillment set is never substituted.
+   * driver work (A82 exception: an order only waiting for its driver prints, without a driver) and a
+   * partial local fulfillment set is never substituted.
    */
   async ordersForOperatorDate(token: string, deliveryDate: string): Promise<{
     actor: StaffContext;
@@ -526,11 +527,17 @@ function fleetbaseOrderDate(order: FleetbaseOrderProjection): string | null {
   return kuwait.toISOString().slice(0, 10);
 }
 
-function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
+/**
+ * A82 (owner, 2026-10-08): an order the legacy admin has not given a driver yet still gets its
+ * sticker — the drivers' manager places "day before" boxes himself. It stays held (not dispatched to
+ * any driver app) and prints with an empty driver box. Every other hold and every cancel stays out.
+ */
+export function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
   const status = String(order.status ?? '').toLowerCase();
   if (status.includes('cancel')) return true;
   const holdReason = order.meta?.hold_reason;
-  return typeof holdReason === 'string' && holdReason.trim().length > 0;
+  if (typeof holdReason !== 'string' || holdReason.trim().length === 0) return false;
+  return holdReason.trim() !== 'no_partner_driver';
 }
 
 const DRIVER_LABEL_COLORS: readonly DriverLabelColorToken[] = [

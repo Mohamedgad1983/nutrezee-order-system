@@ -155,6 +155,8 @@ def evaluate(day, screen):
     # A70.12: an order the legacy admin itself has not given a driver cannot have a label (owner rule:
     # no order without a driver). That is a job for the legacy admin, not a difference to repair here.
     waiting = set(d['no_driver_in_legacy'])
+    # A82 (owner, 2026-10-08): such an order now prints without a driver; listed for information only.
+    d['printed_without_driver'] = sorted(n for n in labels if n in waiting)
     d['needs_driver'] = sorted(n for n in d['no_label'] if n in waiting)
     d['no_label'] = sorted(n for n in d['no_label'] if n not in waiting)
     d['diff'] = len(d['no_label']) + len(d['extra_label']) + len(d['wrong_driver'])
@@ -224,6 +226,7 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         n_wait = len(d.get('needs_driver') or [])
         subject = (f"[OK] Labels {day}: Batch Labels {n_labels} = legacy screen {n_screen - n_wait}"
                    + (f" — {n_wait} order(s) need a driver in legacy: {short(d['needs_driver'], 5)}" if n_wait else '')
+                   + (f" ({len(d['printed_without_driver'])} without a driver yet)" if d.get('printed_without_driver') else '')
                    if zero else
                    f"[CHECK] Labels {day}: Batch Labels {n_labels} vs legacy screen {n_screen} — {d['diff']} difference(s)")
         lines += [
@@ -248,6 +251,11 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
             lines.append("Areas moved to another driver by the drivers' manager for this day (not a difference) / "
                          "مناطق منقولة لسواق تاني من مدير السواقين لليوم ده (مش فرق): "
                          + ', '.join(f'{area} ({count})' for area, count in d['area_moves']))
+        if d.get('printed_without_driver'):
+            lines.append(f"Labels without a driver (not set in the legacy admin yet; they print with an empty driver box, "
+                         f"under Area or Delivery time) / ملصقات من غير سواق (لسه مش متحدد في السيستم القديم، بتتطبع وخانة "
+                         f"السواق فاضية من فلتر المنطقة أو وقت التوصيل): {len(d['printed_without_driver'])} — "
+                         f"{short(d['printed_without_driver'])}")
         if n_wait:
             lines.append(f"{n_screen} on the screen, {n_wait} of them without a driver in the legacy admin: no label until a "
                          f"driver is set there, then it appears with the next sync. / {n_wait} طلب على الشاشة من غير سواق في "

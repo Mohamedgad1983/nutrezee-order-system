@@ -21,7 +21,8 @@ function isHeldOrCancelled(order) {
   const status = String(order.status || '').toLowerCase();
   if (status.includes('cancel')) return true;
   const hold = order.meta && order.meta.hold_reason;
-  return typeof hold === 'string' && hold.trim().length > 0;
+  if (typeof hold !== 'string' || hold.trim().length === 0) return false;
+  return hold.trim() !== 'no_partner_driver'; // A82: waiting for a driver still prints
 }
 
 async function main() {
