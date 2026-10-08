@@ -42,6 +42,7 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 const NO_AREA_KEY = '__no_area__';
+const NO_TIME_KEY = '__no_time__';
 
 export interface BatchLabelCandidate {
   selectionId: string;
@@ -49,6 +50,9 @@ export interface BatchLabelCandidate {
   orderNumber: string;
   areaKey: string;
   areaLabel: string;
+  /** A79: the delivery time slot of the day (legacy "Time Slots" filter). */
+  timeKey: string;
+  timeLabel: string;
   driverId: string | null;
   driverLabel: string | null;
   driverRef: string | null;
@@ -83,7 +87,7 @@ export interface FleetbaseDriverLabelSource {
 }
 
 export interface BatchLabelFilter {
-  filterType: 'driver' | 'area';
+  filterType: 'driver' | 'area' | 'time';
   filterValue: string;
   selectionIds?: string[];
 }
@@ -323,6 +327,7 @@ export class LabelService {
     const { rows } = await this.pool.query(
       `SELECT co.id AS order_id,
               co.order_number,
+              co.delivery_time_frozen,
               coalesce(addr.area_name, co.delivery_area_frozen) AS local_area_name
          FROM customer_order co
          LEFT JOIN LATERAL (
@@ -338,10 +343,21 @@ export class LabelService {
       [localOrderIds],
     );
 
+    // A79: the day's own slot (same value the label prints); the stored one when Partner has none.
+    const dayTimes = new Map<string, string | null>();
+    if (this.partnerProfile?.deliveryTimeForOrder) {
+      const gateway = this.partnerProfile;
+      await Promise.all(rows.map(async (raw) => {
+        const number = (raw as Record<string, unknown>).order_number as string;
+        dayTimes.set(number, await gateway.deliveryTimeForOrder!(number, deliveryDate).catch(() => null));
+      }));
+    }
+
     return rows.map((raw) => {
       const row = raw as Record<string, unknown>;
       const localOrderId = row.order_id as string;
       const order = fleetbaseByLocalOrder.get(localOrderId)!;
+      const time = compactStrings([dayTimes.get(row.order_number as string), row.delivery_time_frozen])[0] ?? '';
       const area = compactStrings([
         order.meta?.routing_area,
         order.meta?.area_en,
@@ -361,6 +377,8 @@ export class LabelService {
         orderNumber,
         areaKey: area || NO_AREA_KEY,
         areaLabel: area || 'No area / بدون منطقة',
+        timeKey: time || NO_TIME_KEY,
+        timeLabel: time || 'No time / بدون وقت',
         driverId,
         driverLabel: driverSource.vehicleNumber && driverSource.driverPhone
           ? `${driverSource.driverName || 'Name unavailable / الاسم غير متوفر'} · ${driverSource.driverPhone} · ${driverSource.vehicleNumber}`
@@ -408,7 +426,7 @@ export class LabelService {
     candidates: BatchLabelCandidate[],
     filter: BatchLabelFilter,
   ): BatchLabelCandidate[] {
-    if (filter.filterType !== 'driver' && filter.filterType !== 'area') {
+    if (filter.filterType !== 'driver' && filter.filterType !== 'area' && filter.filterType !== 'time') {
       throw new LabelError('validation_failed', { field: 'filter_type' });
     }
     const filterValue = String(filter.filterValue ?? '').trim();
@@ -417,7 +435,9 @@ export class LabelService {
     const filtered = candidates.filter((candidate) =>
       filter.filterType === 'driver'
         ? candidate.driverId === filterValue
-        : candidate.areaKey === filterValue,
+        : filter.filterType === 'time'
+          ? candidate.timeKey === filterValue
+          : candidate.areaKey === filterValue,
     );
     if (filtered.length === 0) {
       throw new LabelError('not_found', { reason: 'batch_filter_has_no_current_day_orders' });

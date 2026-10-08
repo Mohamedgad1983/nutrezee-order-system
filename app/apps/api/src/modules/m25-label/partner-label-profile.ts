@@ -36,6 +36,8 @@ export interface PartnerLabelProfile {
 
 export interface PartnerLabelProfileGateway {
   profileForOrder(orderNumber: string, deliveryDate: string): Promise<PartnerLabelProfile | null>;
+  /** A79: only the day's time slot (one day read, no large lists) — for the Batch Labels filter. */
+  deliveryTimeForOrder?(orderNumber: string, deliveryDate: string): Promise<string | null>;
 }
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -190,6 +192,16 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         deliveryTime: day.deliveryTime,
         deliveryMethod: day.deliveryMethod,
       };
+    } catch {
+      return null;
+    }
+  }
+
+  async deliveryTimeForOrder(orderNumber: string, deliveryDate: string): Promise<string | null> {
+    const number = orderNumber.trim();
+    if (!number || !DATE_RE.test(deliveryDate)) return null;
+    try {
+      return (await this.day(deliveryDate)).get(number)?.deliveryTime ?? null;
     } catch {
       return null;
     }

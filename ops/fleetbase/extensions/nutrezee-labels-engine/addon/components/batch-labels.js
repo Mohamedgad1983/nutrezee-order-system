@@ -15,6 +15,8 @@ export default class BatchLabelsComponent extends Component {
     @tracked filterType = 'driver';
     @tracked filterValue = '';
     @tracked orderValue = '';
+    // A79: '' = every delivery time; otherwise one time slot inside the chosen driver or area.
+    @tracked timeValue = '';
     @tracked searches = {};
     previewRevision = 0;
     optionsRevision = 0;
@@ -42,6 +44,7 @@ export default class BatchLabelsComponent extends Component {
     get dropdowns() {
         const fields = [{ name: 'group', label: 'Filter by / الاختيار حسب', options: this.filterTypes, value: this.filterType }];
         if (!this.isOrderFilter) fields.push({ name: 'scope', label: this.filterLabel, options: this.filterOptions, value: this.filterValue });
+        if (this.showTimeDropdown) fields.push({ name: 'time', label: 'Delivery time / وقت التوصيل', options: this.timeOptions, value: this.timeValue });
         fields.push({ name: 'order', label: 'Orders / الطلبات', options: this.orderOptions, value: this.orderValue });
         return fields.map((field) => {
             const query = this.searches[field.name] ?? '';
@@ -90,6 +93,7 @@ export default class BatchLabelsComponent extends Component {
         this.searches = {};
         if (name === 'group') this.chooseFilterType(id);
         else if (name === 'scope') this.chooseFilterValue(id);
+        else if (name === 'time') this.chooseTime(id);
         else if (name === 'order') this.chooseOrder(id);
     }
 
@@ -97,8 +101,9 @@ export default class BatchLabelsComponent extends Component {
         return [
             { id: 'driver', label: 'Driver / السائق' },
             { id: 'area', label: 'Area / المنطقة' },
+            { id: 'time', label: 'Delivery time / وقت التوصيل' },
             { id: 'order', label: 'Orders / الطلبات' },
-        ].filter((option) => option.id !== 'driver' || this.hasDriverOptions);
+        ].filter((option) => (option.id !== 'driver' || this.hasDriverOptions) && (option.id !== 'time' || this.timeSlots.length > 0));
     }
 
     get isOrderFilter() {
@@ -106,21 +111,40 @@ export default class BatchLabelsComponent extends Component {
     }
 
     get filterLabel() {
+        if (this.filterType === 'time') return 'Delivery time / وقت التوصيل';
         return this.filterType === 'driver' ? 'Driver / السائق' : 'Area / المنطقة';
+    }
+
+    get timeSlots() {
+        return (this.options?.time_slots ?? []).map((slot) => ({ id: slot.id, label: `${slot.label} (${slot.count})` }));
+    }
+
+    /** Inside a driver or an area the day can still be split by time slot, as on the legacy screen. */
+    get showTimeDropdown() {
+        return (this.filterType === 'driver' || this.filterType === 'area') && this.timeSlots.length > 1;
+    }
+
+    get timeOptions() {
+        return [{ id: '', label: 'All times / كل الأوقات' }, ...(this.options?.time_slots ?? []).map((slot) => ({ id: slot.id, label: slot.label }))];
     }
 
     get filterOptions() {
         if (!this.options || this.isOrderFilter) return [];
+        if (this.filterType === 'time') return this.timeSlots;
         return (this.filterType === 'driver' ? this.options.drivers : this.options.areas) ?? [];
     }
 
     get scopedOrders() {
         const orders = Array.isArray(this.options?.orders) ? this.options.orders : [];
-        return orders.filter((order) => this.isOrderFilter || (
-            this.filterType === 'driver'
-                ? order.driver_id === this.filterValue
-                : order.area_id === this.filterValue
-        ));
+        if (this.isOrderFilter) return orders;
+        if (this.filterType === 'time') {
+            // One time slot across the day prints grouped by driver, then area.
+            return orders.filter((order) => order.time_id === this.filterValue).sort((a, b) =>
+                String(a.driver_label ?? '').localeCompare(String(b.driver_label ?? '')) || String(a.area ?? '').localeCompare(String(b.area ?? '')));
+        }
+        return orders.filter((order) => (
+            this.filterType === 'driver' ? order.driver_id === this.filterValue : order.area_id === this.filterValue
+        ) && (!this.showTimeDropdown || !this.timeValue || order.time_id === this.timeValue));
     }
 
     get orderOptions() {
@@ -234,6 +258,7 @@ export default class BatchLabelsComponent extends Component {
         this.resetPreview();
         this.selectionIds = [];
         this.orderValue = '';
+        this.timeValue = '';
         this.loading = true;
         this.error = null;
         this.notice = null;
@@ -316,6 +341,7 @@ export default class BatchLabelsComponent extends Component {
         if (filterType === 'driver' && !this.hasDriverOptions) return;
         this.filterType = filterType;
         this.orderValue = '';
+        this.timeValue = '';
         const first = this.filterOptions[0];
         this.filterValue = first?.id ?? '';
         if (this.isOrderFilter) this.orderValue = this.orderOptions[0]?.id ?? '';
@@ -330,6 +356,17 @@ export default class BatchLabelsComponent extends Component {
         const value = String(filterValue ?? '');
         if (!value || !this.filterOptions.some((option) => option.id === value)) return;
         this.filterValue = value;
+        this.orderValue = '';
+        this.resetPreview();
+        this.selectAllFiltered();
+        void this.showSelection();
+    }
+
+    @action
+    chooseTime(value) {
+        if (this.loading || this.confirming || !this.timeOptions.some((option) => option.id === value)) return;
+        // Kept while the operator moves from driver to driver, so one slot is printed car by car.
+        this.timeValue = value;
         this.orderValue = '';
         this.resetPreview();
         this.selectAllFiltered();

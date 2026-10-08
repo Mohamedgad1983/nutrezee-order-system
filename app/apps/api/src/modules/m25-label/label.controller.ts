@@ -461,7 +461,7 @@ interface PrintBody { delivery_date: string; kind?: 'print' | 'reprint'; reason?
 interface FleetbasePrintBody { kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbaseBatchBody {
   delivery_date?: string;
-  filter_type: 'driver' | 'area';
+  filter_type: 'driver' | 'area' | 'time';
   filter_value: string;
   selection_ids?: string[];
 }
@@ -490,7 +490,10 @@ function batchOptionsResponse(
 ) {
   const driverMap = new Map<string, { id: string; label: string; count: number }>();
   const areaMap = new Map<string, { id: string; label: string; count: number }>();
+  const timeMap = new Map<string, { id: string; label: string; count: number }>();
   for (const candidate of candidates) {
+    const slot = timeMap.get(candidate.timeKey);
+    timeMap.set(candidate.timeKey, { id: candidate.timeKey, label: candidate.timeLabel, count: (slot?.count ?? 0) + 1 });
     if (candidate.driverId) {
       const current = driverMap.get(candidate.driverId);
       driverMap.set(candidate.driverId, {
@@ -517,6 +520,8 @@ function batchOptionsResponse(
     ready: sourceTotal > 0 && candidates.length > 0,
     drivers: [...driverMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
     areas: [...areaMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    // A79: delivery time slots of the day, biggest first (legacy "Time Slots" filter).
+    time_slots: [...timeMap.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     orders: candidates.map((candidate) => ({
       selection_id: candidate.selectionId,
       order_number: candidate.orderNumber,
@@ -524,6 +529,8 @@ function batchOptionsResponse(
       driver_label: candidate.driverLabel,
       area_id: candidate.areaKey,
       area: candidate.areaLabel,
+      time_id: candidate.timeKey,
+      time: candidate.timeLabel,
     })),
   };
 }
