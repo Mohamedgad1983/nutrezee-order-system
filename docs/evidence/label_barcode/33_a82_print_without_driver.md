@@ -29,3 +29,9 @@ State on Saturday 2026-10-10 at 18:20 Kuwait: 774 orders on the legacy screen, 1
 
 - The status read through the real Fleetbase HTTP API with an operator's session: no operator token is available to the assistant. The night check reads the same rows from the Fleetbase database. To be confirmed by opening Batch Labels for Saturday (summary should show 806 = 773 + 33).
 - Not yet printed on paper. The driver box of such a label reads "Name unavailable".
+
+## A83 — WhatsApp subscribers as their own group (same day)
+
+Owner: "separate the WhatsApp orders from them". Driver, area and delivery-time batches now contain legacy orders only (their option lists and counts too); "Filter by" has a **WhatsApp subscribers** group (all of the day's, sorted by driver then area) and the summary shows their count on its own tile. API `filter_type: "source"`, console extension 0.3.23 (`fleetbase-console:a83-1`, API `nutrezee-api:a83-aa4ff49`, rollback tags `pre-a83-20261008`).
+
+Checked: unit `ts-u-batch-label-filters` 14/14 (3 new), integration 27/27; release gate 13/13; candidate booted in a real browser before the swap; after the swap the Saturday check still reads `Batch Labels 773 = legacy screen 773 (187 without a driver yet) + WhatsApp 33`. The page itself has not been opened with an operator account by the assistant.
