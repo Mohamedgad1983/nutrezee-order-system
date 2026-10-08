@@ -42,6 +42,58 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+describe('TS-U A79 batch-label delivery time filter', () => {
+  const timed = {
+    ...options,
+    orders: [
+      { ...orders[0]!, time_id: 'Before 1 day', time: 'Before 1 day' },
+      { ...orders[1]!, time_id: 'From 5 AM to 4 PM', time: 'From 5 AM to 4 PM' },
+      { ...orders[2]!, time_id: 'Before 1 day', time: 'Before 1 day' },
+    ],
+    time_slots: [{ id: 'Before 1 day', label: 'Before 1 day', count: 2 }, { id: 'From 5 AM to 4 PM', label: 'From 5 AM to 4 PM', count: 1 }],
+  };
+  function timedBatch() {
+    const state = batch();
+    state.options = timed;
+    state.showSelection = vi.fn();
+    state.selectAllFiltered();
+    return state;
+  }
+
+  it('narrows a driver to one time slot and keeps the slot when the driver changes', () => {
+    const state = timedBatch();
+    expect(state.dropdowns.map((d: { name: string }) => d.name)).toEqual(['group', 'scope', 'time', 'order']);
+    state.chooseTime('Before 1 day');
+    expect(state.selectionIds).toEqual(['day:o1']);
+    expect(state.batchPayload()).toMatchObject({ filter_type: 'driver', filter_value: 'd1', selection_ids: ['day:o1'] });
+    state.chooseFilterValue('d2');
+    expect(state.timeValue).toBe('Before 1 day');
+    expect(state.selectionIds).toEqual(['day:o3']);
+    state.chooseTime('');
+    expect(state.selectionIds).toEqual(['day:o3']);
+    state.chooseTime('not a slot');
+    expect(state.timeValue).toBe('');
+  });
+
+  it('prints one whole time slot across drivers, grouped by driver', () => {
+    const state = timedBatch();
+    state.chooseFilterType('time');
+    expect(state.filterValue).toBe('Before 1 day');
+    expect(state.filterOptions[0].label).toBe('Before 1 day (2)');
+    expect(state.selectionIds).toEqual(['day:o1', 'day:o3']);
+    expect(state.batchPayload()).toEqual({
+      delivery_date: '2026-09-06', filter_type: 'time', filter_value: 'Before 1 day', selection_ids: ['day:o1', 'day:o3'],
+    });
+    expect(state.dropdowns.map((d: { name: string }) => d.name)).toEqual(['group', 'scope', 'order']);
+  });
+
+  it('shows no time dropdown on a day with a single slot or an older API answer', () => {
+    const state = batch();
+    expect(state.dropdowns.map((d: { name: string }) => d.name)).toEqual(['group', 'scope', 'order']);
+    expect(state.filterTypes.map((t: { id: string }) => t.id)).toEqual(['driver', 'area', 'order']);
+  });
+});
+
 describe('TS-U A55 batch-label dropdown selection', () => {
   it('shows all driver orders and narrows/restores that group through the order dropdown', () => {
     const state = batch();

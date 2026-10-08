@@ -7,7 +7,7 @@ import { OutboxService } from '../../apps/api/src/platform/outbox/outbox.service
 import { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
 import { MergeService } from '../../apps/api/src/modules/m04-customers/merge.service';
 import { BarcodeService } from '../../apps/api/src/modules/m25-label/barcode.service';
-import { LabelService } from '../../apps/api/src/modules/m25-label/label.service';
+import { LabelError, LabelService } from '../../apps/api/src/modules/m25-label/label.service';
 import { isValidBarcodeValue } from '../../apps/api/src/modules/m25-label/code128';
 import type { StaffContext } from '../../apps/api/src/platform/auth/session.service';
 import { PartnerLabelSourceError } from '../../apps/api/src/modules/m25-label/partner-label-source';
@@ -510,6 +510,37 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
     expect(candidates[0]).toMatchObject({
       fleetbaseOrderId: 'fleetbase_a72_1', fleetbaseStatus: 'dispatched', fallbackPin: { lat: 29.1, lng: 48.1 },
     });
+  });
+
+  it('A79: batch candidates carry the day\'s time slot and can be selected by it', async () => {
+    const early = await seed('Slot Early', 'N-LBL-A79-1');
+    const normal = await seed('Slot Normal', 'N-LBL-A79-2');
+    const none = await seed('Slot None', 'N-LBL-A79-3');
+    await pool.query(`UPDATE customer_order SET delivery_time_frozen = 'From 5 AM to 4 PM' WHERE id = ANY($1::text[])`,
+      [[early.orderId, normal.orderId]]);
+    await pool.query('UPDATE customer_order SET delivery_time_frozen = NULL WHERE id = $1', [none.orderId]);
+    const gateway = {
+      profileForOrder: async () => null,
+      // the day's slot differs from the stored one for the first order only
+      deliveryTimeForOrder: vi.fn(async (orderNumber: string) => (orderNumber === 'N-LBL-A79-1' ? 'Before 1 day' : null)),
+    };
+    const timed = new LabelService(pool, audit, barcodes, null, gateway);
+    const candidates = await timed.batchCandidates(DATE_B, [early, normal, none].map((item, index) => ({
+      id: `fleetbase_a79_${index}`, meta: { delivery_date: DATE_B, nutrezee_order_id: item.orderId },
+    })));
+    const byNumber = new Map(candidates.map((c) => [c.orderNumber, c]));
+    expect(byNumber.get('N-LBL-A79-1')).toMatchObject({ timeKey: 'Before 1 day', timeLabel: 'Before 1 day' });
+    expect(byNumber.get('N-LBL-A79-2')).toMatchObject({ timeKey: 'From 5 AM to 4 PM' });
+    expect(byNumber.get('N-LBL-A79-3')).toMatchObject({ timeKey: '__no_time__', timeLabel: 'No time / بدون وقت' });
+    expect(timed.selectBatchCandidates(candidates, { filterType: 'time', filterValue: 'Before 1 day' })
+      .map((c) => c.orderNumber)).toEqual(['N-LBL-A79-1']);
+    expect(() => timed.selectBatchCandidates(candidates, { filterType: 'time', filterValue: 'Midnight' }))
+      .toThrow(LabelError);
+    // without a Partner source the stored slot is used
+    const plain = await labels.batchCandidates(DATE_B, [{
+      id: 'fleetbase_a79_plain', meta: { delivery_date: DATE_B, nutrezee_order_id: early.orderId },
+    }]);
+    expect(plain[0]).toMatchObject({ timeKey: 'From 5 AM to 4 PM' });
   });
 
   it('builds a selected driver batch and records one audited batch only after confirmation', async () => {
