@@ -32,6 +32,8 @@ export interface PartnerLabelProfile {
   /** A78.3: the time slot and handover instruction of this delivery day (they can differ from the order's first day). */
   deliveryTime: string | null;
   deliveryMethod: string | null;
+  /** A80: the legacy "days remains" figure for this delivery date; null when Partner has no end date. */
+  daysRemaining: number | null;
 }
 
 export interface PartnerLabelProfileGateway {
@@ -58,6 +60,9 @@ interface SubscriptionRef {
   packageName: string | null;
   mealsPerDay: number | null;
   snacksPerDay: number | null;
+  endDate: string | null;
+  offWeekdays: number[];
+  frozenDays: number;
 }
 
 interface Reference {
@@ -109,6 +114,29 @@ export function localPhone(value: unknown): string | null {
   // Kuwait numbers are 8 digits. `+966` here is the old import default, not a Saudi number.
   if (international && /^(965|966)\d{8}$/.test(trimmed)) return trimmed.slice(3);
   return international ? `+${trimmed}` : digits;
+}
+
+/**
+ * A80 — "days remains" exactly as the legacy admin shows it: delivery days (weekdays that are not
+ * the subscription's off days) from the delivery date to the current end date, minus the
+ * subscription's frozen days. Checked against 20 orders read off the legacy Driver Orders screen on
+ * 2026-10-08: 19 equal, including one negative figure (a subscription with 29 frozen days shows
+ * -19 there too); the one that differs is a "Thursday double box" subscription ending that week.
+ * Counting the mirrored future days was wrong: Partner lists only the days already generated.
+ */
+export function legacyDaysRemaining(
+  deliveryDate: string,
+  subscription: { endDate: string | null; offWeekdays: number[]; frozenDays: number },
+): number | null {
+  if (!subscription.endDate || !DATE_RE.test(deliveryDate)) return null;
+  const end = Date.parse(`${subscription.endDate}T00:00:00Z`);
+  let cursor = Date.parse(`${deliveryDate}T00:00:00Z`);
+  if (Number.isNaN(end) || Number.isNaN(cursor) || end - cursor > 3660 * 86_400_000) return null;
+  let days = 0;
+  for (; cursor <= end; cursor += 86_400_000) {
+    if (!subscription.offWeekdays.includes(new Date(cursor).getUTCDay())) days += 1;
+  }
+  return days - subscription.frozenDays;
 }
 
 export function addressFromPartner(raw: unknown): LabelAddressContract | null {
@@ -191,6 +219,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         notes: day.notes,
         deliveryTime: day.deliveryTime,
         deliveryMethod: day.deliveryMethod,
+        daysRemaining: subscription ? legacyDaysRemaining(deliveryDate, subscription) : null,
       };
     } catch {
       return null;
@@ -234,6 +263,10 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           packageName: labelText(pack.name_ar) ?? labelText(pack.name_en),
           mealsPerDay: smallCount(pack.meals_per_day),
           snacksPerDay: smallCount(pack.snacks_per_day),
+          endDate: typeof raw.end_date === 'string' && DATE_RE.test(raw.end_date) ? raw.end_date : null,
+          offWeekdays: Array.isArray(delivery.off_weekdays)
+            ? delivery.off_weekdays.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6) : [],
+          frozenDays: typeof raw.frozen_days === 'number' && Number.isInteger(raw.frozen_days) && raw.frozen_days > 0 ? raw.frozen_days : 0,
         });
       }
       const addresses = new Map<string, LabelAddressContract>();

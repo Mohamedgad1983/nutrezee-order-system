@@ -211,7 +211,8 @@ export class LabelService {
       subscription_date_display: formatLabelDate(deliveryDate),
       // A78.3: the day's own slot wins — the order keeps only the slot of its first imported day.
       delivery_time: profile?.deliveryTime ?? (r.delivery_time_frozen as string) ?? null,
-      days_remaining: source?.labelDaysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
+      // A80: Partner's end date gives the legacy figure; the mirrored-day count is only a fallback.
+      days_remaining: source?.labelDaysRemaining ?? profile?.daysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
         ? null : Number(r.days_remaining)),
       delivery_method: profile?.deliveryMethod ?? (r.delivery_method_frozen as string) ?? null,
       package_name: source?.labelPackage ?? profile?.packageName ?? (r.package_name as string) ?? null,

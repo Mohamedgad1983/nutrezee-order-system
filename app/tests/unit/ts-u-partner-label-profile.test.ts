@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  PartnerLabelProfileSource, addressFromPartner, labelText, localPhone,
+  PartnerLabelProfileSource, addressFromPartner, labelText, legacyDaysRemaining, localPhone,
 } from '../../apps/api/src/modules/m25-label/partner-label-profile';
 
 // TS-U (WP-OPS-A78) — the customer part of the legacy label, read from Partner at print time.
@@ -19,7 +19,8 @@ const daily = {
 const subscription = {
   subscription_id: 28251, order_number: '29203', deleted: false,
   package: { name_en: '720- 1920  calories (almost)', name_ar: '(تقريبا) 720- 1920 سعرة حرارية', meals_per_day: 3, snacks_per_day: 2 },
-  delivery: { delivery_address_id: 7913 },
+  delivery: { delivery_address_id: 7913, off_weekdays: [5] },
+  start_date: '2026-09-12', end_date: '2026-10-11', frozen_days: 0,
 };
 const address = {
   address_id: 7913, name: '3', street: '314', building: '2', house_no: '13', flat_no: null, landmark: null,
@@ -50,6 +51,19 @@ describe('TS-U partner label profile (A78)', () => {
     expect(localPhone(null)).toBeNull();
   });
 
+  it('A80: days remaining follows the legacy rule (values read off the legacy screen on 2026-10-08)', () => {
+    const fri = [5];
+    // order 29203 on its label for the 7th: ends on the 11th, Friday off -> 7, 8, 10, 11
+    expect(legacyDaysRemaining('2026-10-07', { endDate: '2026-10-11', offWeekdays: fri, frozenDays: 0 })).toBe(4);
+    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-11-08', offWeekdays: fri, frozenDays: 0 })).toBe(27); // 30545
+    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-10-20', offWeekdays: fri, frozenDays: 2 })).toBe(9); // 29432
+    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-11-02', offWeekdays: fri, frozenDays: 1 })).toBe(21); // 27097
+    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-10-19', offWeekdays: fri, frozenDays: 29 })).toBe(-19); // 27067
+    expect(legacyDaysRemaining('2026-10-10', { endDate: '2026-10-09', offWeekdays: fri, frozenDays: 0 })).toBe(0);
+    expect(legacyDaysRemaining('2026-10-10', { endDate: null, offWeekdays: fri, frozenDays: 0 })).toBeNull();
+    expect(legacyDaysRemaining('2026-10-10', { endDate: '2099-01-01', offWeekdays: fri, frozenDays: 0 })).toBeNull();
+  });
+
   it('maps a Partner address the way the legacy label prints it', () => {
     expect(addressFromPartner({ ...address, landmark: 'Main street', flat_no: '4' })).toEqual({
       area: 'Old Area', block: '3', street: '314', building: '13', floor: null, flat: '4', direction: 'Main street',
@@ -69,7 +83,7 @@ describe('TS-U partner label profile (A78)', () => {
       packageName: '(تقريبا) 720- 1920 سعرة حرارية', mealsPerDay: 3, snacksPerDay: 2,
       address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
       notes: 'Thursday Double Box if no answer call 97504160',
-      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box',
+      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: 4,
     });
     await expect(instance.profileForOrder('WA-98992558', DATE)).resolves.toBeNull();
     await instance.profileForOrder('29203', DATE);
@@ -90,7 +104,7 @@ describe('TS-U partner label profile (A78)', () => {
     await expect(lists.instance.profileForOrder('29203', DATE)).resolves.toEqual({
       userId: '1119', phone: '98992558', packageName: null, mealsPerDay: null, snacksPerDay: null, address: null,
       notes: 'Thursday Double Box if no answer call 97504160',
-      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box',
+      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: null,
     });
     const down = source({});
     await expect(down.instance.profileForOrder('29203', DATE)).resolves.toBeNull();
