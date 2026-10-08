@@ -205,10 +205,11 @@ export class LabelService {
       delivery_date: deliveryDate,
       full_name: (r.full_name_en as string) ?? '',
       subscription_date_display: formatLabelDate(deliveryDate),
-      delivery_time: (r.delivery_time_frozen as string) ?? null,
+      // A78.3: the day's own slot wins — the order keeps only the slot of its first imported day.
+      delivery_time: profile?.deliveryTime ?? (r.delivery_time_frozen as string) ?? null,
       days_remaining: source?.labelDaysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
         ? null : Number(r.days_remaining)),
-      delivery_method: (r.delivery_method_frozen as string) ?? null,
+      delivery_method: profile?.deliveryMethod ?? (r.delivery_method_frozen as string) ?? null,
       package_name: source?.labelPackage ?? profile?.packageName ?? (r.package_name as string) ?? null,
       meals_per_day: r.meals_per_day === null || r.meals_per_day === undefined
         ? profile?.mealsPerDay ?? null : Number(r.meals_per_day),
