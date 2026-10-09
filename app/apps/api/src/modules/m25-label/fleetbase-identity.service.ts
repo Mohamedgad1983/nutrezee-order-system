@@ -204,7 +204,8 @@ export class FleetbaseIdentityService {
   /**
    * The operator-visible Fleetbase orders for one server-selected delivery date. The response is
    * the complete operational batch authority; held/cancelled orders can never become printable
-   * driver work and a partial local fulfillment set is never substituted.
+   * driver work (A82 exception: an order only waiting for its driver prints, without a driver) and a
+   * partial local fulfillment set is never substituted.
    */
   async ordersForOperatorDate(token: string, deliveryDate: string): Promise<{
     actor: StaffContext;
@@ -359,7 +360,38 @@ export class HttpFleetbaseIdentityGateway implements FleetbaseIdentityGateway {
     return arrayPayload<FleetbaseOrderProjection>(response);
   }
 
+  /**
+   * The day's orders: the scheduled ones, plus (A82) the ones only waiting for a driver. The sync
+   * keeps a held order unscheduled on purpose — Fleetbase's own scheduler would dispatch it — so the
+   * date filter cannot see it; they are read by status instead (a few hundred rows at most). A
+   * failure of this second read never blocks the scheduled labels.
+   */
   async orders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
+    const scheduled = await this.scheduledOrders(token, deliveryDate);
+    const waiting = await this.ordersWaitingForDriver(token, deliveryDate).catch(() => []);
+    const seen = new Set(scheduled.map((order) => order.id));
+    return [...scheduled, ...waiting.filter((order) => !seen.has(order.id))];
+  }
+
+  private async ordersWaitingForDriver(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
+    const waiting: FleetbaseOrderProjection[] = [];
+    const seen = new Set<string>();
+    for (let page = 1; page <= 20; page += 1) {
+      const pageOrders = arrayPayload<FleetbaseOrderProjection>(await this.request<unknown>(
+        'GET', `/v1/orders?status=created&limit=${this.orderPageSize}&page=${page}${ORDER_COLUMNS_QUERY}`, token,
+      ));
+      for (const order of pageOrders) {
+        if (!order.id || seen.has(order.id)) continue;
+        seen.add(order.id);
+        if (order.meta?.delivery_date === deliveryDate && order.meta?.hold_reason === 'no_partner_driver'
+          && !order.scheduled_at) waiting.push(order);
+      }
+      if (pageOrders.length < this.orderPageSize) break;
+    }
+    return waiting;
+  }
+
+  private async scheduledOrders(token: string, deliveryDate: string): Promise<FleetbaseOrderProjection[]> {
     const orders: FleetbaseOrderProjection[] = [];
     const seen = new Set<string>();
 
@@ -526,11 +558,17 @@ function fleetbaseOrderDate(order: FleetbaseOrderProjection): string | null {
   return kuwait.toISOString().slice(0, 10);
 }
 
-function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
+/**
+ * A82 (owner, 2026-10-08): an order the legacy admin has not given a driver yet still gets its
+ * sticker — the drivers' manager places "day before" boxes himself. It stays held (not dispatched to
+ * any driver app) and prints with an empty driver box. Every other hold and every cancel stays out.
+ */
+export function isHeldOrCancelled(order: FleetbaseOrderProjection): boolean {
   const status = String(order.status ?? '').toLowerCase();
   if (status.includes('cancel')) return true;
   const holdReason = order.meta?.hold_reason;
-  return typeof holdReason === 'string' && holdReason.trim().length > 0;
+  if (typeof holdReason !== 'string' || holdReason.trim().length === 0) return false;
+  return holdReason.trim() !== 'no_partner_driver';
 }
 
 const DRIVER_LABEL_COLORS: readonly DriverLabelColorToken[] = [

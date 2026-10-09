@@ -8,10 +8,17 @@ screen's driver in Fleetbase. On any difference it repairs automatically and che
   - an order has no label record yet   → run the Partner label feed for that day.
 Then one short email to it@nutreeze.com (Fleetbase Laravel mailer, hello@nutreeze.com).
 Order numbers only; no customer data.
-Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix]
+Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix] [--follow-up]
+
+A81 (owner, 2026-10-08): drivers are often completed in the legacy admin around 01:00, after the
+00:45 check. `--follow-up` (timer every 15 min) repeats the same check and repair so those labels
+appear the same night, and emails only when the result changed.
+A84 (2026-10-09): the follow-up runs from 18:00 to 02:45 Kuwait, because drivers are assigned in
+legacy through the evening and the page showed a driver with 36 labels while legacy had 48.
 """
 import datetime
 import collections
+import fcntl
 import json
 import os
 import subprocess
@@ -27,6 +34,9 @@ READING_DIR = '/root/a68'
 CONTAINER_CONFIG_ROOT = '/fleetbase/api/storage/app/integrations/config'
 COMPANY = '2db920aa-d0d4-42a7-a0a3-c9d4c6dd487c'
 FIX_ROUNDS = 2
+FOLLOW_UP = '--follow-up' in sys.argv
+STATE_DIR = '/root/a70'
+LOCK_FILE = '/run/lock/nutreeze-print-status.lock'
 
 
 def sh(cmd, inp=None, timeout=300, env=None):
@@ -105,7 +115,10 @@ def batch_labels(day):
     query = ('select json_object("id",public_id,"internal_id",internal_id,"status",status,'
              '"scheduled_at",if(scheduled_at is null,null,date_format(scheduled_at,"%Y-%m-%dT%H:%i:%sZ")),"meta",meta) '
              f'from fleetbase.orders where company_uuid="{COMPANY}" and deleted_at is null '
-             'and scheduled_at >= date_sub("DAY", interval 1 day) and scheduled_at < date_add("DAY", interval 1 day)'
+             'and ((scheduled_at >= date_sub("DAY", interval 1 day) and scheduled_at < date_add("DAY", interval 1 day)) '
+             # A82: orders only waiting for a driver are kept unscheduled; the page reads them by status.
+             'or (scheduled_at is null and status="created" and json_unquote(json_extract(meta,"$.delivery_date"))="DAY" '
+             'and json_unquote(json_extract(meta,"$.hold_reason"))="no_partner_driver"))'
              ).replace('DAY', day)
     out = sh(['docker', 'exec', 'fleetbase-database-1', 'mysql', '-uroot', '-N', '-B', '--raw', '-e', query])
     rows = []
@@ -147,6 +160,8 @@ def evaluate(day, screen):
     # A70.12: an order the legacy admin itself has not given a driver cannot have a label (owner rule:
     # no order without a driver). That is a job for the legacy admin, not a difference to repair here.
     waiting = set(d['no_driver_in_legacy'])
+    # A82 (owner, 2026-10-08): such an order now prints without a driver; listed for information only.
+    d['printed_without_driver'] = sorted(n for n in labels if n in waiting)
     d['needs_driver'] = sorted(n for n in d['no_label'] if n in waiting)
     d['no_label'] = sorted(n for n in d['no_label'] if n not in waiting)
     d['diff'] = len(d['no_label']) + len(d['extra_label']) + len(d['wrong_driver'])
@@ -216,6 +231,7 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         n_wait = len(d.get('needs_driver') or [])
         subject = (f"[OK] Labels {day}: Batch Labels {n_labels} = legacy screen {n_screen - n_wait}"
                    + (f" — {n_wait} order(s) need a driver in legacy: {short(d['needs_driver'], 5)}" if n_wait else '')
+                   + (f" ({len(d['printed_without_driver'])} without a driver yet)" if d.get('printed_without_driver') else '')
                    if zero else
                    f"[CHECK] Labels {day}: Batch Labels {n_labels} vs legacy screen {n_screen} — {d['diff']} difference(s)")
         lines += [
@@ -240,6 +256,11 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
             lines.append("Areas moved to another driver by the drivers' manager for this day (not a difference) / "
                          "مناطق منقولة لسواق تاني من مدير السواقين لليوم ده (مش فرق): "
                          + ', '.join(f'{area} ({count})' for area, count in d['area_moves']))
+        if d.get('printed_without_driver'):
+            lines.append(f"Labels without a driver (not set in the legacy admin yet; they print with an empty driver box, "
+                         f"under Area or Delivery time) / ملصقات من غير سواق (لسه مش متحدد في السيستم القديم، بتتطبع وخانة "
+                         f"السواق فاضية من فلتر المنطقة أو وقت التوصيل): {len(d['printed_without_driver'])} — "
+                         f"{short(d['printed_without_driver'])}")
         if n_wait:
             lines.append(f"{n_screen} on the screen, {n_wait} of them without a driver in the legacy admin: no label until a "
                          f"driver is set there, then it appears with the next sync. / {n_wait} طلب على الشاشة من غير سواق في "
@@ -248,8 +269,8 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
                            ('Label but not on the screen / ملصق ومش على الشاشة', 'extra_label'),
                            ('Different driver / سواق مختلف', 'wrong_driver'),
                            ('No driver in the legacy admin itself / مالوش سواق في السيستم القديم نفسه', 'no_driver_in_legacy')):
-            if key == 'no_driver_in_legacy' and n_wait:
-                continue
+            if key == 'no_driver_in_legacy' and (n_wait or d.get('printed_without_driver')):
+                continue  # already listed above
             if d.get(key):
                 lines.append(f'{title}: {short(d[key])}')
     if fix_log:
@@ -260,8 +281,27 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         fh.write(subject + '\n\n' + body)
     print(subject)
     print(body)
-    if '--no-send' not in sys.argv:
-        print('mail:', 'sent' if send(subject, body) else 'FAILED')
+    if '--no-send' in sys.argv:
+        return
+    sent_file = os.path.join(STATE_DIR, f'print-status-sent-{day}.txt')
+    if FOLLOW_UP:
+        # A81: a follow-up run is silent unless the result differs from the last email of that day.
+        last = open(sent_file).read().strip() if os.path.isfile(sent_file) else None
+        if last is None:
+            # A84: evening runs keep the page in step with legacy; the first email of a day is the 00:45 one.
+            print('mail: skipped (before the 00:45 email of this day)')
+            return
+        if note or last == subject:
+            print('mail: skipped (no change since the last email)')
+            return
+        subject_out = f'{subject} (update {datetime.datetime.now(KW).strftime("%H:%M")})'
+    else:
+        subject_out = subject
+    ok = send(subject_out, body)
+    print('mail:', 'sent' if ok else 'FAILED')
+    if ok and not note:
+        with open(sent_file, 'w') as fh:
+            fh.write(subject + '\n')
 
 
 def resync(day, log):
@@ -327,8 +367,19 @@ def send(subject, body):
 
 
 def main():
+    # A81: one check at a time. A follow-up never queues behind a running check; the others wait.
+    lock = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if FOLLOW_UP else 0))
+    except BlockingIOError:
+        print('another check is running; this follow-up is skipped')
+        return 0
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    day = args[0] if args else (datetime.datetime.now(KW).date() + datetime.timedelta(days=1)).isoformat()
+    tomorrow = datetime.datetime.now(KW).date() + datetime.timedelta(days=1)
+    if FOLLOW_UP and tomorrow.weekday() == 4:
+        # A84: no deliveries on Friday, so on Thursday evening the day being prepared is Saturday.
+        tomorrow += datetime.timedelta(days=1)
+    day = args[0] if args else tomorrow.isoformat()
     fix = '--no-fix' not in sys.argv
     started = datetime.datetime.now(KW).strftime('%H:%M')
     fix_log = []

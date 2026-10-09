@@ -461,7 +461,7 @@ interface PrintBody { delivery_date: string; kind?: 'print' | 'reprint'; reason?
 interface FleetbasePrintBody { kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbaseBatchBody {
   delivery_date?: string;
-  filter_type: 'driver' | 'area' | 'time';
+  filter_type: 'driver' | 'area' | 'time' | 'source';
   filter_value: string;
   selection_ids?: string[];
 }
@@ -491,7 +491,11 @@ function batchOptionsResponse(
   const driverMap = new Map<string, { id: string; label: string; count: number }>();
   const areaMap = new Map<string, { id: string; label: string; count: number }>();
   const timeMap = new Map<string, { id: string; label: string; count: number }>();
+  let whatsapp = 0;
   for (const candidate of candidates) {
+    // A83: the driver, area and time lists describe the legacy orders only; WhatsApp subscribers
+    // are their own group.
+    if (candidate.source === 'whatsapp') { whatsapp += 1; continue; }
     const slot = timeMap.get(candidate.timeKey);
     timeMap.set(candidate.timeKey, { id: candidate.timeKey, label: candidate.timeLabel, count: (slot?.count ?? 0) + 1 });
     if (candidate.driverId) {
@@ -514,6 +518,9 @@ function batchOptionsResponse(
     delivery_date: deliveryDate,
     source_total: sourceTotal,
     total: candidates.length,
+    legacy_total: candidates.length - whatsapp,
+    whatsapp_total: whatsapp,
+    sources: whatsapp > 0 ? [{ id: 'whatsapp', label: 'WhatsApp subscribers / مشتركين الواتساب', count: whatsapp }] : [],
     unmapped,
     // A70: every mapped label is printable even while a few orders are still unmapped; the
     // summary keeps showing source_total vs total so the gap stays visible.
@@ -531,6 +538,7 @@ function batchOptionsResponse(
       area: candidate.areaLabel,
       time_id: candidate.timeKey,
       time: candidate.timeLabel,
+      source: candidate.source,
     })),
   };
 }

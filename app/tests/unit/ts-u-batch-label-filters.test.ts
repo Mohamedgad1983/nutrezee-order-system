@@ -94,6 +94,46 @@ describe('TS-U A79 batch-label delivery time filter', () => {
   });
 });
 
+describe('TS-U A83 WhatsApp subscribers print as their own group', () => {
+  const mixed = {
+    ...options,
+    orders: [
+      ...orders,
+      { selection_id: 'day:w1', order_number: 'WA-55123456', area_id: 'a1', area: 'Salmiya', driver_id: 'd1', driver_label: 'Car 1', source: 'whatsapp' },
+      { selection_id: 'day:w2', order_number: 'WA-55999999', area_id: 'a2', area: 'Bayan', driver_id: null, driver_label: null, source: 'whatsapp' },
+    ],
+    sources: [{ id: 'whatsapp', label: 'WhatsApp subscribers / مشتركين الواتساب', count: 2 }],
+  };
+  function mixedBatch() {
+    const state = batch();
+    state.options = mixed;
+    state.showSelection = vi.fn();
+    state.selectAllFiltered();
+    return state;
+  }
+
+  it('keeps them out of the driver and area batches', () => {
+    const state = mixedBatch();
+    expect(state.selectionIds).toEqual(['day:o1', 'day:o2']);
+    state.chooseFilterType('area');
+    expect(state.selectionIds).toEqual(['day:o1', 'day:o3']);
+  });
+
+  it('prints all of them from the WhatsApp group', () => {
+    const state = mixedBatch();
+    state.chooseFilterType('source');
+    expect(state.filterValue).toBe('whatsapp');
+    expect(state.selectionIds).toEqual(['day:w2', 'day:w1']);
+    expect(state.batchPayload()).toEqual({
+      delivery_date: '2026-09-06', filter_type: 'source', filter_value: 'whatsapp', selection_ids: ['day:w2', 'day:w1'],
+    });
+  });
+
+  it('offers no WhatsApp group on a day without them', () => {
+    expect(batch().filterTypes.map((t: { id: string }) => t.id)).toEqual(['driver', 'area', 'order']);
+  });
+});
+
 describe('TS-U A55 batch-label dropdown selection', () => {
   it('shows all driver orders and narrows/restores that group through the order dropdown', () => {
     const state = batch();

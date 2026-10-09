@@ -536,6 +536,7 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
       .map((c) => c.orderNumber)).toEqual(['N-LBL-A79-1']);
     expect(() => timed.selectBatchCandidates(candidates, { filterType: 'time', filterValue: 'Midnight' }))
       .toThrow(LabelError);
+    expect(candidates.every((c) => c.source === 'partner')).toBe(true);
     // without a Partner source the stored slot is used
     const plain = await labels.batchCandidates(DATE_B, [{
       id: 'fleetbase_a79_plain', meta: { delivery_date: DATE_B, nutrezee_order_id: early.orderId },
