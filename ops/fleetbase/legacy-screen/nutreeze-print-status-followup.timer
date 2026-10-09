@@ -1,9 +1,8 @@
 [Unit]
-Description=A81 print guard follow-ups every 15 min, 01:00-02:30 Kuwait (drivers completed in legacy after the 00:45 check)
+Description=A81/A84 print guard follow-ups every 15 min, 18:00-02:45 Kuwait (drivers are assigned in legacy through the evening)
 
 [Timer]
-OnCalendar=*-*-* 22:00,15,30,45:00 UTC
-OnCalendar=*-*-* 23:00,15,30:00 UTC
+OnCalendar=*-*-* 15..23:00/15:00 UTC
 Persistent=false
 
 [Install]

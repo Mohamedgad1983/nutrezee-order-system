@@ -35,3 +35,13 @@ State on Saturday 2026-10-10 at 18:20 Kuwait: 774 orders on the legacy screen, 1
 Owner: "separate the WhatsApp orders from them". Driver, area and delivery-time batches now contain legacy orders only (their option lists and counts too); "Filter by" has a **WhatsApp subscribers** group (all of the day's, sorted by driver then area) and the summary shows their count on its own tile. API `filter_type: "source"`, console extension 0.3.23 (`fleetbase-console:a83-1`, API `nutrezee-api:a83-aa4ff49`, rollback tags `pre-a83-20261008`).
 
 Checked: unit `ts-u-batch-label-filters` 14/14 (3 new), integration 27/27; release gate 13/13; candidate booted in a real browser before the swap; after the swap the Saturday check still reads `Batch Labels 773 = legacy screen 773 (187 without a driver yet) + WhatsApp 33`. The page itself has not been opened with an operator account by the assistant.
+
+## A84 — evening follow-ups (2026-10-09)
+
+Owner's video at 00:11 Kuwait on Friday: Batch Labels showed driver Salato Din Miya with 36 labels for Saturday 2026-10-10 while the legacy screen showed 48.
+
+Cause (Verified): no check or sync for Saturday ran between 18:29 (a manual run) and 00:25–00:45 Kuwait. The hourly evening sync targets "tomorrow", which on Thursday evening is Friday (no deliveries); drivers were being assigned in legacy during that time. At 00:45 the check read 773 = 773, difference 0, all with a driver; by 02:32 that driver had 71 orders on the legacy screen and 71 labels.
+
+Change: the follow-up runs every 15 minutes from 18:00 to 02:45 Kuwait (was 01:00–02:30) and prepares the next delivery day (Saturday when tomorrow is Friday). It never emails before the 00:45 email of that day. Installed by the assistant; the previous script is `print-status.py.bak-a84`.
+
+Limit that remains: the page can be up to about 15 minutes behind legacy, and before 18:00 it is as old as the last sync.

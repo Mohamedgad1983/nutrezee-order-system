@@ -11,8 +11,10 @@ Order numbers only; no customer data.
 Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix] [--follow-up]
 
 A81 (owner, 2026-10-08): drivers are often completed in the legacy admin around 01:00, after the
-00:45 check. `--follow-up` (timer every 15 min until 02:30 Kuwait) repeats the same check and
-repair so those labels appear the same night, and emails only when the result changed.
+00:45 check. `--follow-up` (timer every 15 min) repeats the same check and repair so those labels
+appear the same night, and emails only when the result changed.
+A84 (2026-10-09): the follow-up runs from 18:00 to 02:45 Kuwait, because drivers are assigned in
+legacy through the evening and the page showed a driver with 36 labels while legacy had 48.
 """
 import datetime
 import collections
@@ -285,6 +287,10 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
     if FOLLOW_UP:
         # A81: a follow-up run is silent unless the result differs from the last email of that day.
         last = open(sent_file).read().strip() if os.path.isfile(sent_file) else None
+        if last is None:
+            # A84: evening runs keep the page in step with legacy; the first email of a day is the 00:45 one.
+            print('mail: skipped (before the 00:45 email of this day)')
+            return
         if note or last == subject:
             print('mail: skipped (no change since the last email)')
             return
@@ -369,7 +375,11 @@ def main():
         print('another check is running; this follow-up is skipped')
         return 0
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    day = args[0] if args else (datetime.datetime.now(KW).date() + datetime.timedelta(days=1)).isoformat()
+    tomorrow = datetime.datetime.now(KW).date() + datetime.timedelta(days=1)
+    if FOLLOW_UP and tomorrow.weekday() == 4:
+        # A84: no deliveries on Friday, so on Thursday evening the day being prepared is Saturday.
+        tomorrow += datetime.timedelta(days=1)
+    day = args[0] if args else tomorrow.isoformat()
     fix = '--no-fix' not in sys.argv
     started = datetime.datetime.now(KW).strftime('%H:%M')
     fix_log = []
