@@ -1,0 +1,9 @@
+[Unit]
+Description=A86 hourly, 06:40-17:40 Kuwait: next three delivery days checked against the legacy admin
+
+[Timer]
+OnCalendar=*-*-* 03..14:40:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1067,6 +1067,19 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 }
 .nz-driver-band__contact strong { flex: none; }
 
+/* A85: the print page's own "matches the legacy admin" line. */
+.nz-print-check {
+    margin: 0 0 0.6rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.nz-print-check--ok { background: #ecfdf3; border-color: #86efac; color: #14532d; }
+.nz-print-check--busy { background: #fffbeb; border-color: #fcd34d; color: #78350f; }
+.nz-print-check--bad { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; font-size: 1rem; }
+
 .nz-label-freshness {
     margin: 0 0 0.6rem;
     padding: 0.4rem 0.7rem;

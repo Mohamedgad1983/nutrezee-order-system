@@ -40,6 +40,9 @@
 
     {{#if this.options}}
         <div class="nz-label-freshness" data-test-partner-freshness>{{this.freshnessText}}</div>
+        {{#if this.printCheckText}}
+            <div class="nz-print-check nz-print-check--{{this.printCheckTone}}" role="status" data-test-print-check>{{this.printCheckText}}</div>
+        {{/if}}
         <div class="nz-batch-summary">
             <div><strong>{{this.options.delivery_date}}</strong><span>Delivery date / تاريخ التوصيل</span></div>
             <div><strong>{{this.options.source_total}}</strong><span>Fleetbase orders that day / طلبات Fleetbase لهذا اليوم</span></div>

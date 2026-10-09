@@ -22,6 +22,7 @@ import fcntl
 import json
 import os
 import subprocess
+import uuid
 import sys
 import time
 import zoneinfo
@@ -37,6 +38,7 @@ FIX_ROUNDS = 2
 FOLLOW_UP = '--follow-up' in sys.argv
 STATE_DIR = '/root/a70'
 LOCK_FILE = '/run/lock/nutreeze-print-status.lock'
+STARTED_UTC = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 def sh(cmd, inp=None, timeout=300, env=None):
@@ -216,6 +218,43 @@ def wait_for_scheduled_sync(limit_s=1200, day=None):
         time.sleep(15)
 
 
+def record_result(day, screen, d):
+    """A85: store the result so the print page itself shows whether the labels match the legacy admin
+    now, and close the page's requests made before this check started. Order numbers only."""
+    try:
+        compared = screen is not None and d.get('diff') is not None
+        status = 'failed' if not compared else ('ok' if d['diff'] == 0 else 'differences')
+        detail = {} if not compared else {key: d.get(key, [])[:200] for key in ('no_label', 'extra_label', 'wrong_driver')}
+        value = lambda v: '' if v is None else str(v)  # noqa: E731
+        sql = """
+INSERT INTO label_print_check (id, delivery_date, status, requested_at, finished_at, screen_orders, labels, differences,
+                               without_driver, whatsapp_labels, detail)
+VALUES (:'id', :'day', :'status', now(), now(), NULLIF(:'screen','')::int, NULLIF(:'labels','')::int,
+        NULLIF(:'diff','')::int, NULLIF(:'nodriver','')::int, NULLIF(:'wa','')::int, :'detail'::jsonb);
+UPDATE label_print_check
+   SET status = :'status', finished_at = now(), screen_orders = NULLIF(:'screen','')::int, labels = NULLIF(:'labels','')::int,
+       differences = NULLIF(:'diff','')::int, without_driver = NULLIF(:'nodriver','')::int,
+       whatsapp_labels = NULLIF(:'wa','')::int, detail = :'detail'::jsonb
+ WHERE delivery_date = :'day' AND status = 'requested' AND requested_at <= :'started'::timestamptz;
+"""
+        variables = {
+            'id': 'chk-' + uuid.uuid4().hex, 'day': day, 'status': status, 'started': STARTED_UTC,
+            'screen': value(len(screen['order_numbers']) if compared else None),
+            'labels': value(d.get('legacy_labels') if compared else None),
+            'diff': value(d.get('diff') if compared else None),
+            'nodriver': value(len(d.get('printed_without_driver') or []) if compared else None),
+            'wa': value(len(d.get('whatsapp_labels') or []) if compared else None),
+            'detail': json.dumps(detail),
+        }
+        cmd = ['docker', 'exec', '-i', 'nutrezee-postgres-1', 'psql', '-U', 'nutrezee', '-d', 'nutrezee', '-q', '-v', 'ON_ERROR_STOP=1']
+        for name, val in variables.items():
+            cmd += ['-v', f'{name}={val}']
+        res = subprocess.run(cmd + ['-f', '-'], input=sql, capture_output=True, text=True, timeout=60)
+        print('page status:', 'recorded ' + status if res.returncode == 0 else 'NOT recorded: ' + res.stderr.strip()[:160])
+    except Exception as error:  # the email and the repair never depend on this
+        print('page status: NOT recorded:', str(error)[:160])
+
+
 def report(day, screen, d, fix_log, started, note=None, wa=None):
     page = d['page']
     lines = [f'Checked {started}–{datetime.datetime.now(KW).strftime("%H:%M")} Kuwait with the Batch Labels page code.', '']
@@ -366,6 +405,26 @@ def send(subject, body):
     return 'MAIL_SENT' in res
 
 
+def api_vs_screen(day):
+    """A85: measure, at the moment of a fresh screen reading, whether Partner's live API says the same
+    (orders + driver). One log line per check; never affects the check itself."""
+    try:
+        manifest = os.path.join(CONFIG_ROOT, f"legacy-screen-{day.replace('-', '')}.json")
+        if not os.path.isfile(manifest):
+            return
+        sh(['docker', 'cp', manifest, 'nutrezee-api-1:/tmp/screen.json'])
+        sh(['docker', 'cp', f'{INTEGRATION}/api-vs-screen.mjs', 'nutrezee-api-1:/srv/api-vs-screen.mjs'])
+        out = sh(['docker', 'exec', '-u', '0', '-w', '/srv', 'nutrezee-api-1', 'node', 'api-vs-screen.mjs', day], timeout=120)
+        sh(['docker', 'exec', '-u', '0', 'nutrezee-api-1', 'rm', '-f', '/srv/api-vs-screen.mjs', '/tmp/screen.json'])
+        line = next((l for l in out.splitlines() if l.startswith('{')), None)
+        if line:
+            os.makedirs('/root/a85', exist_ok=True)
+            with open('/root/a85/api-vs-screen.log', 'a') as fh:
+                fh.write(line + '\n')
+    except Exception as error:  # measurement only
+        print('api-vs-screen skipped:', str(error)[:120])
+
+
 def main():
     # A81: one check at a time. A follow-up never queues behind a running check; the others wait.
     lock = open(LOCK_FILE, 'w')
@@ -391,6 +450,7 @@ def main():
                                                 else 'FAILED — using the reading from the sync'))
     screen = current_screen(day)
     if fix:
+        api_vs_screen(day)
         feed_labels(day, fix_log)  # A70.7: always complete the label database first (≈15 s)
     wa = whatsapp_labels(day, fix_log) if fix else None
     if fix and screen is None:
@@ -416,6 +476,8 @@ def main():
         wa = whatsapp_labels(day, fix_log)  # a repair can change an area's driver
         d = evaluate(day, screen)
 
+    if fix:
+        record_result(day, screen, d)  # a check-only run (--no-fix) may read an old screen: not a result
     report(day, screen, d, fix_log, started, wa=wa)
     return 0
 

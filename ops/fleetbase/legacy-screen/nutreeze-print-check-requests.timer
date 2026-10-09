@@ -1,0 +1,10 @@
+[Unit]
+Description=A85 look every minute for a print page waiting on a fresh legacy check
+
+[Timer]
+OnCalendar=*-*-* *:*:20
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

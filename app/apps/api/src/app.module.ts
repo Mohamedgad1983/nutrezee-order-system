@@ -65,6 +65,8 @@ import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity
 import { DriverLocationService } from './modules/m25-label/driver-location.service';
 import { AreaMoveService } from './modules/m25-label/area-move.service';
 import { AreaMoveController } from './modules/m25-label/area-move.controller';
+import { PrintCheckService } from './modules/m25-label/print-check.service';
+import { PrintCheckController } from './modules/m25-label/print-check.controller';
 import {
   PartnerLabelSource, type PartnerLabelMealSourceGateway,
 } from './modules/m25-label/partner-label-source';
@@ -83,7 +85,7 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
-    PackingController, DeliveryController, LabelController, AreaMoveController,
+    PackingController, DeliveryController, LabelController, AreaMoveController, PrintCheckController,
     FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
@@ -323,6 +325,12 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
       // driver's assignments directly from Fleetbase. No second Nutrezee driver identity exists.
       provide: FleetbaseIdentityService,
       useFactory: () => new FleetbaseIdentityService(),
+    },
+    {
+      // A85 — results of the Batch Labels vs legacy screen check, shown on the print page.
+      provide: PrintCheckService,
+      useFactory: (pool: Pool, audit: AuditService) => new PrintCheckService(pool, audit),
+      inject: [POOL, AuditService],
     },
     {
       // A77 — one-day area moves between drivers (decision ledger only; the Fleetbase sync applies them).

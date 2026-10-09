@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.23');
+    expect(packageJson.version).toBe('0.3.24');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
