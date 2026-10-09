@@ -134,6 +134,74 @@ describe('TS-U A83 WhatsApp subscribers print as their own group', () => {
   });
 });
 
+describe('TS-U A85 the page checks itself against the legacy admin', () => {
+  const result = (over: Record<string, unknown> = {}) => ({
+    status: 'ok', finished_at: '2026-09-05T21:50:00Z', age_seconds: 120, fresh: true,
+    screen_orders: 773, labels: 773, differences: 0, without_driver: 0, whatsapp_labels: 33, detail: {}, ...over,
+  });
+
+  it('says green only for a fresh check with no difference, red with the fallback, amber while checking', () => {
+    const state = batch();
+    state.today = '2026-09-05';
+    expect(state.printCheckText).toBe('');
+    state.printCheck = { verified: true, pending: null, latest: result({ without_driver: 5 }) };
+    expect(state.printCheckTone).toBe('ok');
+    expect(state.printCheckText).toContain('773 = 773');
+    expect(state.printCheckText).toContain('5 without a driver yet');
+    state.printCheck = { verified: false, pending: null, latest: result({ status: 'differences', differences: 3 }) };
+    expect(state.printCheckTone).toBe('bad');
+    expect(state.printCheckText).toContain('اطبع من السيستم القديم');
+    state.printCheck = { verified: false, pending: null, latest: result({ status: 'failed' }) };
+    expect(state.printCheckTone).toBe('bad');
+    state.printCheck = { verified: false, pending: { id: 'r1' }, latest: result({ fresh: false, age_seconds: 4000 }) };
+    expect(state.printCheckTone).toBe('busy');
+    state.printCheck = { verified: false, pending: null, latest: null };
+    expect(state.printCheckTone).toBe('busy');
+    // a day already delivered shows no line
+    state.today = '2026-09-07';
+    expect(state.printCheckText).toBe('');
+  });
+
+  it('a newer result reloads the labels and keeps the operator on the same driver, never during a print', async () => {
+    const state = batch();
+    state.today = '2026-09-05';
+    state.showSelection = vi.fn();
+    state.chooseFilterValue('d2');
+    const moved = { ...options, orders: orders.map((order) => ({ ...order, driver_id: 'd2', driver_label: 'Car 2' })) };
+    state.request = vi.fn(async (path: string) => (path.includes('print-check')
+      ? { verified: true, pending: null, latest: result({ finished_at: '2026-09-05T21:55:00Z' }) }
+      : moved));
+    state.printCheckSeen = '2026-09-05T21:50:00Z';
+    await state.readPrintCheck('GET', '2026-09-06');
+    expect(state.filterValue).toBe('d2');
+    expect(state.selectionIds).toEqual(['day:o1', 'day:o2', 'day:o3']);
+    // same result again: nothing is reloaded
+    const calls = state.request.mock.calls.length;
+    await state.readPrintCheck('GET', '2026-09-06');
+    expect(state.request.mock.calls.length).toBe(calls + 1);
+    // while the operator is confirming a print, the list is left alone
+    state.awaitingConfirmation = true;
+    state.request = vi.fn(async (path: string) => (path.includes('print-check')
+      ? { verified: true, pending: null, latest: result({ finished_at: '2026-09-05T22:00:00Z' }) }
+      : options));
+    await state.readPrintCheck('GET', '2026-09-06');
+    expect(state.request).toHaveBeenCalledTimes(1);
+    expect(state.selectionIds).toEqual(['day:o1', 'day:o2', 'day:o3']);
+  });
+
+  it('the first reading of a day never reloads, and a failed read leaves the page working', async () => {
+    const state = batch();
+    state.today = '2026-09-05';
+    state.request = vi.fn(async () => ({ verified: true, pending: null, latest: result() }));
+    await state.readPrintCheck('POST', '2026-09-06');
+    expect(state.request).toHaveBeenCalledTimes(1);
+    expect(state.request.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    state.request = vi.fn(async () => { throw new Error('http_503'); });
+    await expect(state.readPrintCheck('GET', '2026-09-06')).resolves.toBeUndefined();
+    expect(state.printCheckTone).toBe('ok');
+  });
+});
+
 describe('TS-U A55 batch-label dropdown selection', () => {
   it('shows all driver orders and narrows/restores that group through the order dropdown', () => {
     const state = batch();

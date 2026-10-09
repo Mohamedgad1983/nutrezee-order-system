@@ -28,6 +28,11 @@ export default class BatchLabelsComponent extends Component {
     @tracked preview = null;
     @tracked reprintReason = '';
     @tracked freshness = null;
+    // A85: the page's own "matches the legacy admin" state. Nobody presses anything: the page asks
+    // for a fresh check when it opens, watches it, and reloads the labels when a new result lands.
+    @tracked printCheck = null;
+    printCheckTimer = null;
+    printCheckSeen = '';
     @tracked awaitingConfirmation = false;
     @tracked error = null;
     @tracked notice = null;
@@ -35,6 +40,108 @@ export default class BatchLabelsComponent extends Component {
     constructor() {
         super(...arguments);
         void this.loadOptions();
+    }
+
+    willDestroy() {
+        super.willDestroy(...arguments);
+        this.stopPrintCheckWatch();
+    }
+
+    get printCheckTone() {
+        const check = this.printCheck;
+        if (!check || this.selectedDate < this.today) return '';
+        if (check.verified) return 'ok';
+        if (check.pending) return 'busy';
+        if (check.latest && check.latest.fresh && check.latest.status !== 'ok') return 'bad';
+        return 'busy';
+    }
+
+    get printCheckText() {
+        const check = this.printCheck;
+        const tone = this.printCheckTone;
+        if (!tone) return '';
+        const latest = check.latest;
+        const minutes = latest ? Math.max(0, Math.round(latest.age_seconds / 60)) : null;
+        if (tone === 'ok') {
+            const waiting = latest.without_driver ? ` · ${latest.without_driver} without a driver yet / من غير سواق لسه` : '';
+            return `✔ Matches the legacy admin: ${latest.labels} = ${latest.screen_orders}, checked ${minutes} min ago / `
+                + `مطابق للسيستم القديم، آخر مراجعة من ${minutes} دقيقة${waiting}`;
+        }
+        if (tone === 'bad') {
+            return latest.status === 'failed'
+                ? '✖ The legacy admin could not be read. Print from the legacy admin until this line turns green. / '
+                    + 'السيستم القديم ما اتقراش. اطبع من السيستم القديم لحد ما السطر ده يبقى أخضر.'
+                : `✖ Not matching the legacy admin yet (${latest.differences} difference(s)); it is being repaired and this page `
+                    + 'refreshes by itself. Print from the legacy admin until this line turns green. / '
+                    + `لسه مش مطابق للسيستم القديم (${latest.differences} فرق) وجاري التصليح والصفحة هتتحدث لوحدها. `
+                    + 'اطبع من السيستم القديم لحد ما السطر ده يبقى أخضر.';
+        }
+        return 'Checking against the legacy admin now (about 3 minutes). The labels refresh by themselves. / '
+            + 'جاري المراجعة مع السيستم القديم دلوقتي (حوالي 3 دقايق). الملصقات هتتحدث لوحدها.';
+    }
+
+    /** POST when the day opens (records the need for a fresh check), then a quiet watch every 20 s. */
+    async watchPrintCheck() {
+        this.stopPrintCheckWatch();
+        const date = this.selectedDate;
+        if (!date || typeof window === 'undefined') return;
+        this.printCheckSeen = '';
+        await this.readPrintCheck('POST', date);
+        this.printCheckTimer = window.setInterval(() => { void this.tickPrintCheck(date); }, 20000);
+    }
+
+    stopPrintCheckWatch() {
+        if (this.printCheckTimer && typeof window !== 'undefined') window.clearInterval(this.printCheckTimer);
+        this.printCheckTimer = null;
+    }
+
+    async tickPrintCheck(date) {
+        if (this.isDestroyed || this.isDestroying || date !== this.selectedDate) return this.stopPrintCheckWatch();
+        const stale = !this.printCheck?.pending && !this.printCheck?.latest?.fresh;
+        await this.readPrintCheck(stale ? 'POST' : 'GET', date);
+    }
+
+    async readPrintCheck(method, date) {
+        try {
+            const state = method === 'POST'
+                ? await this.request('/nz/fleet-ops/labels/print-check', { method, body: JSON.stringify({ delivery_date: date }) })
+                : await this.request(`/nz/fleet-ops/labels/print-check?delivery_date=${encodeURIComponent(date)}`);
+            if (this.isDestroyed || this.isDestroying || date !== this.selectedDate) return;
+            this.printCheck = state;
+            const finished = state?.latest?.finished_at ?? '';
+            const first = this.printCheckSeen === '';
+            if (finished && finished !== this.printCheckSeen) {
+                this.printCheckSeen = finished;
+                // A newer result means drivers or orders may have changed: show them without a click.
+                if (!first) await this.refreshKeepingSelection();
+            } else if (first) {
+                this.printCheckSeen = finished || '-';
+            }
+        } catch (error) {
+            // The status line is extra safety; the page keeps working without it.
+        }
+    }
+
+    /** Re-read the day and keep the operator's driver / area / time choice; never during a print. */
+    async refreshKeepingSelection() {
+        if (this.loading || this.preparing || this.confirming || this.awaitingConfirmation) return;
+        const keep = { type: this.filterType, value: this.filterValue, time: this.timeValue, order: this.orderValue };
+        try {
+            const query = `?delivery_date=${encodeURIComponent(this.selectedDate)}`;
+            const options = await this.request(`/nz/fleet-ops/labels/batch/options${query}`);
+            if (this.isDestroyed || this.isDestroying || options.delivery_date !== this.selectedDate) return;
+            if (this.loading || this.preparing || this.confirming || this.awaitingConfirmation) return;
+            this.options = options;
+            this.filterType = this.filterTypes.some((option) => option.id === keep.type) ? keep.type : (this.filterTypes[0]?.id ?? 'area');
+            this.filterValue = this.filterOptions.some((option) => option.id === keep.value) ? keep.value : (this.filterOptions[0]?.id ?? '');
+            this.timeValue = this.timeOptions.some((option) => option.id === keep.time) ? keep.time : '';
+            this.orderValue = this.orderOptions.some((option) => option.id === keep.order) ? keep.order : (this.isOrderFilter ? (this.orderOptions[0]?.id ?? '') : '');
+            this.resetPreview();
+            this.selectAllFiltered();
+            await this.showSelection();
+        } catch (error) {
+            // keep what is on screen; the next result tries again
+        }
     }
 
     get filtersDisabled() {
@@ -311,6 +418,7 @@ export default class BatchLabelsComponent extends Component {
             if (revision === this.optionsRevision) this.loading = false;
         }
         if (revision === this.optionsRevision) await this.showSelection();
+        if (revision === this.optionsRevision && this.options) void this.watchPrintCheck();
     }
 
     /** A54: the chosen driver's (or area's) labels for the chosen day appear as a view at once. */
