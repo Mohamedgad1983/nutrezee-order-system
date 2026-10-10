@@ -24,3 +24,11 @@ Friday evening the follow-ups targeted "tomorrow" = Saturday, already printed, w
 ## Partner API vs legacy screen (147 simultaneous comparisons, 2026-10-09/10)
 
 Equal in 139. In 8 the API differed by 1–2 orders (membership) or 1–2 drivers, including 23:46 and 01:11 — the minutes when legacy is being edited. The API is close to live but not exact at print time, so the legacy screen stays the reference.
+
+## A89 — the note in large type (same day)
+
+Owner's second photo (order 29138): a 150-character note printed at 1.7 mm in the half-width box beside the barcode — "very small".
+
+Change: on a label with a note the barcode stays under the customer column (footer limited to the left 51%), and the note is the last block of the right column, from the totals down to the bottom edge of the label. `fitLabels()` prints it in the largest of six sizes that fits that label (3 mm down to 1.75 mm); from the third level the dishes table is tightened first so the note keeps its size. Labels without a note are unchanged.
+
+Checked in a real browser with the real template and stylesheet (6 cases): the photographed label 3 mm (was 1.7), a short note 3 mm, an Arabic note 3 mm, seven dishes with a 160-character note 2.35 mm (was 1.7, and clipped before the table tightening), no note unchanged; Phone visible and nothing over the barcode in all. Console `fleetbase-console:a89-1`, extension 0.3.26 (rollback `pre-a89-20261010`), gate 13/13, candidate booted before the swap at 20:39 Kuwait. **Not yet printed on paper.**
