@@ -1303,34 +1303,58 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     text-align: center;
 }
 
-/* A78 (owner, 2026-10-07): notes are written often. The info column has room for one line and
-   anything longer would run over the barcode, so a written note gets a boxed area beside it. */
-.nz-legacy-label__barcode--notes {
-    display: grid;
-    grid-template-columns: 44mm minmax(0, 1fr);
-    gap: 1.2mm;
-    align-items: start;
+/* A78/A89 (owner): notes are written often and must be easy to read. A label with a note keeps the
+   barcode under the customer column; the whole right column below the dishes, down to the bottom
+   edge, is the note. fitLabels() then picks the largest type that fits that label's note. */
+.nz-legacy-label--notes .nz-legacy-label__barcode {
+    width: 51%;
+}
+
+.nz-legacy-label--notes .nz-legacy-label__body {
+    overflow: visible;
+}
+
+.nz-legacy-label--notes .nz-legacy-label__meals {
+    display: flex;
+    flex-direction: column;
+    height: 55.8mm; /* dishes column (45.2mm) + the free half of the barcode row (10.6mm) */
+    min-height: 0;
 }
 
 .nz-label-notes {
-    height: 9.4mm;
+    flex: 1 1 0;
+    min-height: 8mm;
     box-sizing: border-box;
-    padding: 0.4mm 0.9mm;
+    margin-top: 1mm;
+    padding: 0.6mm 1mm;
     border: 0.3mm solid #000;
     border-radius: 0.6mm;
     overflow: hidden;
-    font-size: 2.05mm;
-    font-weight: 600;
-    line-height: 1.14;
+    font-size: 3mm;
+    font-weight: 700;
+    line-height: 1.16;
     text-align: start;
     overflow-wrap: anywhere;
     unicode-bidi: plaintext;
 }
 
-.nz-label-notes--long {
-    font-size: 1.7mm;
-    line-height: 1.1;
-}
+.nz-notes-fit-1 .nz-label-notes { font-size: 2.65mm; }
+.nz-notes-fit-2 .nz-label-notes { font-size: 2.35mm; }
+/* From level 3 the dishes table is set a little tighter first, so the note keeps its size. */
+.nz-notes-fit-3 .nz-label-notes { font-size: 2.35mm; }
+.nz-notes-fit-4 .nz-label-notes { font-size: 2.1mm; line-height: 1.13; }
+.nz-notes-fit-5 .nz-label-notes { font-size: 1.9mm; line-height: 1.11; }
+.nz-notes-fit-6 .nz-label-notes { font-size: 1.75mm; line-height: 1.1; }
+.nz-notes-fit-3 .nz-meals-table, .nz-notes-fit-4 .nz-meals-table,
+.nz-notes-fit-5 .nz-meals-table, .nz-notes-fit-6 .nz-meals-table { font-size: 1.8mm; line-height: 1.12; }
+.nz-notes-fit-3 .nz-meals-table td, .nz-notes-fit-4 .nz-meals-table td,
+.nz-notes-fit-5 .nz-meals-table td, .nz-notes-fit-6 .nz-meals-table td,
+.nz-notes-fit-3 .nz-meals-table th, .nz-notes-fit-4 .nz-meals-table th,
+.nz-notes-fit-5 .nz-meals-table th, .nz-notes-fit-6 .nz-meals-table th { padding: 0.2mm 0.4mm; }
+.nz-notes-fit-3 .nz-total-row, .nz-notes-fit-4 .nz-total-row,
+.nz-notes-fit-5 .nz-total-row, .nz-notes-fit-6 .nz-total-row { margin-top: 0.5mm; font-size: 1.8mm; }
+.nz-notes-fit-3 .nz-label-notes, .nz-notes-fit-4 .nz-label-notes,
+.nz-notes-fit-5 .nz-label-notes, .nz-notes-fit-6 .nz-label-notes { margin-top: 0.6mm; padding: 0.4mm 0.9mm; }
 
 .nz-barcode-svg svg {
     display: block;

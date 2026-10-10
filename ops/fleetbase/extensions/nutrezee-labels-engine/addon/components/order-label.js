@@ -177,6 +177,16 @@ export function fitLabels(root) {
             label.classList.remove(...levels);
             label.classList.add(level);
         }
+        // A89: the note is printed in the largest type that fits its box on this label.
+        const notes = label.querySelector('.nz-label-notes');
+        if (!notes) return;
+        const noteLevels = ['nz-notes-fit-1', 'nz-notes-fit-2', 'nz-notes-fit-3', 'nz-notes-fit-4', 'nz-notes-fit-5', 'nz-notes-fit-6'];
+        label.classList.remove(...noteLevels);
+        for (const level of noteLevels) {
+            if (notes.scrollHeight <= notes.clientHeight + 1) break;
+            label.classList.remove(...noteLevels);
+            label.classList.add(level);
+        }
     });
 }
 

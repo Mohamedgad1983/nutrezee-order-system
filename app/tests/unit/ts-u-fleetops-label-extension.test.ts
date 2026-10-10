@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.25');
+    expect(packageJson.version).toBe('0.3.26');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -296,9 +296,11 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(render({ notes: 'x'.repeat(150) }).notesLong).toBe(true);
     expect(render({}).hasNotes).toBe(false);
     expect(template).toContain("{{#unless this.label.hasNotes}}<div><strong>Notes:</strong> -</div>{{/unless}}");
-    expect(template).toMatch(/nz-legacy-label__barcode--notes[\s\S]*nz-barcode-cell[\s\S]*nz-label-notes[\s\S]*this\.label\.notes/);
-    expect(styles).toMatch(/\.nz-label-notes \{[^}]*height: 9\.4mm;[^}]*overflow: hidden;/);
-    expect(styles).toMatch(/\.nz-legacy-label__barcode--notes \{[^}]*grid-template-columns: 44mm minmax\(0, 1fr\);/);
+    // A89: the note sits under the dishes and owns the column down to the bottom edge; the barcode
+    // stays under the customer column.
+    expect(template).toMatch(/nz-legacy-label--notes[\s\S]*nz-legacy-label__meals[\s\S]*nz-label-notes[\s\S]*this\.label\.notes[\s\S]*<\/section>[\s\S]*nz-legacy-label__barcode/);
+    expect(styles).toMatch(/\.nz-legacy-label--notes \.nz-legacy-label__barcode \{[^}]*width: 51%;/);
+    expect(styles).toMatch(/\.nz-label-notes \{[^}]*flex: 1 1 0;[^}]*overflow: hidden;[^}]*font-size: 3mm;/);
   });
 
   it('A88: a tall customer column is tightened until it fits above the barcode, never printed over it', () => {
@@ -323,6 +325,21 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     // running it again (reload, reprint) gives the same result
     fitLabels({ querySelectorAll: () => labels });
     expect([...labels[1]!.classes]).toEqual(['nz-legacy-label', 'nz-fit-1']);
+    // A89: the note gets the largest type that fits its own box
+    const noted = (needs: number) => {
+      const classes = new Set<string>(['nz-legacy-label']);
+      const level = () => Number([...classes].find((c) => c.startsWith('nz-notes-fit-'))?.slice(-1) ?? 0);
+      const fits = { clientHeight: 100, scrollHeight: 100 };
+      const notes = { clientHeight: 50, get scrollHeight() { return level() >= needs ? 50 : 70; } };
+      return {
+        classes,
+        classList: { add: (...n: string[]) => n.forEach((x) => classes.add(x)), remove: (...n: string[]) => n.forEach((x) => classes.delete(x)) },
+        querySelector: (selector: string) => (selector.includes('notes') ? notes : fits),
+      };
+    };
+    const withNotes = [noted(0), noted(3), noted(9)];
+    fitLabels({ querySelectorAll: () => withNotes });
+    expect(withNotes.map((l) => [...l.classes].filter((c) => c.includes('notes')))).toEqual([[], ['nz-notes-fit-3'], ['nz-notes-fit-6']]);
     expect(styles).toMatch(/\.nz-legacy-label__info \{[^}]*overflow: hidden;/);
     expect(styles).toMatch(/\.nz-info-row em \{[^}]*white-space: nowrap;/);
     expect(source).toMatch(/export function printDetached[\s\S]*?fitLabels\(/);
