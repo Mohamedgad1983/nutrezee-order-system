@@ -16,6 +16,7 @@ long random gaps, and a full stop for the day on the first problem.
 
 Usage: whatsapp-reminder.py                         daily run
        whatsapp-reminder.py --days 1,2                one-off run for other days-remaining values
+       whatsapp-reminder.py --cap 30                  one-off daily cap for this run
        whatsapp-reminder.py --optout 9655XXXXXXX     never message this number again
        whatsapp-reminder.py --test-to 9655XXXXXXX   send the message once to one number (owner test)
        whatsapp-reminder.py --report-email          email today's follow-up list to customer service
@@ -268,6 +269,8 @@ def main():
         return 75
     live = conf['WHATSAPP_LIVE'] == 'yes'
     days_ok = {int(d) for d in conf['REMIND_DAYS'].split(',')}
+    if '--cap' in sys.argv:  # one-off cap for today's run, e.g. --cap 30
+        conf['DAILY_CAP'] = sys.argv[sys.argv.index('--cap') + 1]
     cap, gap_min, gap_max = int(conf['DAILY_CAP']), max(120, int(conf['GAP_MIN'])), max(180, int(conf['GAP_MAX']))
     log(f"Starting WhatsApp renewal reminders ({'LIVE' if live else 'DRY-RUN — nothing is sent'}; days {sorted(days_ok)})")
     try:
@@ -306,6 +309,8 @@ def main():
         if phone[-8:] in recent or db.execute('SELECT 1 FROM reminder WHERE phone=? AND at>?', (phone, (now() - datetime.timedelta(days=7)).isoformat())).fetchone():
             skip('reminded_recently'); continue
         queue.append((phone, c))
+    # most urgent last: customers with 3 days left come first, then those never reminded with 2 and 1 days left
+    queue.sort(key=lambda item: -item[1]['days_remaining'])
     halt = f'{OUT}/.whatsapp-halt-{today}'
     done_today = db.execute("SELECT count(*) FROM reminder WHERE state='sent' AND substr(at,1,10)=?", (today,)).fetchone()[0]
     room = max(0, cap - done_today)
