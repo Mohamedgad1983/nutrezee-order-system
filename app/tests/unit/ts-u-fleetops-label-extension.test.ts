@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.24');
+    expect(packageJson.version).toBe('0.3.25');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -299,6 +299,33 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(template).toMatch(/nz-legacy-label__barcode--notes[\s\S]*nz-barcode-cell[\s\S]*nz-label-notes[\s\S]*this\.label\.notes/);
     expect(styles).toMatch(/\.nz-label-notes \{[^}]*height: 9\.4mm;[^}]*overflow: hidden;/);
     expect(styles).toMatch(/\.nz-legacy-label__barcode--notes \{[^}]*grid-template-columns: 44mm minmax\(0, 1fr\);/);
+  });
+
+  it('A88: a tall customer column is tightened until it fits above the barcode, never printed over it', () => {
+    const source = readFileSync(new URL('../../../ops/fleetbase/extensions/nutrezee-labels-engine/addon/components/order-label.js', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('export function fitLabels'), source.indexOf('export function printDetached'))
+      .replace('export function', 'function');
+    const fitLabels = new Function(`${body}; return fitLabels;`)() as (root: unknown) => void;
+    // a fake label whose column needs `needs` levels before it fits
+    const label = (needs: number) => {
+      const classes = new Set<string>(['nz-legacy-label']);
+      const level = () => ['nz-fit-1', 'nz-fit-2', 'nz-fit-3'].findIndex((name) => classes.has(name)) + 1;
+      const info = { clientHeight: 100, get scrollHeight() { return level() >= needs ? 100 : 130; } };
+      return {
+        classes,
+        classList: { add: (...n: string[]) => n.forEach((x) => classes.add(x)), remove: (...n: string[]) => n.forEach((x) => classes.delete(x)) },
+        querySelector: () => info,
+      };
+    };
+    const labels = [label(0), label(1), label(3), label(9)];
+    fitLabels({ querySelectorAll: () => labels });
+    expect(labels.map((l) => [...l.classes].filter((c) => c.startsWith('nz-fit')))).toEqual([[], ['nz-fit-1'], ['nz-fit-3'], ['nz-fit-3']]);
+    // running it again (reload, reprint) gives the same result
+    fitLabels({ querySelectorAll: () => labels });
+    expect([...labels[1]!.classes]).toEqual(['nz-legacy-label', 'nz-fit-1']);
+    expect(styles).toMatch(/\.nz-legacy-label__info \{[^}]*overflow: hidden;/);
+    expect(styles).toMatch(/\.nz-info-row em \{[^}]*white-space: nowrap;/);
+    expect(source).toMatch(/export function printDetached[\s\S]*?fitLabels\(/);
   });
 
   it('prints the driver box black-on-white with car number, name and phone only (A58)', () => {

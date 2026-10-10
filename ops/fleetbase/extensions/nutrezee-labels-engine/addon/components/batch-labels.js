@@ -3,7 +3,7 @@ import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { inject as service } from '@ember/service';
 import normalizeLabel, { describeFreshness } from '../utils/normalize-label';
-import { printDetached } from './order-label';
+import { printDetached, fitLabels } from './order-label';
 
 export default class BatchLabelsComponent extends Component {
     @service session;
@@ -532,6 +532,8 @@ export default class BatchLabelsComponent extends Component {
                 })),
             };
             this.notice = `${response.count} label(s) for ${this.selectedDate} shown below. No print has been recorded yet.`;
+            // A88: once the labels are on the page, make every customer column fit above its barcode.
+            if (typeof window !== 'undefined') window.requestAnimationFrame(() => fitLabels());
         } catch (error) {
             if (revision !== this.previewRevision) return;
             this.preview = null;

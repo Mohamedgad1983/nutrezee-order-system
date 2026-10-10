@@ -434,9 +434,15 @@ def main():
         print('another check is running; this follow-up is skipped')
         return 0
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    tomorrow = datetime.datetime.now(KW).date() + datetime.timedelta(days=1)
+    now = datetime.datetime.now(KW)
+    tomorrow = now.date() + datetime.timedelta(days=1)
+    if FOLLOW_UP and now.hour >= 12:
+        # A88: labels are printed at 01:00 for the NEXT day, so in the evening the day being prepared
+        # is the day after tomorrow (Friday evening -> Sunday). On 2026-10-09 the evening runs watched
+        # Saturday, already printed, while Sunday's drivers were being set in legacy.
+        tomorrow += datetime.timedelta(days=1)
     if FOLLOW_UP and tomorrow.weekday() == 4:
-        # A84: no deliveries on Friday, so on Thursday evening the day being prepared is Saturday.
+        # A84: no deliveries on Friday; prepare the next delivery day instead.
         tomorrow += datetime.timedelta(days=1)
     day = args[0] if args else tomorrow.isoformat()
     fix = '--no-fix' not in sys.argv
