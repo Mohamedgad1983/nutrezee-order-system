@@ -84,6 +84,7 @@ export default class OrderLabelComponent extends Component {
                 this.request(`/nz/fleet-ops/labels/${encoded}/print-history`),
             ]);
             this.label = normalizeLabel(document);
+            if (typeof window !== 'undefined') window.requestAnimationFrame(() => fitLabels());
             this.history = Array.isArray(history?.items) ? history.items : [];
             this.freshness = await this.loadFreshness(document?.delivery_date);
         } catch (error) {
@@ -160,11 +161,31 @@ function messageOf(error) {
  * inside a transformed container, which turns `position: fixed` into a panel-relative offset and
  * clipped the 100 x 70 mm sheet. The root exists only while the print dialog is open.
  */
+/**
+ * A88: a label's customer column has a fixed height above the barcode. When a long area, street or
+ * plan name makes it taller, tighten that label's type one level at a time until it fits, so the
+ * phone line is never pushed under the barcode. Measured in the browser that prints.
+ */
+export function fitLabels(root) {
+    const levels = ['nz-fit-1', 'nz-fit-2', 'nz-fit-3'];
+    (root || document).querySelectorAll('.nz-legacy-label').forEach((label) => {
+        const info = label.querySelector('.nz-legacy-label__info');
+        if (!info) return;
+        label.classList.remove(...levels);
+        for (const level of levels) {
+            if (info.scrollHeight <= info.clientHeight + 1) break;
+            label.classList.remove(...levels);
+            label.classList.add(level);
+        }
+    });
+}
+
 export function printDetached(selector, modeClass) {
     const source = document.querySelector(selector);
     if (!source) {
         throw new Error('Nothing to print yet. Reload the label and try again.');
     }
+    fitLabels(source.classList?.contains('nz-legacy-label') ? source.parentNode : source);
     const root = document.createElement('div');
     root.className = 'nz-print-root';
     root.appendChild(source.cloneNode(true));

@@ -1131,8 +1131,29 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
 .nz-legacy-label__info {
     min-width: 0;
+    min-height: 0;
     padding-right: 1.4mm;
+    /* A88: this column may never paint over the barcode below it. fitLabels() tightens the type
+       until the content fits; whatever still does not fit is cut here, not printed on the barcode. */
+    overflow: hidden;
 }
+
+/* A88 fit levels, applied by fitLabels() only to a label whose customer column is too tall
+   (long area / street / plan name). Level 0 is the approved design, untouched. */
+.nz-fit-1 .nz-address-block { font-size: 1.95mm; line-height: 1.24; }
+.nz-fit-1 .nz-info-row { min-height: 2.85mm; }
+.nz-fit-1 .nz-package-row { min-height: 0; font-size: 2mm; }
+.nz-fit-1 .nz-id-row { min-height: 4.2mm; }
+.nz-fit-2 .nz-address-block { font-size: 1.8mm; line-height: 1.18; }
+.nz-fit-2 .nz-info-row { min-height: 2.6mm; font-size: 1.9mm; }
+.nz-fit-2 .nz-package-row { min-height: 0; font-size: 1.85mm; }
+.nz-fit-2 .nz-id-row { min-height: 3.6mm; }
+.nz-fit-2 .nz-info-group { padding: 0.3mm 0; }
+.nz-fit-3 .nz-address-block { font-size: 1.62mm; line-height: 1.12; }
+.nz-fit-3 .nz-info-row { min-height: 2.3mm; font-size: 1.75mm; }
+.nz-fit-3 .nz-package-row { min-height: 0; font-size: 1.7mm; }
+.nz-fit-3 .nz-id-row { min-height: 3.2mm; font-size: 1.8mm; }
+.nz-fit-3 .nz-info-group { padding: 0.2mm 0; }
 
 .nz-legacy-label__meals {
     min-width: 0;
@@ -1146,7 +1167,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
 .nz-info-row {
     display: grid;
-    grid-template-columns: 17mm minmax(0, 1fr);
+    grid-template-columns: 19mm minmax(0, 1fr);
     gap: 0.8mm;
     min-height: 3.1mm;
     border-bottom: 0.1mm dotted #c7c7c7;
@@ -1158,6 +1179,8 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
 .nz-info-row em {
     color: #272727;
+    /* A88: on the print PC the colon of "Days Remaining :" dropped to a line of its own. */
+    white-space: nowrap;
 }
 
 .nz-info-row strong {
