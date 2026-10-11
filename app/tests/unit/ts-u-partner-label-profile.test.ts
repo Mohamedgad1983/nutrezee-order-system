@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  PartnerLabelProfileSource, addressFromPartner, labelText, legacyDaysRemaining, localPhone,
+  PartnerLabelProfileSource, addressFromPartner, daysRemaining, isKitchenPickup, labelText, localPhone,
 } from '../../apps/api/src/modules/m25-label/partner-label-profile';
 
 // TS-U (WP-OPS-A78) — the customer part of the legacy label, read from Partner at print time.
@@ -22,6 +22,10 @@ const subscription = {
   delivery: { delivery_address_id: 7913, off_weekdays: [5] },
   start_date: '2026-09-12', end_date: '2026-10-11', frozen_days: 0,
 };
+const freeze = (id: number, date: string, extra: Record<string, unknown> = {}) => ({
+  change_id: id, subscription_id: 28251, change_type: 'freeze', effective_from: date, effective_to: date,
+  is_reverted: false, deleted: false, ...extra,
+});
 const address = {
   address_id: 7913, name: '3', street: '314', building: '2', house_no: '13', flat_no: null, landmark: null,
   extra_directions: 'home', area_en: 'Old Area', deleted: false,
@@ -51,17 +55,28 @@ describe('TS-U partner label profile (A78)', () => {
     expect(localPhone(null)).toBeNull();
   });
 
-  it('A80: days remaining follows the legacy rule (values read off the legacy screen on 2026-10-08)', () => {
+  it('A90: days remaining is the delivery days still ahead, past freezes not taken off again', () => {
     const fri = [5];
     // order 29203 on its label for the 7th: ends on the 11th, Friday off -> 7, 8, 10, 11
-    expect(legacyDaysRemaining('2026-10-07', { endDate: '2026-10-11', offWeekdays: fri, frozenDays: 0 })).toBe(4);
-    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-11-08', offWeekdays: fri, frozenDays: 0 })).toBe(27); // 30545
-    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-10-20', offWeekdays: fri, frozenDays: 2 })).toBe(9); // 29432
-    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-11-02', offWeekdays: fri, frozenDays: 1 })).toBe(21); // 27097
-    expect(legacyDaysRemaining('2026-10-08', { endDate: '2026-10-19', offWeekdays: fri, frozenDays: 29 })).toBe(-19); // 27067
-    expect(legacyDaysRemaining('2026-10-10', { endDate: '2026-10-09', offWeekdays: fri, frozenDays: 0 })).toBe(0);
-    expect(legacyDaysRemaining('2026-10-10', { endDate: null, offWeekdays: fri, frozenDays: 0 })).toBeNull();
-    expect(legacyDaysRemaining('2026-10-10', { endDate: '2099-01-01', offWeekdays: fri, frozenDays: 0 })).toBeNull();
+    expect(daysRemaining('2026-10-07', { endDate: '2026-10-11', offWeekdays: fri })).toBe(4);
+    // order 27902 on 2026-10-11: 55 bought, 34 delivered; 12 frozen days of which one is ahead
+    expect(daysRemaining('2026-10-11', { endDate: '2026-11-04', offWeekdays: fri }, new Set(['2026-10-03', '2026-10-17']))).toBe(21);
+    // a freeze on an off day or after the end date takes nothing off
+    expect(daysRemaining('2026-10-11', { endDate: '2026-11-04', offWeekdays: fri }, new Set(['2026-10-16', '2026-11-05']))).toBe(22);
+    expect(daysRemaining('2026-10-10', { endDate: '2026-10-09', offWeekdays: fri })).toBe(0);
+    expect(daysRemaining('2026-10-10', { endDate: null, offWeekdays: fri })).toBeNull();
+    expect(daysRemaining('2026-10-10', { endDate: '2099-01-01', offWeekdays: fri })).toBeNull();
+  });
+
+  it('A91: a Qurain pickup note means the customer collects from the central kitchen', () => {
+    expect(isKitchenPickup('Pickup Qurain/100c/180p')).toBe(true);
+    expect(isKitchenPickup('Pickup Qurain branch')).toBe(true);
+    expect(isKitchenPickup('day before / pick up from Al Qurain')).toBe(true);
+    expect(isKitchenPickup('استلام من القرين')).toBe(true);
+    // another branch is still carried by a driver; a bare branch name is not a pickup
+    expect(isKitchenPickup('day before/ pick up from jahra branch ,')).toBe(false);
+    expect(isKitchenPickup('day before - qurain branch - 160 c')).toBe(false);
+    expect(isKitchenPickup(null)).toBe(false);
   });
 
   it('maps a Partner address the way the legacy label prints it', () => {
@@ -77,18 +92,19 @@ describe('TS-U partner label profile (A78)', () => {
       'daily-deliveries': () => page([daily]),
       subscriptions: () => page([subscription, { ...subscription, subscription_id: 1, deleted: true }]),
       'customer-addresses': () => page([address]),
+      'subscription-changes': () => page([freeze(1, '2026-10-10')]),
     });
     await expect(instance.profileForOrder('29203', DATE)).resolves.toEqual({
       userId: '1119', phone: '98992558',
       packageName: '(تقريبا) 720- 1920 سعرة حرارية', mealsPerDay: 3, snacksPerDay: 2,
       address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
       notes: 'Thursday Double Box if no answer call 97504160',
-      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: 4,
+      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: 3,
     });
     await expect(instance.profileForOrder('WA-98992558', DATE)).resolves.toBeNull();
     await instance.profileForOrder('29203', DATE);
     // one day page + one page of each list, shared by every label
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
     for (const call of fetchImpl.mock.calls) {
       expect((call[1] as RequestInit).headers).toMatchObject({ 'X-Api-Key': 'test-key' });
       expect(String(call[0])).not.toContain('test-key');
@@ -138,5 +154,48 @@ describe('TS-U partner label profile (A78)', () => {
       'customer-addresses': () => page([address]),
     });
     expect((await instance.profileForOrder('29203', DATE))?.userId).toBe('2000');
+  });
+
+  it('A90: reads every freeze once, then only the changed ones; a reverted freeze counts again', async () => {
+    let now = Date.parse('2026-10-07T09:00:00Z');
+    const asked: string[] = [];
+    let changed: unknown[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      const endpoint = url.pathname.split('/').pop()!;
+      if (endpoint === 'daily-deliveries') return page([daily]);
+      if (endpoint === 'subscriptions') return page([subscription]);
+      if (endpoint === 'customer-addresses') return page([address]);
+      asked.push(url.search);
+      return page(url.searchParams.has('since') ? changed : [
+        freeze(1, '2026-10-08'), freeze(2, '2026-10-10'), freeze(3, '2026-09-20'),
+        freeze(4, '2026-10-11', { is_reverted: true }), freeze(5, '2026-10-11', { subscription_id: 99 }),
+      ]);
+    });
+    const instance = new PartnerLabelProfileSource({
+      baseUrl: 'https://nutreeze.com/integration', apiKey: 'test-key', fetchImpl, now: () => now, referenceTtlMs: 1000,
+    });
+    expect((await instance.profileForOrder('29203', DATE))?.daysRemaining).toBe(2);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain('change_type=freeze');
+    expect(asked[0]).not.toContain('since');
+
+    changed = [freeze(2, '2026-10-10', { is_reverted: true })];
+    now += 5000;
+    await instance.profileForOrder('29203', DATE); // serves the older copy, refreshes behind it
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(asked[1]).toContain('since=');
+    expect((await instance.profileForOrder('29203', DATE))?.daysRemaining).toBe(3);
+  });
+
+  it('A90: without the freeze list the label still prints a count, and a failed read is not repeated per label', async () => {
+    const { instance, fetchImpl } = source({
+      'daily-deliveries': () => page([daily]),
+      subscriptions: () => page([subscription]),
+      'customer-addresses': () => page([address]),
+    });
+    expect((await instance.profileForOrder('29203', DATE))?.daysRemaining).toBe(4);
+    expect((await instance.profileForOrder('29203', DATE))?.daysRemaining).toBe(4);
+    expect(fetchImpl.mock.calls.filter((call) => String(call[0]).includes('subscription-changes'))).toHaveLength(1);
   });
 });

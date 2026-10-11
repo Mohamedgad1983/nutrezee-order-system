@@ -15,7 +15,7 @@ import {
   type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
 import { validPin } from './order-status';
-import { localPhone, type PartnerLabelProfileGateway } from './partner-label-profile';
+import { isKitchenPickup, localPhone, type PartnerLabelProfileGateway } from './partner-label-profile';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -43,6 +43,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 const NO_AREA_KEY = '__no_area__';
 const NO_TIME_KEY = '__no_time__';
+/** Printed where the driver's name goes when the customer collects from the central kitchen. */
+const KITCHEN_PICKUP_NAME = 'Customer pickup - Kitchen / استلام العميل من المطبخ';
 
 export interface BatchLabelCandidate {
   selectionId: string;
@@ -205,6 +207,10 @@ export class LabelService {
       direction: (r.delivery_notes as string) ?? null,
     };
 
+    const notes = profile?.notes ?? (r.customer_notes as string) ?? null;
+    // A91: the customer collects this box from the central kitchen — no driver on the label.
+    const pickup = isKitchenPickup(notes);
+
     return {
       order_id: orderId,
       customer_id: r.customer_id as string,
@@ -225,15 +231,15 @@ export class LabelService {
       // Imported customers are keyed by phone, which is not a user id: print the code or nothing.
       legacy_user_id: profile?.userId ?? (storedUserId && !storedUserId.startsWith('+') ? storedUserId : null),
       driver_ref: driverRef,
-      driver_color: source?.driverColor ?? null,
-      driver_phone: source?.driverPhone ?? null,
-      driver_name: source?.driverName ?? null,
-      vehicle_number: source?.vehicleNumber ?? null,
+      driver_color: pickup ? null : source?.driverColor ?? null,
+      driver_phone: pickup ? null : source?.driverPhone ?? null,
+      driver_name: pickup ? KITCHEN_PICKUP_NAME : source?.driverName ?? null,
+      vehicle_number: pickup ? 'PICKUP' : source?.vehicleNumber ?? null,
       order_number: r.order_number as string,
       address,
       // The legacy label prints the local number, without a country prefix.
       phone: profile?.phone ?? localPhone(r.phone_normalized),
-      notes: profile?.notes ?? (r.customer_notes as string) ?? null,
+      notes,
       meals,
       meal_source: mealSource,
       totals: totalsOf(meals),
