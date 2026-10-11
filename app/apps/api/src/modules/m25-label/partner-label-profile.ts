@@ -53,6 +53,8 @@ interface PartnerLabelProfileConfig {
   /** Subscriptions + addresses (about 30 pages): refreshed in the background after this age. */
   referenceTtlMs?: number;
   dayTtlMs?: number;
+  /** Freeze records (about 50 pages): read in full after this age, only the changed ones in between. */
+  freezeFullTtlMs?: number;
 }
 
 interface SubscriptionRef {
@@ -62,7 +64,6 @@ interface SubscriptionRef {
   snacksPerDay: number | null;
   endDate: string | null;
   offWeekdays: number[];
-  frozenDays: number;
 }
 
 interface Reference {
@@ -76,6 +77,13 @@ interface DayRow {
 }
 
 interface Cached<T> { loadedAt: number; value: T }
+
+/** Freeze records by change id; `date` is null once the freeze was reverted or deleted. */
+interface FreezeBook {
+  changes: Map<string, { subscriptionId: string; date: string | null }>;
+  bySubscription: Map<string, Set<string>>;
+  fullLoadedAt: number;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -117,16 +125,16 @@ export function localPhone(value: unknown): string | null {
 }
 
 /**
- * A80 — "days remains" exactly as the legacy admin shows it: delivery days (weekdays that are not
- * the subscription's off days) from the delivery date to the current end date, minus the
- * subscription's frozen days. Checked against 20 orders read off the legacy Driver Orders screen on
- * 2026-10-08: 19 equal, including one negative figure (a subscription with 29 frozen days shows
- * -19 there too); the one that differs is a "Thursday double box" subscription ending that week.
- * Counting the mirrored future days was wrong: Partner lists only the days already generated.
+ * A90 — delivery days the customer still receives, counted from the delivery date to the current
+ * end date: weekdays that are not the subscription's off days, minus the freezes that are still
+ * ahead. The end date already carries the past freezes, so subtracting every frozen day (the legacy
+ * admin's figure, A80) understates it: order 27902 on 2026-10-11 printed 10 with 21 boxes left
+ * (55 bought, 34 delivered). Owner's decision 2026-10-11: print the real count.
  */
-export function legacyDaysRemaining(
+export function daysRemaining(
   deliveryDate: string,
-  subscription: { endDate: string | null; offWeekdays: number[]; frozenDays: number },
+  subscription: { endDate: string | null; offWeekdays: number[] },
+  upcomingFreezes: ReadonlySet<string> = new Set(),
 ): number | null {
   if (!subscription.endDate || !DATE_RE.test(deliveryDate)) return null;
   const end = Date.parse(`${subscription.endDate}T00:00:00Z`);
@@ -134,9 +142,11 @@ export function legacyDaysRemaining(
   if (Number.isNaN(end) || Number.isNaN(cursor) || end - cursor > 3660 * 86_400_000) return null;
   let days = 0;
   for (; cursor <= end; cursor += 86_400_000) {
-    if (!subscription.offWeekdays.includes(new Date(cursor).getUTCDay())) days += 1;
+    const date = new Date(cursor);
+    if (subscription.offWeekdays.includes(date.getUTCDay())) continue;
+    if (!upcomingFreezes.has(date.toISOString().slice(0, 10))) days += 1;
   }
-  return days - subscription.frozenDays;
+  return days;
 }
 
 export function addressFromPartner(raw: unknown): LabelAddressContract | null {
@@ -160,6 +170,10 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
   private readonly timeoutMs: number;
   private readonly referenceTtlMs: number;
   private readonly dayTtlMs: number;
+  private readonly freezeFullTtlMs: number;
+  private freezes: Cached<FreezeBook> | null = null;
+  private freezeLoad: Promise<FreezeBook> | null = null;
+  private freezeFailedAt: number | null = null;
   private reference: Cached<Reference> | null = null;
   private referenceLoad: Promise<Reference> | null = null;
   private readonly days = new Map<string, Cached<Map<string, DayRow>>>();
@@ -181,6 +195,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
     this.timeoutMs = config.timeoutMs ?? 30_000;
     this.referenceTtlMs = config.referenceTtlMs ?? 20 * 60_000;
     this.dayTtlMs = config.dayTtlMs ?? 5 * 60_000;
+    this.freezeFullTtlMs = config.freezeFullTtlMs ?? 24 * 3_600_000;
   }
 
   /** Same Partner key as the meal source; without it the label keeps its previous fields. */
@@ -193,6 +208,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
       });
       // Warm the large lists once so the first print preview does not wait for them.
       void source.loadReference().catch(() => undefined);
+      void source.loadFreezes().catch(() => undefined);
       return source;
     } catch {
       return null;
@@ -207,6 +223,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
       if (!day) return null;
       const reference = await this.currentReference().catch(() => null);
       const subscription = reference?.subscriptions.get(day.subscriptionId) ?? null;
+      const freezes = subscription ? await this.currentFreezes().catch(() => null) : null;
       const stored = subscription?.addressId ? reference?.addresses.get(subscription.addressId) ?? null : null;
       return {
         userId: day.userId,
@@ -219,7 +236,8 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         notes: day.notes,
         deliveryTime: day.deliveryTime,
         deliveryMethod: day.deliveryMethod,
-        daysRemaining: subscription ? legacyDaysRemaining(deliveryDate, subscription) : null,
+        daysRemaining: subscription
+          ? daysRemaining(deliveryDate, subscription, freezes?.bySubscription.get(day.subscriptionId)) : null,
       };
     } catch {
       return null;
@@ -266,7 +284,6 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           endDate: typeof raw.end_date === 'string' && DATE_RE.test(raw.end_date) ? raw.end_date : null,
           offWeekdays: Array.isArray(delivery.off_weekdays)
             ? delivery.off_weekdays.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6) : [],
-          frozenDays: typeof raw.frozen_days === 'number' && Number.isInteger(raw.frozen_days) && raw.frozen_days > 0 ? raw.frozen_days : 0,
         });
       }
       const addresses = new Map<string, LabelAddressContract>();
@@ -283,6 +300,69 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
       return value;
     })().finally(() => { this.referenceLoad = null; });
     this.referenceLoad = load;
+    return load;
+  }
+
+  /** Same rule as the reference lists: an older copy rather than waiting; printing never waits twice. */
+  private async currentFreezes(): Promise<FreezeBook> {
+    const cached = this.freezes;
+    if (!cached) {
+      // A batch asks once per label: one failed read is not repeated for each of them.
+      if (this.freezeFailedAt !== null && this.now() - this.freezeFailedAt < 60_000) throw new Error('partner_label_profile_freezes');
+      return this.loadFreezes();
+    }
+    if (this.now() - cached.loadedAt > this.referenceTtlMs) void this.loadFreezes().catch(() => undefined);
+    return cached.value;
+  }
+
+  private loadFreezes(): Promise<FreezeBook> {
+    if (this.freezeLoad) return this.freezeLoad;
+    const load = (async () => {
+      const startedAt = this.now();
+      const previous = this.freezes?.value ?? null;
+      const full = !previous || startedAt - previous.fullLoadedAt > this.freezeFullTtlMs;
+      const query: Record<string, string> = { change_type: 'freeze' };
+      // Partner refreshes its copy hourly; two hours of overlap never misses a revert.
+      if (!full) query.since = new Date(this.freezes!.loadedAt - 2 * 3_600_000).toISOString();
+      const rows = await this.fetchAll('subscription-changes', query);
+      if (full && rows.length === 0) throw new Error('partner_label_profile_empty');
+      const changes = full ? new Map<string, { subscriptionId: string; date: string | null }>() : new Map(previous!.changes);
+      // Freezes of days long gone can no longer change a label.
+      const oldest = new Date(startedAt - 3 * 86_400_000).toISOString().slice(0, 10);
+      for (const raw of rows) {
+        if (!isRecord(raw) || raw.change_type !== 'freeze') continue;
+        const id = idText(raw.change_id);
+        const subscriptionId = idText(raw.subscription_id);
+        if (!id || !subscriptionId) continue;
+        const from = typeof raw.effective_from === 'string' && DATE_RE.test(raw.effective_from) ? raw.effective_from : null;
+        const to = typeof raw.effective_to === 'string' && DATE_RE.test(raw.effective_to) ? raw.effective_to : from;
+        const live = raw.is_reverted !== true && raw.deleted !== true && from !== null && to !== null && to >= oldest;
+        changes.delete(id);
+        for (let index = 1; changes.delete(`${id}#${index}`); index += 1) { /* a range read earlier */ }
+        if (!live) continue;
+        // One record per frozen day today; a range is still read as every day in it.
+        let cursor = Date.parse(`${from}T00:00:00Z`);
+        const end = Math.min(Date.parse(`${to}T00:00:00Z`), cursor + 370 * 86_400_000);
+        for (let index = 0; cursor <= end; cursor += 86_400_000, index += 1) {
+          const date = new Date(cursor).toISOString().slice(0, 10);
+          if (date >= oldest) changes.set(index === 0 ? id : `${id}#${index}`, { subscriptionId, date });
+        }
+      }
+      const bySubscription = new Map<string, Set<string>>();
+      for (const change of changes.values()) {
+        if (!change.date) continue;
+        const dates = bySubscription.get(change.subscriptionId) ?? new Set<string>();
+        dates.add(change.date);
+        bySubscription.set(change.subscriptionId, dates);
+      }
+      const value = { changes, bySubscription, fullLoadedAt: full ? startedAt : previous!.fullLoadedAt };
+      this.freezes = { loadedAt: startedAt, value };
+      return value;
+    })().then(
+      (value) => { this.freezeFailedAt = null; return value; },
+      (error: unknown) => { this.freezeFailedAt = this.now(); throw error; },
+    ).finally(() => { this.freezeLoad = null; });
+    this.freezeLoad = load;
     return load;
   }
 
