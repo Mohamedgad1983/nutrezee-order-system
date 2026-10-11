@@ -23,3 +23,17 @@ The end date already carries the past freezes; the legacy rule takes them off a 
 **Deployed:** API `nutrezee-api:a90-8772bec`, rollback `nutrezee-api:pre-a90-20261011`, env fingerprint unchanged. Console unchanged.
 
 **Not ours:** the customer app's figure (calendar days) — its code is not in this program.
+
+---
+
+# A91 — "Pickup Qurain" prints no driver (2026-10-11)
+
+**Owner:** when the notes say `Pickup Qurain`, the customer collects the box from the central kitchen — do not put a driver on it.
+
+**Change (API only):** `isKitchenPickup(notes)` — "pick up / pickup [from] [Al] Qurain" or "استلام من القرين". For those labels the driver box prints `CAR / سيارة PICKUP` and `Customer pickup - Kitchen / استلام العميل من المطبخ`, no driver phone, no driver colour.
+
+**Verified on 2026-10-12 (960 labels):** 2 pickup labels — 27902 (`Pickup Qurain/100c/180p`) and 27903 (`Pickup Qurain branch`). Left with their driver on purpose: 30255 (`pick up from jahra branch`) and 26131 (`qurain branch`, no pickup word) — **[NC]** owner to say whether these are kitchen pickups too.
+
+**Not changed:** the order still belongs to the legacy driver in Fleetbase (Arsad Ali for both), so it prints inside that driver's batch, shows in the driver app, and the night check against the legacy screen stays equal. Removing it from the driver in Fleetbase needs the owner's decision (it would differ from the legacy screen).
+
+**Deployed:** API `nutrezee-api:a91-23eac53`, rollback `nutrezee-api:pre-a90-20261011`. Not yet seen on paper.
