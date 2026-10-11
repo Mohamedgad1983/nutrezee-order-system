@@ -149,6 +149,17 @@ export function daysRemaining(
   return days;
 }
 
+/**
+ * A91 (owner, 2026-10-11): a note that starts the pickup wording for Qurain means the customer
+ * collects the box from the central kitchen — the label must not name a driver. Other branches
+ * ("pick up from jahra branch") are still carried by a driver and are left alone.
+ */
+export function isKitchenPickup(notes: string | null | undefined): boolean {
+  if (!notes) return false;
+  return /\bpick\s*-?\s*up\s+(from\s+)?(al[\s-]*)?qurain\b/i.test(notes)
+    || /استلام\s+(من\s+)?(فرع\s+)?القرين/.test(notes);
+}
+
 export function addressFromPartner(raw: unknown): LabelAddressContract | null {
   if (!isRecord(raw)) return null;
   return {

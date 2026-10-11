@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  PartnerLabelProfileSource, addressFromPartner, daysRemaining, labelText, localPhone,
+  PartnerLabelProfileSource, addressFromPartner, daysRemaining, isKitchenPickup, labelText, localPhone,
 } from '../../apps/api/src/modules/m25-label/partner-label-profile';
 
 // TS-U (WP-OPS-A78) — the customer part of the legacy label, read from Partner at print time.
@@ -66,6 +66,17 @@ describe('TS-U partner label profile (A78)', () => {
     expect(daysRemaining('2026-10-10', { endDate: '2026-10-09', offWeekdays: fri })).toBe(0);
     expect(daysRemaining('2026-10-10', { endDate: null, offWeekdays: fri })).toBeNull();
     expect(daysRemaining('2026-10-10', { endDate: '2099-01-01', offWeekdays: fri })).toBeNull();
+  });
+
+  it('A91: a Qurain pickup note means the customer collects from the central kitchen', () => {
+    expect(isKitchenPickup('Pickup Qurain/100c/180p')).toBe(true);
+    expect(isKitchenPickup('Pickup Qurain branch')).toBe(true);
+    expect(isKitchenPickup('day before / pick up from Al Qurain')).toBe(true);
+    expect(isKitchenPickup('استلام من القرين')).toBe(true);
+    // another branch is still carried by a driver; a bare branch name is not a pickup
+    expect(isKitchenPickup('day before/ pick up from jahra branch ,')).toBe(false);
+    expect(isKitchenPickup('day before - qurain branch - 160 c')).toBe(false);
+    expect(isKitchenPickup(null)).toBe(false);
   });
 
   it('maps a Partner address the way the legacy label prints it', () => {
