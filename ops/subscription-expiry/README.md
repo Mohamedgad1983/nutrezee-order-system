@@ -49,3 +49,22 @@ Copy `ops/subscription-expiry/` to `/opt/nutrezee/subscription-expiry/` (root, 0
 `app/node_modules/` as the mount point) and `ops/systemd/nutreeze-subscription-expiry.{service,timer}` to
 `/etc/systemd/system/`, then `systemctl daemon-reload && systemctl enable --now nutreeze-subscription-expiry.timer`.
 The credential file, reports and logs live only on the VPS and are never committed.
+
+## 2026-10-12 — expiry source switched to the Partner API
+
+`api-expiry.py` produces the same report files (`latest*.json/.csv`, dated copies, same columns) from
+`GET /integration/subscriptions` + `/customers` + `/customer-addresses` (key from `/opt/nutrezee/.env`,
+`NUTREEZE_PARTNER_DAILY_API_KEY`, fallback the label key). The end date comes from the API, so frozen days and
+days added are already applied (the admin screen showed 3 of 85 end dates late on 2026-10-11 and three customers
+were reminded by mistake). On the first day the API and the screen agreed 64/64 (ACTION_REQUIRED) and 7/7
+(ALREADY_RENEWED); read time ≈ 2 min, no browser, no admin password.
+
+- `nutreeze-renewal-whatsapp.service`: `ExecStartPre=/usr/bin/python3 -I api-expiry.py` (was `run.sh`).
+- `nutreeze-subscription-expiry.service` (07:30 Kuwait): `ExecStart=-run.sh` (screen cross-check, failure
+  ignored) → `ExecStart=api-expiry.py` (the report that is used; logs "Cross-check vs admin screen: API only
+  […], screen only […]") → `ExecStartPost=whatsapp-reminder.py --report-email`.
+- `customer_id` is now the Partner `customer_ref` (the screen's "Unique Id" was a different number);
+  `detail_check` is `api`; `sub_package` is the duration name. The reminder ledger matches by phone + end date,
+  so nothing changes for already-reminded customers.
+- Exit codes: 0 ok, 11 API/network failure (previous files kept), 13 fewer than 100 current subscriptions
+  (implausible answer, previous files kept). Nothing is sent when the API step fails.
