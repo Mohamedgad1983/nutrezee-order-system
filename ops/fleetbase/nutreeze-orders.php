@@ -2995,9 +2995,17 @@ final class FleetbaseWriter
             throw new RuntimeException('fleetbase_foreign_order_id');
         }
         $storedUpdated = $meta['source_updated_at'] ?? null;
+        // A94 (2026-10-16): every run reads Partner live, so its row is the current truth even when
+        // its time is older than the stored one — legacy can move a delivery's stamp back (order
+        // 31059: meal lines re-saved, 19:55 -> 19:42). Refusing it stopped the whole day's sync for
+        // 18 hours (49 new orders without a label). Record it and take the live row.
         if (is_string($storedUpdated)
             && parseTimestamp($row['updated_at'], 'updated_at') < parseTimestamp($storedUpdated, 'stored_source_updated_at')) {
-            throw new RuntimeException('fleetbase_stale_source');
+            safeLog('daily_source_time_went_back', [
+                'order_number' => $row['order_number'],
+                'stored_updated_at' => $storedUpdated,
+                'source_updated_at' => $row['updated_at'],
+            ]);
         }
     }
 
