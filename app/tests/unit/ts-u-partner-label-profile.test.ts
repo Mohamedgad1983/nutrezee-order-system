@@ -39,7 +39,8 @@ function source(handlers: Record<string, () => Response | Promise<Response>>, ex
     return handler();
   });
   const instance = new PartnerLabelProfileSource({
-    baseUrl: 'https://nutreeze.com/integration', apiKey: 'test-key', fetchImpl, ...extra,
+    // The labels are for DATE: a fixed clock keeps freezes of that week from ageing out of the test.
+    baseUrl: 'https://nutreeze.com/integration', apiKey: 'test-key', fetchImpl, now: () => Date.parse(`${DATE}T09:00:00Z`), ...extra,
   });
   return { instance, fetchImpl };
 }
