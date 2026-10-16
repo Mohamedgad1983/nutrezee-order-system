@@ -15,7 +15,7 @@ import {
   type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
 import { validPin } from './order-status';
-import { isKitchenPickup, localPhone, type PartnerLabelProfileGateway } from './partner-label-profile';
+import { isKitchenPickup, localPhone, mealsOfOneDelivery, type PartnerLabelProfileGateway } from './partner-label-profile';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -171,7 +171,7 @@ export class LabelService {
     if (rows.length === 0) throw new LabelError('not_found', { order_id: orderId });
     const r = rows[0] as Record<string, unknown>;
 
-    const [meals, mealSource] = await this.mealRows(
+    const [listedMeals, mealSource] = await this.mealRows(
       orderId, r.order_number as string, deliveryDate,
     );
     const driverRef = source && 'driverRef' in source
@@ -184,6 +184,9 @@ export class LabelService {
     const profile = this.partnerProfile
       ? await this.partnerProfile.profileForOrder(r.order_number as string, deliveryDate)
       : null;
+    // A92: a delivery legacy holds twice lists its meals twice; the box carries them once.
+    const meals = mealSource === 'partner_api_v2' && profile
+      ? mealsOfOneDelivery(listedMeals, profile.deliveryRows) : listedMeals;
     const storedUserId = (r.legacy_user_id as string) ?? null;
     const sourceAddress = source?.labelAddress ?? null;
     const address: LabelAddressContract = sourceAddress ? {

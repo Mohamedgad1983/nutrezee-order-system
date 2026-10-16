@@ -201,4 +201,24 @@ describe('TS-U Partner Kitchen & Labels v2 source (A29)', () => {
       code: 'pagination_invalid',
     });
   });
+
+  it('A93: a failed Partner answer is tried again, then the last good copy of the day is used', async () => {
+    let now = 0;
+    let failures = 0;
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (failures > 0 && url.pathname.endsWith('/order-items')) { failures -= 1; return new Response(null, { status: 503 }); }
+      return url.pathname.endsWith('/meal-catalog-v2')
+        ? envelope([catalog('meal-1')])
+        : envelope([item('ORDER-1', 'meal-1', 'item-1')]);
+    });
+    const source = new PartnerLabelSource({
+      baseUrl: 'https://partner.example/integration', apiKey: 'key', fetchImpl, now: () => now, cacheTtlMs: 1000,
+    });
+    failures = 1; // the second try succeeds
+    await expect(source.mealsForOrder('ORDER-1', DATE)).resolves.toHaveLength(1);
+    now = 5000;
+    failures = 5; // Partner stays down: the earlier copy still prints the meals
+    await expect(source.mealsForOrder('ORDER-1', DATE)).resolves.toHaveLength(1);
+  });
 });

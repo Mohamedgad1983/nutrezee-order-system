@@ -32,8 +32,10 @@ export interface PartnerLabelProfile {
   /** A78.3: the time slot and handover instruction of this delivery day (they can differ from the order's first day). */
   deliveryTime: string | null;
   deliveryMethod: string | null;
-  /** A80: the legacy "days remains" figure for this delivery date; null when Partner has no end date. */
+  /** A90: delivery days still ahead from this delivery date; null when Partner has no end date. */
   daysRemaining: number | null;
+  /** A92: how many delivery rows legacy holds for this order on this day (2+ is a doubled row). */
+  deliveryRows: number;
 }
 
 export interface PartnerLabelProfileGateway {
@@ -74,6 +76,7 @@ interface Reference {
 interface DayRow {
   subscriptionId: string; userId: string | null; phone: string | null; area: string | null; notes: string | null;
   deliveryTime: string | null; deliveryMethod: string | null;
+  deliveryRows: number;
 }
 
 interface Cached<T> { loadedAt: number; value: T }
@@ -158,6 +161,23 @@ export function isKitchenPickup(notes: string | null | undefined): boolean {
   if (!notes) return false;
   return /\bpick\s*-?\s*up\s+(from\s+)?(al[\s-]*)?qurain\b/i.test(notes)
     || /استلام\s+(من\s+)?(فرع\s+)?القرين/.test(notes);
+}
+
+/**
+ * A92 — legacy sometimes holds the same delivery twice for one order and day (order 30781 on
+ * 2026-10-12: two delivery rows, the six meal lines listed twice); its own label prints the meals
+ * once. Only when Partner shows that many delivery rows AND the lines are that many exact copies
+ * is one copy kept — a customer who really ordered a dish twice keeps both lines.
+ */
+export function mealsOfOneDelivery<T extends { dish_name: string; qty: number | null }>(meals: T[], deliveryRows: number): T[] {
+  if (!Number.isInteger(deliveryRows) || deliveryRows < 2 || meals.length === 0 || meals.length % deliveryRows !== 0) return meals;
+  const size = meals.length / deliveryRows;
+  for (let index = size; index < meals.length; index += 1) {
+    const first = meals[index % size];
+    const copy = meals[index];
+    if (!first || !copy || copy.dish_name !== first.dish_name || copy.qty !== first.qty) return meals;
+  }
+  return meals.slice(0, size);
 }
 
 export function addressFromPartner(raw: unknown): LabelAddressContract | null {
@@ -247,6 +267,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         notes: day.notes,
         deliveryTime: day.deliveryTime,
         deliveryMethod: day.deliveryMethod,
+        deliveryRows: day.deliveryRows,
         daysRemaining: subscription
           ? daysRemaining(deliveryDate, subscription, freezes?.bySubscription.get(day.subscriptionId)) : null,
       };
@@ -385,13 +406,18 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
     const load = (async () => {
       const rows = new Map<string, DayRow>();
       const newest = new Map<string, number>();
+      const deliveryIds = new Map<string, Set<string>>();
       for (const raw of await this.fetchAll('daily-deliveries', { delivery_date: deliveryDate })) {
         if (!isRecord(raw)) continue;
         const number = labelText(raw.order_number, 255);
         const subscriptionId = idText(raw.order_id);
         if (!number || !subscriptionId) continue;
         const updated = typeof raw.updated_at === 'string' ? new Date(raw.updated_at).getTime() || 0 : 0;
-        if (rows.has(number) && updated < (newest.get(number) ?? 0)) continue;
+        const deliveryId = idText(raw.delivery_id);
+        const seen = deliveryIds.get(number) ?? new Set<string>();
+        if (deliveryId) seen.add(deliveryId);
+        deliveryIds.set(number, seen);
+        if (rows.has(number) && updated < (newest.get(number) ?? 0)) { rows.get(number)!.deliveryRows = Math.max(1, seen.size); continue; }
         const customer = isRecord(raw.customer) ? raw.customer : {};
         const address = isRecord(raw.address) ? raw.address : {};
         newest.set(number, updated);
@@ -403,6 +429,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           notes: labelText(raw.driver_instructions, 240),
           deliveryTime: labelText(isRecord(raw.time_slot) ? raw.time_slot.title : null),
           deliveryMethod: labelText(raw.delivery_method),
+          deliveryRows: Math.max(1, seen.size),
         });
       }
       if (this.days.size > 40) this.days.clear();

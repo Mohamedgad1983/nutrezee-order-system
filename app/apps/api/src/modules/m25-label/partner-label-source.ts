@@ -71,6 +71,7 @@ export class PartnerLabelSource implements PartnerLabelMealSourceGateway {
   private readonly cacheTtlMs: number;
   private readonly fetchImpl: FetchLike;
   private readonly inFlight = new Map<string, Promise<DateSnapshot>>();
+  private readonly lastGood = new Map<string, DateSnapshot>();
   private readonly now: () => number;
   private readonly timeoutMs: number;
 
@@ -122,13 +123,26 @@ export class PartnerLabelSource implements PartnerLabelMealSourceGateway {
     const active = this.inFlight.get(deliveryDate);
     if (active) return active;
 
+    // A93: one slow or failed Partner answer during a print used to leave every label of that
+    // preview without its meals, silently. Try once more, then use the day's last good copy.
     const load = this.fetchDate(deliveryDate)
+      .catch((error: unknown) => {
+        if (!(error instanceof PartnerLabelSourceError) || !['unavailable', 'upstream_http'].includes(error.code)) throw error;
+        return this.fetchDate(deliveryDate);
+      })
       .then((snapshot) => {
         this.cache.set(deliveryDate, {
           expiresAt: this.now() + this.cacheTtlMs,
           snapshot,
         });
+        if (this.lastGood.size > 40) this.lastGood.clear();
+        this.lastGood.set(deliveryDate, snapshot);
         return snapshot;
+      })
+      .catch((error: unknown) => {
+        const previous = this.lastGood.get(deliveryDate);
+        if (!previous) throw error;
+        return previous;
       })
       .finally(() => {
         if (this.inFlight.get(deliveryDate) === load) this.inFlight.delete(deliveryDate);
