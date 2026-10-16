@@ -68,3 +68,14 @@ were reminded by mistake). On the first day the API and the screen agreed 64/64 
   so nothing changes for already-reminded customers.
 - Exit codes: 0 ok, 11 API/network failure (previous files kept), 13 fewer than 100 current subscriptions
   (implausible answer, previous files kept). Nothing is sent when the API step fails.
+
+## 2026-10-16 — birthday win-back messages
+
+`birthday-whatsapp.py` (timer `nutreeze-birthday-whatsapp.timer`, 11:00 Kuwait): customers whose birthday is
+today, who bought at least one subscription, whose last subscription ended within `BIRTHDAY_ENDED_DAYS` (365)
+and who have nothing current or upcoming — read from the ERPNext Partner mirror (`/root/nzq.sh`, read-only).
+Text in `birthday-message.txt` (owner-approved 2026-10-16, code BDAY20, 20%, 7 days), settings in
+`birthday.env` (LIVE, cap 20 most-loyal-first, 4–8 min gaps, until 20:00), one message per customer per year
+(ledger table `birthday`), shares the opt-out list with the renewal reminders, halts on the first failure,
+summary email with xlsx to it@ cc callcenter@. Reuses the helpers of `whatsapp-reminder.py`. Expected volume
+≈ 9 per day (3,252 candidates per year). First batch 2026-10-16 16:26 Kuwait: 9 customers.
