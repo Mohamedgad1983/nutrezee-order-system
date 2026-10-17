@@ -5,6 +5,9 @@ import { inject as service } from '@ember/service';
 import normalizeLabel, { describeFreshness } from '../utils/normalize-label';
 import { printDetached, fitLabels } from './order-label';
 
+/** A96: the API's group id for the kitchen's own WhatsApp stickers (A95). */
+const KITCHEN_STICKERS = 'whatsapp_kitchen';
+
 export default class BatchLabelsComponent extends Component {
     @service session;
 
@@ -149,7 +152,11 @@ export default class BatchLabelsComponent extends Component {
     }
 
     get dropdowns() {
-        const fields = [{ name: 'group', label: 'Filter by / الاختيار حسب', options: this.filterTypes, value: this.filterType }];
+        // A96: WhatsApp subscribers have their own tab; its only choice is the group.
+        const fields = this.activeTab === 'whatsapp' ? [] : [{
+            name: 'group', label: 'Filter by / الاختيار حسب',
+            options: this.filterTypes.filter((option) => option.id !== 'source'), value: this.filterType,
+        }];
         if (!this.isOrderFilter) fields.push({ name: 'scope', label: this.filterLabel, options: this.filterOptions, value: this.filterValue });
         if (this.showTimeDropdown) fields.push({ name: 'time', label: 'Delivery time / وقت التوصيل', options: this.timeOptions, value: this.timeValue });
         fields.push({ name: 'order', label: 'Orders / الطلبات', options: this.orderOptions, value: this.orderValue });
@@ -215,6 +222,25 @@ export default class BatchLabelsComponent extends Component {
             && (option.id !== 'source' || this.sources.length > 0));
     }
 
+    /** A96: "Delivery orders" (legacy) or "WhatsApp" — the two tabs of the page. */
+    get activeTab() {
+        return this.filterType === 'source' ? 'whatsapp' : 'delivery';
+    }
+
+    @action
+    chooseTab(tab) {
+        if (this.loading || this.confirming || tab === this.activeTab) return;
+        if (tab === 'whatsapp') {
+            if (this.sources.length === 0) return;
+            this.chooseFilterType('source');
+            // The owner prints the kitchen's stickers from this tab; start there when the day has them.
+            if (this.sources.some((option) => option.id === KITCHEN_STICKERS)) this.chooseFilterValue(KITCHEN_STICKERS);
+            return;
+        }
+        const first = this.filterTypes.find((option) => option.id !== 'source');
+        if (first) this.chooseFilterType(first.id);
+    }
+
     get isOrderFilter() {
         return this.filterType === 'order';
     }
@@ -255,7 +281,13 @@ export default class BatchLabelsComponent extends Component {
         if (this.isOrderFilter) return orders;
         const byDriverThenArea = (a, b) =>
             String(a.driver_label ?? '').localeCompare(String(b.driver_label ?? '')) || String(a.area ?? '').localeCompare(String(b.area ?? ''));
-        if (this.filterType === 'source') return orders.filter((order) => order.source === this.filterValue).sort(byDriverThenArea);
+        if (this.filterType === 'source') {
+            // A96: the kitchen's own stickers are the WhatsApp labels that carry its box number.
+            const inGroup = this.filterValue === KITCHEN_STICKERS
+                ? (order) => order.source === 'whatsapp' && order.kitchen
+                : (order) => order.source === this.filterValue;
+            return orders.filter(inGroup).sort(byDriverThenArea);
+        }
         const legacy = orders.filter((order) => order.source !== 'whatsapp');
         if (this.filterType === 'time') {
             // One time slot across the day prints grouped by driver, then area.

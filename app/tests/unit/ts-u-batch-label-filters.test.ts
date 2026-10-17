@@ -313,3 +313,43 @@ describe('TS-U A55 batch-label dropdown selection', () => {
     expect(scope().choices).toEqual([]);
   });
 });
+
+describe('TS-U A96 WhatsApp tab and the kitchen stickers', () => {
+  const day = {
+    ...options,
+    legacy_total: 3, whatsapp_total: 2,
+    orders: [
+      ...orders,
+      { selection_id: 'day:w1', order_number: 'WA-55123456', area_id: 'a1', area: 'Salmiya', driver_id: 'd1', driver_label: 'Car 1', source: 'whatsapp', kitchen: true },
+      { selection_id: 'day:w2', order_number: 'WA-55999999', area_id: 'a2', area: 'Bayan', driver_id: 'd2', driver_label: 'Car 2', source: 'whatsapp', kitchen: false },
+    ],
+    sources: [
+      { id: 'whatsapp', label: 'All WhatsApp subscribers', count: 2 },
+      { id: 'whatsapp_kitchen', label: 'Kitchen stickers', count: 1 },
+    ],
+  };
+  function state() {
+    const s = batch();
+    s.options = day;
+    s.showSelection = vi.fn();
+    s.selectAllFiltered();
+    return s;
+  }
+
+  it('opens the WhatsApp tab on the kitchen stickers and prints only them', () => {
+    const s = state();
+    expect(s.activeTab).toBe('delivery');
+    expect(s.dropdowns.find((d: { name: string }) => d.name === 'group').options.map((o: { id: string }) => o.id)).not.toContain('source');
+    s.chooseTab('whatsapp');
+    expect(s.activeTab).toBe('whatsapp');
+    expect(s.filterValue).toBe('whatsapp_kitchen');
+    expect(s.dropdowns.map((d: { name: string }) => d.name)).toEqual(['scope', 'order']);
+    expect(s.selectionIds).toEqual(['day:w1']);
+    expect(s.batchPayload()).toMatchObject({ filter_type: 'source', filter_value: 'whatsapp_kitchen', selection_ids: ['day:w1'] });
+    s.chooseFilterValue('whatsapp');
+    expect(s.selectionIds).toEqual(['day:w1', 'day:w2']);
+    s.chooseTab('delivery');
+    expect(s.activeTab).toBe('delivery');
+    expect(s.selectionIds).toEqual(['day:o1', 'day:o2']);
+  });
+});

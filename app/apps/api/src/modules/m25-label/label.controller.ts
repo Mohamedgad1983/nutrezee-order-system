@@ -8,7 +8,7 @@ import { AccessService } from '../../platform/rbac/access.service';
 import { requirePermission } from '../../platform/rbac/permission.util';
 import { IdempotencyConflictError } from '../../platform/idempotency/idempotency.service';
 import { BarcodeError, BarcodeService } from './barcode.service';
-import { LabelError, LabelService, type BatchLabelCandidate } from './label.service';
+import { KITCHEN_STICKERS, LabelError, LabelService, isKitchenSticker, type BatchLabelCandidate } from './label.service';
 import { CollectionError, CollectionService } from './collection.service';
 import {
   FleetbaseIdentityError, FleetbaseIdentityService,
@@ -492,6 +492,7 @@ function batchOptionsResponse(
   const areaMap = new Map<string, { id: string; label: string; count: number }>();
   const timeMap = new Map<string, { id: string; label: string; count: number }>();
   let whatsapp = 0;
+  const kitchen = candidates.filter(isKitchenSticker).length;
   for (const candidate of candidates) {
     // A83: the driver, area and time lists describe the legacy orders only; WhatsApp subscribers
     // are their own group.
@@ -520,7 +521,11 @@ function batchOptionsResponse(
     total: candidates.length,
     legacy_total: candidates.length - whatsapp,
     whatsapp_total: whatsapp,
-    sources: whatsapp > 0 ? [{ id: 'whatsapp', label: 'WhatsApp subscribers / مشتركين الواتساب', count: whatsapp }] : [],
+    whatsapp_kitchen_total: kitchen,
+    sources: [
+      ...(whatsapp > 0 ? [{ id: 'whatsapp', label: 'All WhatsApp subscribers / كل مشتركين الواتساب', count: whatsapp }] : []),
+      ...(kitchen > 0 ? [{ id: KITCHEN_STICKERS, label: 'Kitchen stickers / ستيكرات المطبخ', count: kitchen }] : []),
+    ],
     unmapped,
     // A70: every mapped label is printable even while a few orders are still unmapped; the
     // summary keeps showing source_total vs total so the gap stays visible.
@@ -539,6 +544,7 @@ function batchOptionsResponse(
       time_id: candidate.timeKey,
       time: candidate.timeLabel,
       source: candidate.source,
+      kitchen: isKitchenSticker(candidate),
     })),
   };
 }

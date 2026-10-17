@@ -43,6 +43,11 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 const NO_AREA_KEY = '__no_area__';
 const NO_TIME_KEY = '__no_time__';
+/** A96: the WhatsApp tab's group of the kitchen's own stickers. */
+export const KITCHEN_STICKERS = 'whatsapp_kitchen';
+export function isKitchenSticker(candidate: Pick<BatchLabelCandidate, 'source' | 'labelUserId'>): boolean {
+  return candidate.source === 'whatsapp' && !!candidate.labelUserId;
+}
 /** Printed where the driver's name goes when the customer collects from the central kitchen. */
 const KITCHEN_PICKUP_NAME = 'Customer pickup - Kitchen / استلام العميل من المطبخ';
 
@@ -461,7 +466,8 @@ export class LabelService {
         : filter.filterType === 'time'
           ? candidate.timeKey === filterValue
           : filter.filterType === 'source'
-            ? candidate.source === filterValue
+            // A96: the kitchen's own stickers (A95) are the WhatsApp labels that carry its box number.
+            ? filterValue === KITCHEN_STICKERS ? isKitchenSticker(candidate) : candidate.source === filterValue
             : candidate.areaKey === filterValue,
     );
     if (filtered.length === 0) {
