@@ -400,6 +400,8 @@ final class WaWriter
                 // A78: the legacy label prints the house number as "Building".
                 'building' => $row['house'], 'direction' => $row['details']],
             'label_package' => $row['plan'], 'label_days_remaining' => $row['days_remaining'],
+            // A96.1: the name printed is today's one (the label database keeps the first name it saw).
+            'label_full_name' => $row['customer_name'],
             'label_notes' => $row['notes'] !== '' ? $row['notes'] : null,
             'label_user_id' => $row['box'] !== '' ? $row['box'] : null,
             'label_meals_per_day' => $row['meals_per_day'], 'label_snacks_per_day' => $row['snacks_per_day'],

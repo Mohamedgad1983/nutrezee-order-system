@@ -75,6 +75,7 @@ export interface BatchLabelCandidate {
   /** A95: the kitchen's own sticker for a WhatsApp subscriber — diet notes, box number, meals a day. */
   labelNotes?: string | null;
   labelUserId?: string | null;
+  labelFullName?: string | null;
   labelMealsPerDay?: number | null;
   labelSnacksPerDay?: number | null;
   /** A72: the Fleetbase order's own id, status and (fallback) pin, for the order-status page. */
@@ -101,6 +102,7 @@ export interface FleetbaseDriverLabelSource {
   /** A95: the kitchen's own sticker for a WhatsApp subscriber — diet notes, box number, meals a day. */
   labelNotes?: string | null;
   labelUserId?: string | null;
+  labelFullName?: string | null;
   labelMealsPerDay?: number | null;
   labelSnacksPerDay?: number | null;
 }
@@ -233,7 +235,7 @@ export class LabelService {
       order_id: orderId,
       customer_id: r.customer_id as string,
       delivery_date: deliveryDate,
-      full_name: (r.full_name_en as string) ?? '',
+      full_name: source?.labelFullName ?? (r.full_name_en as string) ?? '',
       subscription_date_display: formatLabelDate(deliveryDate),
       // A78.3: the day's own slot wins — the order keeps only the slot of its first imported day.
       delivery_time: profile?.deliveryTime ?? (r.delivery_time_frozen as string) ?? null,
@@ -520,6 +522,7 @@ export class LabelService {
             labelPackage: candidate.labelPackage,
             labelDaysRemaining: candidate.labelDaysRemaining,
             labelNotes: candidate.labelNotes,
+            labelFullName: candidate.labelFullName,
             labelUserId: candidate.labelUserId,
             labelMealsPerDay: candidate.labelMealsPerDay,
             labelSnacksPerDay: candidate.labelSnacksPerDay,
@@ -949,6 +952,7 @@ interface LabelOverrides {
   labelDaysRemaining?: number;
   labelNotes?: string;
   labelUserId?: string;
+  labelFullName?: string;
   labelMealsPerDay?: number;
   labelSnacksPerDay?: number;
 }
@@ -982,6 +986,8 @@ function labelOverrides(
   // A95: diet instructions run long on the kitchen's own stickers; the notes box shrinks its font to fit.
   const notes = clean(meta?.label_notes, 900);
   if (notes) out.labelNotes = notes;
+  const name = clean(meta?.label_full_name, 80);
+  if (name) out.labelFullName = name;
   const box = clean(meta?.label_user_id, 20);
   if (box) out.labelUserId = box;
   const meals = count(meta?.label_meals_per_day);

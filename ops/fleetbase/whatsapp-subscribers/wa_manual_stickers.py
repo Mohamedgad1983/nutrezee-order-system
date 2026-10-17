@@ -120,6 +120,9 @@ def merge(export_path, list_path, day_text):
         row = by_phone.get(sticker['mobile'])
         if row is not None:
             row.update(extra)
+            # The kitchen's sticker names the customer; ERPNext often holds a placeholder
+            # ("Muhammad - 64" for Mosaed, "Subscription", the phone number). Owner 2026-10-18.
+            row['customer_name'] = sticker['name']
             row['plan'] = package(sticker, row.get('plan', ''))
             if not row.get('has_address'):
                 row.update(area=sticker['area'], block=sticker['block'], street=sticker['street'],
