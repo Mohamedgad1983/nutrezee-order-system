@@ -82,7 +82,7 @@ def parse(data):
 
 def write_private(path, value):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as handle:
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
         json.dump(value, handle, ensure_ascii=False)
 
 
@@ -100,11 +100,11 @@ def package(sticker, plan=''):
 
 def merge(export_path, list_path, day_text):
     day = date.fromisoformat(day_text)
-    export = json.load(open(export_path))
+    export = json.load(open(export_path, encoding='utf-8'))
     if not os.path.exists(list_path):
         print(json.dumps({'event': 'manual_stickers', 'delivery_date': day_text, 'list': 'none'}))
         return
-    stickers = json.load(open(list_path))
+    stickers = json.load(open(list_path, encoding='utf-8'))
     if day.weekday() == 4 or day_text < stickers['first_day']:
         print(json.dumps({'event': 'manual_stickers', 'delivery_date': day_text, 'applied': 0,
                           'reason': 'friday' if day.weekday() == 4 else 'before_first_day'}))
