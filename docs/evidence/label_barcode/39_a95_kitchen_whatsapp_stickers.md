@@ -21,3 +21,15 @@
 - days remaining comes from the sticker's end date; four stickers have an empty or past end date (8658, 8841, 8754, 6887), so their figure is not reliable;
 - box 8658 (mobile 97118359) also has a regular legacy order on 19 Oct — two labels for one customer unless one is dropped;
 - not shown on our label: the AREA number of the sticker.
+
+---
+
+# A96 — WhatsApp tab on Batch Labels (2026-10-17)
+
+**Owner:** "a separate WhatsApp tab inside Batch Labels; print the 16 from it."
+
+**Change:** the page has two tabs above the filters — *Delivery orders / طلبات التوصيل* (the legacy batches: driver, area, time, order) and *WhatsApp / واتساب*. The WhatsApp tab's only choice is the group: *Kitchen stickers / ستيكرات المطبخ* (WhatsApp labels carrying the kitchen BOX number, i.e. the A95 list) — opened first — or *All WhatsApp subscribers*. API: `filter_value = whatsapp_kitchen` selects them; options give `whatsapp_kitchen_total`, `orders[].kitchen`.
+
+**Tests:** `ts-u-batch-label-filters` (A96 tab flow), `ts-u-kitchen-sticker-filter` (API group). Console `0.7.48-a96.1`, extension `0.3.27`.
+
+**A96.1 (same night):** owner — 90908830 printed as "Muhammad", should be Mosaed. The label database keeps the first name it saw for a phone (ERPNext placeholders: "Muhammad - 64", "Subscription", "Hhh", the phone number). Now the kitchen sticker's name wins in the merge, the writer carries `label_full_name`, and the label prints it. Monday 2026-10-19 after the change: all 16 kitchen stickers print the name on the sticker (9 were wrong before). Other WhatsApp labels print ERPNext's current name. API `nutrezee-api:a961-b42a988` (rollback `pre-a961-20261017`).

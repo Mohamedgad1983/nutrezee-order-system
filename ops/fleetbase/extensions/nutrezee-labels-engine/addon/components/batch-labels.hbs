@@ -75,6 +75,19 @@
             {{/unless}}
         {{/if}}
 
+        {{#if this.sources.length}}
+            <div class="nz-batch-tabs" role="tablist" aria-label="Label groups / مجموعات الملصقات" data-test-batch-tabs>
+                <button type="button" role="tab" data-test-batch-tab="delivery"
+                    class="btn btn-sm {{if (eq this.activeTab "delivery") "btn-primary" "btn-default"}}"
+                    aria-selected={{if (eq this.activeTab "delivery") "true" "false"}} disabled={{this.filtersDisabled}}
+                    {{on "click" (fn this.chooseTab "delivery")}}>Delivery orders / طلبات التوصيل ({{this.options.legacy_total}})</button>
+                <button type="button" role="tab" data-test-batch-tab="whatsapp"
+                    class="btn btn-sm {{if (eq this.activeTab "whatsapp") "btn-primary" "btn-default"}}"
+                    aria-selected={{if (eq this.activeTab "whatsapp") "true" "false"}} disabled={{this.filtersDisabled}}
+                    {{on "click" (fn this.chooseTab "whatsapp")}}>WhatsApp / واتساب ({{this.options.whatsapp_total}})</button>
+            </div>
+        {{/if}}
+
         <div class="nz-batch-filter-card" aria-busy={{or this.loading this.preparing}}>
             <div class="nz-batch-controls" data-test-batch-controls>
                 {{! Fleet-Ops renders this virtual panel in the host owner: keep controls inline. }}

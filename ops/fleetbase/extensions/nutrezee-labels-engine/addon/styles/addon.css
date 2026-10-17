@@ -1483,3 +1483,11 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
         flex-direction: column;
     }
 }
+
+/* A96: Delivery orders / WhatsApp tabs above the filters. */
+.nz-batch-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 8px;
+}
