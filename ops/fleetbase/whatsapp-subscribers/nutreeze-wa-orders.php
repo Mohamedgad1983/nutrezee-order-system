@@ -400,6 +400,9 @@ final class WaWriter
                 // A78: the legacy label prints the house number as "Building".
                 'building' => $row['house'], 'direction' => $row['details']],
             'label_package' => $row['plan'], 'label_days_remaining' => $row['days_remaining'],
+            'label_notes' => $row['notes'] !== '' ? $row['notes'] : null,
+            'label_user_id' => $row['box'] !== '' ? $row['box'] : null,
+            'label_meals_per_day' => $row['meals_per_day'], 'label_snacks_per_day' => $row['snacks_per_day'],
         ]);
         $order->setAttribute('deleted_at', null);
         $changed = quietSave($order) || $changed;
@@ -523,6 +526,10 @@ try {
             'block' => trim((string) ($row['block'] ?? '')), 'street' => trim((string) ($row['street'] ?? '')),
             'house' => trim((string) ($row['house'] ?? '')), 'details' => trim((string) ($row['details'] ?? '')),
             'days_remaining' => is_int($row['days_remaining'] ?? null) ? $row['days_remaining'] : null,
+            // A95: from the kitchen's own sticker list (wa_manual_stickers.py), when it has the subscriber.
+            'notes' => trim((string) ($row['notes'] ?? '')), 'box' => trim((string) ($row['box'] ?? '')),
+            'meals_per_day' => is_int($row['meals_per_day'] ?? null) ? $row['meals_per_day'] : null,
+            'snacks_per_day' => is_int($row['snacks_per_day'] ?? null) ? $row['snacks_per_day'] : null,
         ];
     }
     $lock = fopen('/tmp/nutreeze-wa-orders.lock', 'c');
