@@ -67,6 +67,11 @@ export interface BatchLabelCandidate {
   labelAddress?: Partial<LabelAddressContract> | null;
   labelPackage?: string | null;
   labelDaysRemaining?: number | null;
+  /** A95: the kitchen's own sticker for a WhatsApp subscriber — diet notes, box number, meals a day. */
+  labelNotes?: string | null;
+  labelUserId?: string | null;
+  labelMealsPerDay?: number | null;
+  labelSnacksPerDay?: number | null;
   /** A72: the Fleetbase order's own id, status and (fallback) pin, for the order-status page. */
   fleetbaseOrderId?: string;
   fleetbaseStatus?: string | null;
@@ -88,6 +93,11 @@ export interface FleetbaseDriverLabelSource {
   labelAddress?: Partial<LabelAddressContract> | null;
   labelPackage?: string | null;
   labelDaysRemaining?: number | null;
+  /** A95: the kitchen's own sticker for a WhatsApp subscriber — diet notes, box number, meals a day. */
+  labelNotes?: string | null;
+  labelUserId?: string | null;
+  labelMealsPerDay?: number | null;
+  labelSnacksPerDay?: number | null;
 }
 
 export interface BatchLabelFilter {
@@ -210,7 +220,7 @@ export class LabelService {
       direction: (r.delivery_notes as string) ?? null,
     };
 
-    const notes = profile?.notes ?? (r.customer_notes as string) ?? null;
+    const notes = source?.labelNotes ?? profile?.notes ?? (r.customer_notes as string) ?? null;
     // A91: the customer collects this box from the central kitchen — no driver on the label.
     const pickup = isKitchenPickup(notes);
 
@@ -227,12 +237,12 @@ export class LabelService {
         ? null : Number(r.days_remaining)),
       delivery_method: profile?.deliveryMethod ?? (r.delivery_method_frozen as string) ?? null,
       package_name: source?.labelPackage ?? profile?.packageName ?? (r.package_name as string) ?? null,
-      meals_per_day: r.meals_per_day === null || r.meals_per_day === undefined
-        ? profile?.mealsPerDay ?? null : Number(r.meals_per_day),
+      meals_per_day: source?.labelMealsPerDay ?? (r.meals_per_day === null || r.meals_per_day === undefined
+        ? profile?.mealsPerDay ?? null : Number(r.meals_per_day)),
       // No snacks-per-day column exists in the schema (A27 discovery §2); Partner's plan carries it.
-      snacks_per_day: profile?.snacksPerDay ?? null,
+      snacks_per_day: source?.labelSnacksPerDay ?? profile?.snacksPerDay ?? null,
       // Imported customers are keyed by phone, which is not a user id: print the code or nothing.
-      legacy_user_id: profile?.userId ?? (storedUserId && !storedUserId.startsWith('+') ? storedUserId : null),
+      legacy_user_id: source?.labelUserId ?? profile?.userId ?? (storedUserId && !storedUserId.startsWith('+') ? storedUserId : null),
       driver_ref: driverRef,
       driver_color: pickup ? null : source?.driverColor ?? null,
       driver_phone: pickup ? null : source?.driverPhone ?? null,
@@ -503,6 +513,10 @@ export class LabelService {
             labelAddress: candidate.labelAddress,
             labelPackage: candidate.labelPackage,
             labelDaysRemaining: candidate.labelDaysRemaining,
+            labelNotes: candidate.labelNotes,
+            labelUserId: candidate.labelUserId,
+            labelMealsPerDay: candidate.labelMealsPerDay,
+            labelSnacksPerDay: candidate.labelSnacksPerDay,
           }),
           this.printHistory(candidate.localOrderId, deliveryDate),
         ]);
@@ -923,17 +937,29 @@ export function totalsOf(meals: LabelMealRowContract[]): LabelNutritionTotalsCon
   return { protein, carbs, fat, calories, complete };
 }
 
+interface LabelOverrides {
+  labelAddress?: Partial<LabelAddressContract>;
+  labelPackage?: string;
+  labelDaysRemaining?: number;
+  labelNotes?: string;
+  labelUserId?: string;
+  labelMealsPerDay?: number;
+  labelSnacksPerDay?: number;
+}
+
 /** A71.2: `meta.label_address` / `meta.label_package` of a Fleetbase order, cleaned for printing. */
 function labelOverrides(
   meta: Record<string, unknown> | null | undefined,
-): { labelAddress?: Partial<LabelAddressContract>; labelPackage?: string; labelDaysRemaining?: number } {
-  const clean = (value: unknown): string | null => {
+): LabelOverrides {
+  const clean = (value: unknown, max = 120): string | null => {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
     // eslint-disable-next-line no-control-regex
-    const text = String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const text = String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
     return text.length > 0 ? text : null;
   };
-  const out: { labelAddress?: Partial<LabelAddressContract>; labelPackage?: string; labelDaysRemaining?: number } = {};
+  const count = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 20 ? value : null;
+  const out: LabelOverrides = {};
   const raw = meta?.label_address;
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const a = raw as Record<string, unknown>;
@@ -947,5 +973,14 @@ function labelOverrides(
   if (plan) out.labelPackage = plan;
   const days = meta?.label_days_remaining;
   if (typeof days === 'number' && Number.isInteger(days) && days >= 0 && days <= 3660) out.labelDaysRemaining = days;
+  // A95: diet instructions run long on the kitchen's own stickers; the notes box shrinks its font to fit.
+  const notes = clean(meta?.label_notes, 900);
+  if (notes) out.labelNotes = notes;
+  const box = clean(meta?.label_user_id, 20);
+  if (box) out.labelUserId = box;
+  const meals = count(meta?.label_meals_per_day);
+  if (meals !== null) out.labelMealsPerDay = meals;
+  const snacks = count(meta?.label_snacks_per_day);
+  if (snacks !== null) out.labelSnacksPerDay = snacks;
   return out;
 }

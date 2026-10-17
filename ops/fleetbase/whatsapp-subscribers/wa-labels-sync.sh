@@ -40,6 +40,8 @@ trap 'rm -f "$TMP"' EXIT
 install -m 644 "$HERE/wa_subscribers_export.py" /tmp/wa_subscribers_export.py
 (cd "$BENCH/sites" && sudo -u frappe "$BENCH/env/bin/python" /tmp/wa_subscribers_export.py "$SITE" "$DAY" "$TMP" </dev/null 2>/dev/null) | tee -a "$LOG"
 install -m 600 -o root -g root "$TMP" "$INPUT"
+# A95: the kitchen's own sticker list (root-only, from its Publisher file) joins the day's list.
+python3 -I "$HERE/wa_manual_stickers.py" merge "$INPUT" "$WORK/manual-stickers.json" "$DAY" | tee -a "$LOG"
 
 FB_DIR=/fleetbase/api/storage/app/integrations
 docker cp "$HERE/nutreeze-wa-orders.php" "$FB:$FB_DIR/nutreeze-wa-orders.php" >/dev/null
