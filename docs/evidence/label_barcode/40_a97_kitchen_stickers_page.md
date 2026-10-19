@@ -13,3 +13,5 @@
 **Tests:** `ts-i-kitchen-sticker` (rules, one per phone, audit), `ts-u-kitchen-stickers-page` (preview, search, days left), extension registry test.
 
 **Deployed:** API `nutrezee-api:a97-7cb20be` (rollback `pre-a97-20261019`), console `0.7.48-a97.1`, scripts in `/opt/fleetbase/integrations/whatsapp-subscribers/` (backup `bak-a97/`). Not yet seen by the manager signed in — the assistant does not sign in.
+
+**A97.2 (2026-10-19 22:30 Kuwait):** a sticker entered on the page for one day (BOX 31193, start = end = 2026-10-20, by a Fleet-Ops user at 14:01) printed on the 21st too — staff: "an app subscription, cancelled, but printed with the WhatsApp stickers". The end date now is the last day a page sticker prints. Re-synced 20–22 Oct: the 20th keeps it (as entered); on the 21st and 22nd it and two stickers whose end date was 20 Oct (8109, 8673 — 8673 still prints there from ERPNext without the kitchen fields) are cancelled. Kitchen stickers: 20th 17, 21st 14. Stickers still ending soon: 9027 (22 Oct), 9044 (26 Oct) — extend on the page if they continue.
