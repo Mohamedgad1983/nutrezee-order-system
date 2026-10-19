@@ -1,0 +1,10 @@
+[Unit]
+Description=A97 check the Kitchen Stickers page every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:40
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

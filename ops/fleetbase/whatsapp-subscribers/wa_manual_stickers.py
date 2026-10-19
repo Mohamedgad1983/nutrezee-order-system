@@ -105,7 +105,7 @@ def merge(export_path, list_path, day_text):
         print(json.dumps({'event': 'manual_stickers', 'delivery_date': day_text, 'list': 'none'}))
         return
     stickers = json.load(open(list_path, encoding='utf-8'))
-    if day.weekday() == 4 or day_text < stickers['first_day']:
+    if day.weekday() == 4 or day_text < stickers.get('first_day', '0000-00-00'):
         print(json.dumps({'event': 'manual_stickers', 'delivery_date': day_text, 'applied': 0,
                           'reason': 'friday' if day.weekday() == 4 else 'before_first_day'}))
         return
@@ -113,6 +113,13 @@ def merge(export_path, list_path, day_text):
     by_phone = {row['ref'][-8:]: row for row in rows}
     added = enriched = 0
     for sticker in stickers['rows']:
+        # A97: a sticker kept on the Kitchen Stickers page prints from its own first day.
+        if sticker.get('start_date') and day_text < sticker['start_date']:
+            continue
+        end = date.fromisoformat(sticker['end_date']) if sticker.get('end_date') else sheet_date(sticker.get('end', ''))
+        left = (sum((day + timedelta(days=i)).weekday() != 4 for i in range((end - day).days + 1))
+                if end and end >= day else None)
+        details = sticker.get('details', sticker['address'])
         extra = {
             'notes': sticker['notes'], 'box': sticker['box'],
             'meals_per_day': number(sticker['meals']), 'snacks_per_day': number(sticker['snacks']),
@@ -124,28 +131,29 @@ def merge(export_path, list_path, day_text):
             # ("Muhammad - 64" for Mosaed, "Subscription", the phone number). Owner 2026-10-18.
             row['customer_name'] = sticker['name']
             row['plan'] = package(sticker, row.get('plan', ''))
-            if not row.get('has_address'):
+            if left is not None:
+                row['days_remaining'] = left
+            if not row.get('has_address') or sticker.get('start_date'):
+                # The page's address is the one the manager keeps; ERPNext's only when there is no page row.
                 row.update(area=sticker['area'], block=sticker['block'], street=sticker['street'],
-                           house=sticker['house'], details=sticker['address'], address_text=sticker['address'],
-                           has_address=bool(sticker['address']))
+                           house=sticker['house'], details=details, address_text=sticker['address'],
+                           has_address=bool(sticker['area']))
             enriched += 1
             continue
-        end = sheet_date(sticker['end'])
         rows.append({
             'ref': sticker['mobile'], 'order_number': f"WA-{sticker['mobile']}",
             'customer_name': sticker['name'], 'customer_phone': f"+965{sticker['mobile']}",
             'area': sticker['area'], 'address_text': sticker['address'], 'plan': package(sticker),
             'block': sticker['block'], 'street': sticker['street'], 'house': sticker['house'],
-            'details': sticker['address'],
-            # the sheet's own end date when it is a real one still ahead; otherwise left blank
-            'days_remaining': sum((day + timedelta(days=i)).weekday() != 4 for i in range((end - day).days + 1))
-            if end and end >= day else None,
-            'has_address': bool(sticker['address']), **extra,
+            'details': details,
+            # the sticker's own end date when it is a real one still ahead; otherwise left blank
+            'days_remaining': left,
+            'has_address': bool(sticker['area']), **extra,
         })
         added += 1
     write_private(export_path, export)
     print(json.dumps({'event': 'manual_stickers', 'delivery_date': day_text, 'added': added, 'enriched': enriched,
-                      'rows': len(rows), 'list_first_day': stickers['first_day']}))
+                      'rows': len(rows), 'list': stickers.get('source', stickers.get('first_day'))}))
 
 
 def main(argv):

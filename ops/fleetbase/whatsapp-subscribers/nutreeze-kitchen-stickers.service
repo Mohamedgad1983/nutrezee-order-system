@@ -1,0 +1,8 @@
+[Unit]
+Description=A97 Kitchen Stickers page edits reach Batch Labels (WhatsApp sync when kitchen_sticker changed)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fleetbase/integrations/whatsapp-subscribers/kitchen-stickers-watch.sh
+TimeoutStartSec=900

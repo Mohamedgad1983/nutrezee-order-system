@@ -65,6 +65,8 @@ import { FleetbaseIdentityService } from './modules/m25-label/fleetbase-identity
 import { DriverLocationService } from './modules/m25-label/driver-location.service';
 import { AreaMoveService } from './modules/m25-label/area-move.service';
 import { AreaMoveController } from './modules/m25-label/area-move.controller';
+import { KitchenStickerService } from './modules/m25-label/kitchen-sticker.service';
+import { KitchenStickerController } from './modules/m25-label/kitchen-sticker.controller';
 import { PrintCheckService } from './modules/m25-label/print-check.service';
 import { PrintCheckController } from './modules/m25-label/print-check.controller';
 import {
@@ -85,7 +87,7 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
     DraftController, ReviewController, OrderController, PaymentController, KitchenController,
     NotificationController, ReportController,
     BridgeController, MigrationController,
-    PackingController, DeliveryController, LabelController, AreaMoveController, PrintCheckController,
+    PackingController, DeliveryController, LabelController, AreaMoveController, KitchenStickerController, PrintCheckController,
     FleetbaseController, DriverCredentialController, DriverOrderReassignmentController,
   ],
   providers: [
@@ -336,6 +338,12 @@ const PARTNER_DAILY_FEED = 'PARTNER_DAILY_FEED';
       // A77 — one-day area moves between drivers (decision ledger only; the Fleetbase sync applies them).
       provide: AreaMoveService,
       useFactory: (pool: Pool, audit: AuditService) => new AreaMoveService(pool, audit),
+      inject: [POOL, AuditService],
+    },
+    {
+      // A97 — the kitchen's WhatsApp stickers kept on the Fleet-Ops page (the WhatsApp sync prints them).
+      provide: KitchenStickerService,
+      useFactory: (pool: Pool, audit: AuditService) => new KitchenStickerService(pool, audit),
       inject: [POOL, AuditService],
     },
     {

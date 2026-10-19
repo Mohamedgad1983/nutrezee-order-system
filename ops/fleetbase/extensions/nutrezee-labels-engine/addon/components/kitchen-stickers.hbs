@@ -1,0 +1,143 @@
+<section class="nz-kitchen-panel" data-test-nutrezee-kitchen-stickers>
+    <header class="nz-label-panel__header">
+        <div>
+            <h2>Kitchen Stickers / ستيكرات المطبخ</h2>
+            <p>WhatsApp subscribers' stickers: notes, grams, meals and BOX. They print from Batch Labels → WhatsApp → Kitchen stickers, with the area's driver. / ستيكرات مشتركين الواتساب: الملاحظات والجرامات والوجبات والـ BOX. بتتطبع من Batch Labels ← واتساب ← ستيكرات المطبخ، بسواق المنطقة.</p>
+        </div>
+        <div class="nz-kitchen-actions">
+            <button type="button" class="btn btn-primary btn-sm" disabled={{or this.loading this.saving}} {{on "click" this.startNew}} data-test-kitchen-new>+ New sticker / ستيكر جديد</button>
+            <button type="button" class="btn btn-default btn-sm" disabled={{this.loading}} {{on "click" this.reload}}>Reload / تحديث</button>
+        </div>
+    </header>
+
+    {{#if this.notice}}<div class="nz-label-state nz-label-state--success" role="status">{{this.notice}}</div>{{/if}}
+    {{#if this.error}}<div class="nz-label-state nz-label-state--error" role="alert">{{this.error}}</div>{{/if}}
+
+    {{#if this.loading}}
+        <div class="nz-label-state">Reading the stickers… / بنقرا الستيكرات…</div>
+    {{else if this.data}}
+        <div class="nz-kitchen-layout">
+            <aside class="nz-kitchen-list" aria-label="Stickers / الستيكرات">
+                <input type="search" class="nz-kitchen-search" value={{this.search}} placeholder="Search name, mobile, BOX, area… / ابحث" aria-label="Search stickers" {{on "input" this.searchList}} />
+                <div class="nz-kitchen-count">{{this.activeCount}} printing / بيتطبعوا
+                    {{#if this.stoppedCount}}
+                        · <button type="button" class="nz-link-button" {{on "click" this.toggleStopped}}>{{if this.showStopped "Hide" "Show"}} {{this.stoppedCount}} stopped / متوقف</button>
+                    {{/if}}
+                </div>
+                {{#each this.stickers key="id" as |sticker|}}
+                    <button type="button" class={{sticker.rowClass}} {{on "click" (fn this.open sticker)}} data-test-kitchen-row={{sticker.box}}>
+                        <span class="nz-kitchen-row__box">{{if sticker.box sticker.box "—"}}</span>
+                        <span class="nz-kitchen-row__name">{{sticker.name}}</span>
+                        <span class="nz-kitchen-row__sub">{{sticker.area}} · {{sticker.mobile}}</span>
+                        {{#unless sticker.active}}<span class="nz-kitchen-row__tag">Stopped / متوقف</span>{{/unless}}
+                        {{#if sticker.ended}}<span class="nz-kitchen-row__tag">End date passed / التاريخ خلص</span>{{/if}}
+                    </button>
+                {{else}}
+                    <p class="nz-kitchen-empty">No stickers. / مفيش ستيكرات.</p>
+                {{/each}}
+            </aside>
+
+            {{#if this.editing}}
+                <form class="nz-kitchen-editor" {{on "submit" this.save}} data-test-kitchen-editor>
+                    <h3>{{if this.isNew "New sticker / ستيكر جديد" this.form.name}}</h3>
+                    <div class="nz-kitchen-fields">
+                        {{#each this.fields key="field" as |f|}}
+                            <label class="nz-kitchen-field {{if f.invalid "nz-kitchen-field--invalid"}} nz-kitchen-field--{{f.field}}">
+                                <span>{{f.label}}</span>
+                                <input type={{f.type}} value={{f.value}} list={{f.list}} min={{if (eq f.type "number") "0"}}
+                                    aria-invalid={{if f.invalid "true" "false"}} {{on "input" (fn this.update f.field)}} />
+                            </label>
+                        {{/each}}
+                        <datalist id="nz-kitchen-areas">
+                            {{#each this.areaOptions as |area|}}<option value={{area.label}}></option>{{/each}}
+                        </datalist>
+                        <p class="nz-kitchen-driver">{{this.areaDriver}}</p>
+                        <label class="nz-kitchen-field nz-kitchen-field--notes">
+                            <span>Notes / الملاحظات</span>
+                            <textarea rows="6" maxlength="900" {{on "input" (fn this.update "notes")}}>{{this.form.notes}}</textarea>
+                        </label>
+                    </div>
+                    <div class="nz-kitchen-buttons">
+                        <button type="submit" class="btn btn-primary" disabled={{this.saving}} data-test-kitchen-save>{{if this.saving "Saving… / بيحفظ…" "Save / حفظ"}}</button>
+                        {{#unless this.isNew}}
+                            <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" this.copy}}>Copy as new / انسخ كجديد</button>
+                            {{#if this.selected.active}}
+                                <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" (fn this.setActive false)}}>Stop printing / وقف الطباعة</button>
+                            {{else}}
+                                <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" (fn this.setActive true)}}>Print again / رجعه للطباعة</button>
+                            {{/if}}
+                        {{/unless}}
+                        <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" this.close}}>Close / قفل</button>
+                    </div>
+                </form>
+
+                <div class="nz-kitchen-preview">
+                    <div class="nz-kitchen-preview__title">The sticker as it prints on {{this.data.delivery_date}} / شكل الستيكر وقت الطباعة</div>
+                    <div class="nz-label-preview">
+                        <article class="nz-legacy-label {{if this.preview.hasNotes 'nz-legacy-label--notes'}}" aria-label="Sticker preview">
+                            <header class="nz-legacy-label__header">
+                                <svg class="nz-legacy-label__mark" viewBox="0 0 48 44" aria-hidden="true">
+                                    <polygon points="24,2 42,12 42,32 24,42 6,32 6,12" fill="none" stroke="currentColor" stroke-width="1.4" />
+                                    <polygon points="24,6 38,14 38,30 24,38 10,30 10,14" fill="none" stroke="currentColor" stroke-width="1.1" />
+                                </svg>
+                                <div class="nz-legacy-label__brand">Nutreeze</div>
+                                <div class="nz-legacy-label__tagline">Stay Healthy</div>
+                                <div class="nz-driver-band">
+                                    <span>CAR / سيارة <strong>—</strong></span>
+                                    <span class="nz-driver-band__contact"><bdi class="nz-driver-band__name">Area's driver / سواق المنطقة</bdi><strong>—</strong></span>
+                                </div>
+                            </header>
+                            <div class="nz-legacy-label__body">
+                                <section class="nz-legacy-label__info">
+                                    <div class="nz-info-group">
+                                        <div class="nz-info-row"><em>Full Name :</em><strong>{{this.preview.fullName}}</strong></div>
+                                        <div class="nz-info-row"><em>Subscription :</em><strong>{{this.preview.subscription}}</strong></div>
+                                        <div class="nz-info-row"><em>Delivery Time :</em><strong>{{this.preview.deliveryTime}}</strong></div>
+                                        <div class="nz-info-row"><em>Days Remaining :</em><strong>{{this.preview.daysRemaining}}</strong></div>
+                                        <div class="nz-info-row"><em>Delivery Method :</em><strong>{{this.preview.deliveryMethod}}</strong></div>
+                                    </div>
+                                    <div class="nz-info-group nz-package-row">
+                                        <strong><em>{{this.preview.packageName}}</em> (Meal: {{this.preview.mealsPerDay}})</strong>
+                                        <strong>(Snacks: {{this.preview.snacksPerDay}})</strong>
+                                    </div>
+                                    <div class="nz-info-group nz-id-row">
+                                        <span>User ID <strong>{{this.preview.legacyUserId}}</strong></span>
+                                        <span class="nz-id-row__order">Order ID <strong>{{this.preview.orderNumber}}</strong></span>
+                                    </div>
+                                    <div class="nz-info-group nz-address-block">
+                                        <div><strong>Area:</strong> {{this.preview.area}}, <strong>Block:</strong> {{this.preview.block}}, <strong>Street:</strong> {{this.preview.street}}</div>
+                                        <div><strong>Building:</strong> {{this.preview.building}}, <strong>Floor:</strong> {{this.preview.floor}}, <strong>Flat:</strong> {{this.preview.flat}}, <strong>Direction:</strong> {{this.preview.direction}}</div>
+                                        <div><strong>Phone:</strong> {{this.preview.phone}}</div>
+                                        {{#unless this.preview.hasNotes}}<div><strong>Notes:</strong> -</div>{{/unless}}
+                                    </div>
+                                </section>
+                                <section class="nz-legacy-label__meals">
+                                    <table class="nz-meals-table">
+                                        <colgroup><col class="nz-meals-table__dish" /><col /><col /><col /><col /><col /></colgroup>
+                                        <thead><tr><th>Dish Name</th><th>Qty</th><th>Pro</th><th>Carb</th><th>Fat</th><th>Cal</th></tr></thead>
+                                        <tbody><tr><td class="nz-meals-table__empty" colspan="6">No dish detail recorded for this date</td></tr></tbody>
+                                    </table>
+                                    <div class="nz-total-row">
+                                        <span>Total Nutrition</span>
+                                        <table>
+                                            <thead><tr><th>Protein</th><th>Carb</th><th>Fat</th><th>Calories</th></tr></thead>
+                                            <tbody><tr><td>-</td><td>-</td><td>-</td><td>-</td></tr></tbody>
+                                        </table>
+                                    </div>
+                                    {{#if this.preview.hasNotes}}
+                                        <div class="nz-label-notes"><strong>Notes:</strong> {{this.preview.notes}}</div>
+                                    {{/if}}
+                                </section>
+                            </div>
+                            <footer class="nz-legacy-label__barcode {{if this.preview.hasNotes 'nz-legacy-label__barcode--notes'}}">
+                                <div class="nz-barcode-cell"><div class="nz-barcode-value">Barcode is added when printed / الباركود بيتضاف وقت الطباعة</div></div>
+                            </footer>
+                        </article>
+                    </div>
+                </div>
+            {{else}}
+                <div class="nz-kitchen-hint">Choose a sticker from the list to edit it, or press "New sticker". / اختار ستيكر من القايمة عشان تعدله، أو دوس "ستيكر جديد".</div>
+            {{/if}}
+        </div>
+    {{/if}}
+</section>
