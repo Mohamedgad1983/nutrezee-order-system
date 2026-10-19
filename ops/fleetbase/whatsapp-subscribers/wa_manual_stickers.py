@@ -131,10 +131,10 @@ def merge(export_path, list_path, day_text):
             # ("Muhammad - 64" for Mosaed, "Subscription", the phone number). Owner 2026-10-18.
             row['customer_name'] = sticker['name']
             row['plan'] = package(sticker, row.get('plan', ''))
-            if left is not None:
+            # ERPNext's subscription keeps its own days left and address; the sticker fills only gaps.
+            if left is not None and row.get('days_remaining') is None:
                 row['days_remaining'] = left
-            if not row.get('has_address') or sticker.get('start_date'):
-                # The page's address is the one the manager keeps; ERPNext's only when there is no page row.
+            if not row.get('has_address'):
                 row.update(area=sticker['area'], block=sticker['block'], street=sticker['street'],
                            house=sticker['house'], details=details, address_text=sticker['address'],
                            has_address=bool(sticker['area']))
