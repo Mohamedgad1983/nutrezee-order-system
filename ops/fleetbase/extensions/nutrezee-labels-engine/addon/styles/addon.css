@@ -1517,6 +1517,7 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 .nz-kitchen-field--name, .nz-kitchen-field--area, .nz-kitchen-field--address_details, .nz-kitchen-field--notes { grid-column: 1 / -1; }
 .nz-kitchen-driver { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--nz-muted, #6b7280); }
 .nz-kitchen-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+.nz-kitchen-barcode { width: 34mm; height: 9mm; display: flex; align-items: center; justify-content: center; border: 0.3mm dashed currentColor; font-size: 2.1mm; letter-spacing: 0.15mm; white-space: nowrap; overflow: hidden; }
 .nz-kitchen-preview__title { font-size: 0.8rem; color: var(--nz-muted, #6b7280); margin-bottom: 0.4rem; }
 @media (max-width: 1100px) {
     .nz-kitchen-layout { grid-template-columns: 1fr; }
