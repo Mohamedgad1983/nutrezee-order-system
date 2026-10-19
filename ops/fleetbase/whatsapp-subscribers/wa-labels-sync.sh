@@ -40,8 +40,23 @@ trap 'rm -f "$TMP"' EXIT
 install -m 644 "$HERE/wa_subscribers_export.py" /tmp/wa_subscribers_export.py
 (cd "$BENCH/sites" && sudo -u frappe "$BENCH/env/bin/python" /tmp/wa_subscribers_export.py "$SITE" "$DAY" "$TMP" </dev/null 2>/dev/null) | tee -a "$LOG"
 install -m 600 -o root -g root "$TMP" "$INPUT"
-# A95: the kitchen's own sticker list (root-only, from its Publisher file) joins the day's list.
-python3 -I "$HERE/wa_manual_stickers.py" merge "$INPUT" "$WORK/manual-stickers.json" "$DAY" | tee -a "$LOG"
+# A97: the kitchen's stickers kept on the Fleet-Ops "Kitchen Stickers" page (table kitchen_sticker)
+# join the day's list. Read-only query; the list file is root-only and carries no data into the log.
+STICKERS="$WORK/manual-stickers.json"
+if docker exec "${PG_CONTAINER:-nutrezee-postgres-1}" psql -U nutrezee -d nutrezee -At -c "SELECT to_regclass('kitchen_sticker') IS NOT NULL" 2>/dev/null | grep -qx t; then
+  docker exec "${PG_CONTAINER:-nutrezee-postgres-1}" psql -U nutrezee -d nutrezee -At -v ON_ERROR_STOP=1 -c "
+    SELECT json_build_object('source', 'kitchen_sticker', 'rows', coalesce(json_agg(json_build_object(
+      'name', name, 'mobile', mobile, 'box', coalesce(box, ''), 'notes', coalesce(notes, ''),
+      'protein', coalesce(protein_g::text, ''), 'carb', coalesce(carb_g::text, ''),
+      'meals', coalesce(meals_per_day::text, ''), 'snacks', coalesce(snacks_per_day::text, ''),
+      'breakfast', coalesce(breakfast::text, ''), 'area', area, 'block', coalesce(block, ''),
+      'street', coalesce(street, ''), 'house', coalesce(house, ''), 'details', coalesce(address_details, ''),
+      'address', concat_ws(', ', area, 'Block ' || block, 'Street ' || street, 'House ' || house, address_details),
+      'start_date', start_date::text, 'end_date', end_date::text) ORDER BY box, name), '[]'::json))
+    FROM kitchen_sticker WHERE archived_at IS NULL" > "$STICKERS.new"
+  chmod 600 "$STICKERS.new" && mv "$STICKERS.new" "$STICKERS"
+fi
+python3 -I "$HERE/wa_manual_stickers.py" merge "$INPUT" "$STICKERS" "$DAY" | tee -a "$LOG"
 
 FB_DIR=/fleetbase/api/storage/app/integrations
 docker cp "$HERE/nutreeze-wa-orders.php" "$FB:$FB_DIR/nutreeze-wa-orders.php" >/dev/null

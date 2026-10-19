@@ -219,6 +219,27 @@ export default {
             })
         );
 
+        // A97 — the drivers' manager keeps the kitchen's WhatsApp stickers (notes, grams, BOX) here.
+        menuService.registerMenuItem(
+            'engine:fleet-ops',
+            new MenuItem({
+                title: 'Nutrezee Kitchen Stickers',
+                label: 'Kitchen Stickers',
+                slug: 'nutrezee-kitchen-stickers',
+                view: 'nutrezee-kitchen-stickers',
+                section: 'management',
+                icon: 'pen-to-square',
+                priority: 6,
+                permission: 'fleet-ops update order',
+                description: "Add and edit the kitchen's WhatsApp stickers printed from Batch Labels.",
+                keywords: ['stickers', 'kitchen', 'whatsapp', 'notes', 'publisher', 'diet'],
+                component: new ExtensionComponent(
+                    '@nutrezee/fleetops-labels-engine',
+                    'kitchen-stickers'
+                ),
+            })
+        );
+
         // A30 — governed exact locations captured by the assigned driver. This stays inside the
         // same Fleet-Ops Resources surface; no second admin or Nutrezee operator login exists.
         menuService.registerMenuItem(

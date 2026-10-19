@@ -1491,3 +1491,35 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     gap: 8px;
     margin: 12px 0 8px;
 }
+
+/* A97: Kitchen Stickers page — list, form and the live sticker side by side. */
+.nz-kitchen-panel { padding: 1rem; color: var(--nz-text, #2d251f); }
+.nz-kitchen-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.nz-kitchen-layout { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(18rem, 26rem) 1fr; gap: 1rem; align-items: start; margin-top: 0.75rem; }
+.nz-kitchen-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 78vh; overflow: auto; }
+.nz-kitchen-search { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.5rem; }
+.nz-kitchen-count { font-size: 0.8rem; color: var(--nz-muted, #6b7280); }
+.nz-link-button { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; }
+.nz-kitchen-row { display: grid; grid-template-columns: auto 1fr; gap: 0 0.6rem; padding: 0.55rem 0.7rem; text-align: start; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.6rem; background: var(--nz-surface, #fff); color: inherit; cursor: pointer; }
+.nz-kitchen-row--chosen { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
+.nz-kitchen-row--stopped { opacity: 0.6; }
+.nz-kitchen-row__box { grid-row: 1 / span 2; align-self: center; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2.6rem; }
+.nz-kitchen-row__name { font-weight: 600; overflow-wrap: anywhere; }
+.nz-kitchen-row__sub { font-size: 0.75rem; color: var(--nz-muted, #6b7280); }
+.nz-kitchen-row__tag { grid-column: 2; font-size: 0.7rem; font-weight: 600; }
+.nz-kitchen-empty, .nz-kitchen-hint { color: var(--nz-muted, #6b7280); }
+.nz-kitchen-hint { grid-column: 2 / span 2; padding: 2rem 0; }
+.nz-kitchen-editor h3 { margin: 0 0 0.6rem; font-size: 1rem; }
+.nz-kitchen-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.6rem; }
+.nz-kitchen-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; }
+.nz-kitchen-field input, .nz-kitchen-field textarea { width: 100%; padding: 0.4rem 0.5rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.45rem; font: inherit; font-size: 0.9rem; }
+.nz-kitchen-field--invalid input, .nz-kitchen-field--invalid textarea { border-color: #b91c1c; }
+.nz-kitchen-field--name, .nz-kitchen-field--area, .nz-kitchen-field--address_details, .nz-kitchen-field--notes { grid-column: 1 / -1; }
+.nz-kitchen-driver { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--nz-muted, #6b7280); }
+.nz-kitchen-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+.nz-kitchen-preview__title { font-size: 0.8rem; color: var(--nz-muted, #6b7280); margin-bottom: 0.4rem; }
+@media (max-width: 1100px) {
+    .nz-kitchen-layout { grid-template-columns: 1fr; }
+    .nz-kitchen-hint { grid-column: auto; }
+    .nz-kitchen-list { max-height: 40vh; }
+}
