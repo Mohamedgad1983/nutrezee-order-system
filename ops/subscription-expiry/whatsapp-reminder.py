@@ -313,10 +313,14 @@ def main():
     queue.sort(key=lambda item: -item[1]['days_remaining'])
     halt = f'{OUT}/.whatsapp-halt-{today}'
     done_today = db.execute("SELECT count(*) FROM reminder WHERE state='sent' AND substr(at,1,10)=?", (today,)).fetchone()[0]
-    room = max(0, cap - done_today)
+    # One number, one daily budget: birthday messages sent earlier today count against TOTAL_DAILY_CAP (owner: 50).
+    total_cap = int(conf.get('TOTAL_DAILY_CAP') or cap)
+    db.execute('CREATE TABLE IF NOT EXISTS birthday(phone TEXT, year INTEGER, customer_id TEXT, state TEXT, message_id TEXT, at TEXT, PRIMARY KEY(phone, year))')
+    other_today = db.execute("SELECT count(*) FROM birthday WHERE state='sent' AND substr(at,1,10)=?", (today,)).fetchone()[0]
+    room = max(0, min(cap - done_today, total_cap - done_today - other_today))
     over = max(0, len(queue) - room)
     queue = queue[:room]
-    log(f"Customers in report: {len(report['customers'])}; to remind now: {len(queue)} (daily cap {cap}, already sent today {done_today}, left for the call centre: {over}); skipped: {json.dumps(skipped, ensure_ascii=False)}")
+    log(f"Customers in report: {len(report['customers'])}; to remind now: {len(queue)} (daily cap {cap}, total cap {total_cap}, already sent today {done_today} + {other_today} birthday, left for the call centre: {over}); skipped: {json.dumps(skipped, ensure_ascii=False)}")
     if not live:
         if queue:
             log(f"DRY-RUN sample text length {len(compose(template, queue[0][1].get('customer_name'), queue[0][1]['days_remaining']))} chars; names usable: {sum(1 for _, c in queue if first_name(c.get('customer_name')))}/{len(queue)}")
