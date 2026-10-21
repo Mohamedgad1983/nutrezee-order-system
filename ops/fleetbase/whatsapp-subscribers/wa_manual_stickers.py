@@ -117,6 +117,10 @@ def merge(export_path, list_path, day_text):
         if sticker.get('start_date') and day_text < sticker['start_date']:
             continue
         end = date.fromisoformat(sticker['end_date']) if sticker.get('end_date') else sheet_date(sticker.get('end', ''))
+        # A97.2 (2026-10-19): the page's end date is the last day it prints. A sticker entered for
+        # one day (start = end = 20 Oct) kept printing on the 21st and 22nd for a cancelled customer.
+        if sticker.get('start_date') and end and day > end:
+            continue
         left = (sum((day + timedelta(days=i)).weekday() != 4 for i in range((end - day).days + 1))
                 if end and end >= day else None)
         details = sticker.get('details', sticker['address'])

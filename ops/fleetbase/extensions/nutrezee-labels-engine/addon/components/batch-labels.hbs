@@ -148,6 +148,9 @@
         <div class="nz-batch-print-actions">
             <div>
                 <h3>{{this.preview.count}} labels ready / ملصقات جاهزة — {{this.currentFilterLabel}} · {{this.selectedDate}}</h3>
+                {{#if this.extraStickers}}
+                    <p data-test-double-box-stickers><strong>{{this.preview.stickers}} stickers</strong>: Thursday double boxes print two each (BOX 1 OF 2, BOX 2 OF 2). / <strong>{{this.preview.stickers}} ستيكر</strong>: الدبل بوكس بيطلع له ستيكرين.</p>
+                {{/if}}
                 <p>One 150 × 100 mm sticker per printed page. Nothing is recorded until you confirm.</p>
                 {{#if this.hasReprints}}
                     <label class="nz-label-reason">
@@ -185,8 +188,9 @@
 
         <div class="nz-batch-labels" aria-label="Prepared Nutrezee batch labels">
             {{#each this.preview.items as |item|}}
-                <article class="nz-legacy-label nz-batch-label {{if item.label.hasNotes 'nz-legacy-label--notes'}}" aria-label="Nutrezee label for order {{item.label.orderNumber}}">
+                <article class="nz-legacy-label nz-batch-label {{if item.label.hasNotes 'nz-legacy-label--notes'}} {{if item.boxTitle 'nz-legacy-label--box'}}" aria-label="Nutrezee label for order {{item.label.orderNumber}}">
                     <header class="nz-legacy-label__header">
+                        {{#if item.boxTitle}}<div class="nz-legacy-label__box" data-test-label-box>{{item.boxTitle}}</div>{{/if}}
                         <svg class="nz-legacy-label__mark" viewBox="0 0 48 44" aria-hidden="true">
                             <polygon points="24,2 42,12 42,32 24,42 6,32 6,12" fill="none" stroke="currentColor" stroke-width="1.4" />
                             <polygon points="24,6 38,14 38,30 24,38 10,30 10,14" fill="none" stroke="currentColor" stroke-width="1.1" />

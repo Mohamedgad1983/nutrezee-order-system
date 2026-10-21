@@ -15,7 +15,7 @@ import {
   type PartnerLabelMealSourceGateway,
 } from './partner-label-source';
 import { validPin } from './order-status';
-import { isKitchenPickup, localPhone, mealsOfOneDelivery, type PartnerLabelProfileGateway } from './partner-label-profile';
+import { isKitchenPickup, localPhone, mealsOfOneDelivery, mealsPerBox, type PartnerLabelProfileGateway } from './partner-label-profile';
 
 // m25-label — builds the exact legacy label (WP-LBL-02, amendment A27) and records prints.
 //
@@ -62,6 +62,8 @@ export interface BatchLabelCandidate {
   timeLabel: string;
   /** A83: WhatsApp-system subscribers (order numbers WA-…) are printed apart from the legacy orders. */
   source: 'partner' | 'whatsapp';
+  /** A98: a Thursday double box (two boxes, two stickers). */
+  doubleBox?: boolean;
   driverId: string | null;
   driverLabel: string | null;
   driverRef: string | null;
@@ -108,7 +110,7 @@ export interface FleetbaseDriverLabelSource {
 }
 
 export interface BatchLabelFilter {
-  filterType: 'driver' | 'area' | 'time' | 'source';
+  filterType: 'driver' | 'area' | 'time' | 'source' | 'double_box';
   filterValue: string;
   selectionIds?: string[];
 }
@@ -202,8 +204,11 @@ export class LabelService {
       ? await this.partnerProfile.profileForOrder(r.order_number as string, deliveryDate)
       : null;
     // A92: a delivery legacy holds twice lists its meals twice; the box carries them once.
-    const meals = mealSource === 'partner_api_v2' && profile
+    // A98: a Thursday double box has two real deliveries — never fold them, print one sticker each.
+    const doubleBox = mealSource === 'partner_api_v2' && !!profile?.doubleBox;
+    const meals = mealSource === 'partner_api_v2' && profile && !doubleBox
       ? mealsOfOneDelivery(listedMeals, profile.deliveryRows) : listedMeals;
+    const boxes = doubleBox ? mealsPerBox(listedMeals, profile!.boxItemCounts) : null;
     const storedUserId = (r.legacy_user_id as string) ?? null;
     const sourceAddress = source?.labelAddress ?? null;
     const address: LabelAddressContract = sourceAddress ? {
@@ -263,6 +268,7 @@ export class LabelService {
       meals,
       meal_source: mealSource,
       totals: totalsOf(meals),
+      ...(boxes ? { boxes: boxes.map((box, i) => ({ index: i + 1, total: boxes.length, meals: box, totals: totalsOf(box) })) } : {}),
       barcode_value: barcode.barcode_value,
       barcode_svg: code128Svg(barcode.barcode_value, { moduleWidth: 1, height: 44, quietModules: 10 }),
     };
@@ -382,7 +388,7 @@ export class LabelService {
       }));
     }
 
-    return rows.map((raw) => {
+    const candidates: BatchLabelCandidate[] = rows.map((raw) => {
       const row = raw as Record<string, unknown>;
       const localOrderId = row.order_id as string;
       const order = fleetbaseByLocalOrder.get(localOrderId)!;
@@ -419,6 +425,15 @@ export class LabelService {
         fallbackPin: validPin(order.meta?.fallback_latitude, order.meta?.fallback_longitude),
       };
     });
+    // A98: Thursday double boxes print two stickers each and can be printed as their own batch.
+    if (this.partnerProfile) {
+      await Promise.all(candidates.map(async (candidate) => {
+        if (candidate.source !== 'partner') return;
+        const profile = await this.partnerProfile!.profileForOrder(candidate.orderNumber, deliveryDate);
+        if (profile?.doubleBox) candidate.doubleBox = true;
+      }));
+    }
+    return candidates;
   }
 
   /** A72: every order of the customers whose phone ends with these digits (newest first). */
@@ -456,7 +471,7 @@ export class LabelService {
     candidates: BatchLabelCandidate[],
     filter: BatchLabelFilter,
   ): BatchLabelCandidate[] {
-    if (!['driver', 'area', 'time', 'source'].includes(filter.filterType)) {
+    if (!['driver', 'area', 'time', 'source', 'double_box'].includes(filter.filterType)) {
       throw new LabelError('validation_failed', { field: 'filter_type' });
     }
     const filterValue = String(filter.filterValue ?? '').trim();
@@ -467,6 +482,8 @@ export class LabelService {
         ? candidate.driverId === filterValue
         : filter.filterType === 'time'
           ? candidate.timeKey === filterValue
+          : filter.filterType === 'double_box'
+            ? candidate.doubleBox === true
           : filter.filterType === 'source'
             // A96: the kitchen's own stickers (A95) are the WhatsApp labels that carry its box number.
             ? filterValue === KITCHEN_STICKERS ? isKitchenSticker(candidate) : candidate.source === filterValue

@@ -36,6 +36,9 @@ export interface PartnerLabelProfile {
   daysRemaining: number | null;
   /** A92: how many delivery rows legacy holds for this order on this day (2+ is a doubled row). */
   deliveryRows: number;
+  /** A98: a Thursday double box — two boxes, one sticker each; meal lines per box in delivery order. */
+  doubleBox: boolean;
+  boxItemCounts: number[];
 }
 
 export interface PartnerLabelProfileGateway {
@@ -66,6 +69,8 @@ interface SubscriptionRef {
   snacksPerDay: number | null;
   endDate: string | null;
   offWeekdays: number[];
+  /** A98: Friday's box goes out on Thursday next to Thursday's own (legacy "Thursday Double Box"). */
+  doubleBox: boolean;
 }
 
 interface Reference {
@@ -77,6 +82,7 @@ interface DayRow {
   subscriptionId: string; userId: string | null; phone: string | null; area: string | null; notes: string | null;
   deliveryTime: string | null; deliveryMethod: string | null;
   deliveryRows: number;
+  boxItemCounts: number[];
 }
 
 interface Cached<T> { loadedAt: number; value: T }
@@ -136,9 +142,11 @@ export function localPhone(value: unknown): string | null {
  */
 export function daysRemaining(
   deliveryDate: string,
-  subscription: { endDate: string | null; offWeekdays: number[] },
+  subscription: { endDate: string | null; offWeekdays: number[]; doubleBox?: boolean },
   upcomingFreezes: ReadonlySet<string> = new Set(),
 ): number | null {
+  // A98: a double-box customer still receives Friday's meals (on Thursday), as the legacy count shows.
+  const offWeekdays = subscription.doubleBox ? subscription.offWeekdays.filter((d) => d !== 5) : subscription.offWeekdays;
   if (!subscription.endDate || !DATE_RE.test(deliveryDate)) return null;
   const end = Date.parse(`${subscription.endDate}T00:00:00Z`);
   let cursor = Date.parse(`${deliveryDate}T00:00:00Z`);
@@ -146,7 +154,7 @@ export function daysRemaining(
   let days = 0;
   for (; cursor <= end; cursor += 86_400_000) {
     const date = new Date(cursor);
-    if (subscription.offWeekdays.includes(date.getUTCDay())) continue;
+    if (offWeekdays.includes(date.getUTCDay())) continue;
     if (!upcomingFreezes.has(date.toISOString().slice(0, 10))) days += 1;
   }
   return days;
@@ -178,6 +186,26 @@ export function mealsOfOneDelivery<T extends { dish_name: string; qty: number | 
     if (!first || !copy || copy.dish_name !== first.dish_name || copy.qty !== first.qty) return meals;
   }
   return meals.slice(0, size);
+}
+
+function itemCountsInOrder(byDelivery: Map<string, number>): number[] {
+  return [...byDelivery.entries()]
+    .sort((a, b) => (Number(a[0]) - Number(b[0])) || a[0].localeCompare(b[0]))
+    .map(([, count]) => count);
+}
+
+/**
+ * A98 — the meal lines of a Thursday double box, one list per box, in delivery order (legacy prints
+ * "BOX 1 OF 2" and "BOX 2 OF 2"). Partner lists the order's lines in delivery order and gives each
+ * delivery's line count; null when they do not add up, so the label keeps one sticker.
+ */
+export function mealsPerBox<T>(meals: T[], boxItemCounts: number[]): T[][] | null {
+  if (boxItemCounts.length < 2 || boxItemCounts.some((n) => !Number.isInteger(n) || n <= 0)) return null;
+  if (boxItemCounts.reduce((a, b) => a + b, 0) !== meals.length) return null;
+  const boxes: T[][] = [];
+  let at = 0;
+  for (const n of boxItemCounts) { boxes.push(meals.slice(at, at + n)); at += n; }
+  return boxes;
 }
 
 export function addressFromPartner(raw: unknown): LabelAddressContract | null {
@@ -268,6 +296,8 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         deliveryTime: day.deliveryTime,
         deliveryMethod: day.deliveryMethod,
         deliveryRows: day.deliveryRows,
+        doubleBox: !!subscription?.doubleBox && day.deliveryRows >= 2,
+        boxItemCounts: day.boxItemCounts,
         daysRemaining: subscription
           ? daysRemaining(deliveryDate, subscription, freezes?.bySubscription.get(day.subscriptionId)) : null,
       };
@@ -316,6 +346,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           endDate: typeof raw.end_date === 'string' && DATE_RE.test(raw.end_date) ? raw.end_date : null,
           offWeekdays: Array.isArray(delivery.off_weekdays)
             ? delivery.off_weekdays.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6) : [],
+          doubleBox: delivery.thursday_double_box === true,
         });
       }
       const addresses = new Map<string, LabelAddressContract>();
@@ -406,7 +437,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
     const load = (async () => {
       const rows = new Map<string, DayRow>();
       const newest = new Map<string, number>();
-      const deliveryIds = new Map<string, Set<string>>();
+      const deliveryIds = new Map<string, Map<string, number>>();
       for (const raw of await this.fetchAll('daily-deliveries', { delivery_date: deliveryDate })) {
         if (!isRecord(raw)) continue;
         const number = labelText(raw.order_number, 255);
@@ -414,10 +445,14 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
         if (!number || !subscriptionId) continue;
         const updated = typeof raw.updated_at === 'string' ? new Date(raw.updated_at).getTime() || 0 : 0;
         const deliveryId = idText(raw.delivery_id);
-        const seen = deliveryIds.get(number) ?? new Set<string>();
-        if (deliveryId) seen.add(deliveryId);
+        const seen = deliveryIds.get(number) ?? new Map<string, number>();
+        if (deliveryId) seen.set(deliveryId, smallCount(raw.meal_item_count) ?? 0);
         deliveryIds.set(number, seen);
-        if (rows.has(number) && updated < (newest.get(number) ?? 0)) { rows.get(number)!.deliveryRows = Math.max(1, seen.size); continue; }
+        if (rows.has(number) && updated < (newest.get(number) ?? 0)) {
+          rows.get(number)!.deliveryRows = Math.max(1, seen.size);
+          rows.get(number)!.boxItemCounts = itemCountsInOrder(seen);
+          continue;
+        }
         const customer = isRecord(raw.customer) ? raw.customer : {};
         const address = isRecord(raw.address) ? raw.address : {};
         newest.set(number, updated);
@@ -430,6 +465,7 @@ export class PartnerLabelProfileSource implements PartnerLabelProfileGateway {
           deliveryTime: labelText(isRecord(raw.time_slot) ? raw.time_slot.title : null),
           deliveryMethod: labelText(raw.delivery_method),
           deliveryRows: Math.max(1, seen.size),
+          boxItemCounts: itemCountsInOrder(seen),
         });
       }
       if (this.days.size > 40) this.days.clear();

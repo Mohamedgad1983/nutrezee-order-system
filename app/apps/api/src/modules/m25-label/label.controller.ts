@@ -461,7 +461,7 @@ interface PrintBody { delivery_date: string; kind?: 'print' | 'reprint'; reason?
 interface FleetbasePrintBody { kind?: 'print' | 'reprint'; reason?: string; batch_ref?: string }
 interface FleetbaseBatchBody {
   delivery_date?: string;
-  filter_type: 'driver' | 'area' | 'time' | 'source';
+  filter_type: 'driver' | 'area' | 'time' | 'source' | 'double_box';
   filter_value: string;
   selection_ids?: string[];
 }
@@ -522,6 +522,8 @@ function batchOptionsResponse(
     legacy_total: candidates.length - whatsapp,
     whatsapp_total: whatsapp,
     whatsapp_kitchen_total: kitchen,
+    // A98: Thursday double boxes — two stickers each; their own batch in the Delivery orders tab.
+    double_box_total: candidates.filter((c) => c.doubleBox).length,
     sources: [
       ...(whatsapp > 0 ? [{ id: 'whatsapp', label: 'All WhatsApp subscribers / كل مشتركين الواتساب', count: whatsapp }] : []),
       ...(kitchen > 0 ? [{ id: KITCHEN_STICKERS, label: 'Kitchen stickers / ستيكرات المطبخ', count: kitchen }] : []),
@@ -545,6 +547,7 @@ function batchOptionsResponse(
       time: candidate.timeLabel,
       source: candidate.source,
       kitchen: isKitchenSticker(candidate),
+      double_box: candidate.doubleBox === true,
     })),
   };
 }

@@ -175,6 +175,8 @@ export interface LabelDocumentContract {
   meals: LabelMealRowContract[];
   meal_source: LabelMealSource;
   totals: LabelNutritionTotalsContract;
+  /** A98: a Thursday double box prints one sticker per box ("BOX 1 OF 2"), each with its own meals. */
+  boxes?: { index: number; total: number; meals: LabelMealRowContract[]; totals: LabelNutritionTotalsContract }[];
   barcode_value: string;
   barcode_svg: string;
 }

@@ -353,3 +353,46 @@ describe('TS-U A96 WhatsApp tab and the kitchen stickers', () => {
     expect(s.selectionIds).toEqual(['day:o1', 'day:o2']);
   });
 });
+
+describe('TS-U A98 Thursday double box', () => {
+  const day = {
+    ...options,
+    double_box_total: 1,
+    orders: [
+      ...orders.map((o) => ({ ...o, double_box: false })),
+      { selection_id: 'day:d1', order_number: '30145', area_id: 'a1', area: 'Salmiya', driver_id: 'd1', driver_label: 'Car 1', double_box: true },
+    ],
+  };
+  function state() {
+    const s = batch();
+    s.options = day;
+    s.showSelection = vi.fn();
+    s.selectAllFiltered();
+    return s;
+  }
+
+  it('prints the double boxes as their own batch', () => {
+    const s = state();
+    expect(s.filterTypes.map((t: { id: string }) => t.id)).toContain('double_box');
+    s.chooseFilterType('double_box');
+    expect(s.filterValue).toBe('all');
+    expect(s.selectionIds).toEqual(['day:d1']);
+    expect(s.batchPayload()).toMatchObject({ filter_type: 'double_box', filter_value: 'all', selection_ids: ['day:d1'] });
+  });
+
+  it('turns one double-box label into BOX 1 OF 2 and BOX 2 OF 2 with their own meals', async () => {
+    const s = state();
+    s.chooseFilterType('double_box');
+    const box = (n: string) => ({ meals: [{ dish_name: n, qty: 1 }], totals: { calories: 1 } });
+    s.request = vi.fn(async () => ({
+      count: 1,
+      items: [{ selection_id: 'day:d1', label: { order_number: '30145', meals: [], boxes: [{ index: 1, total: 2, ...box('thu') }, { index: 2, total: 2, ...box('fri') }] } }],
+    }));
+    const Batch = component('batch-labels');
+    Object.assign(s, { showSelection: Batch.prototype.showSelection });
+    await s.showSelection();
+    expect(s.preview.items.map((i: { boxTitle: string; label: { meals: { dish_name: string }[] } }) => [i.boxTitle, i.label.meals[0]?.dish_name]))
+      .toEqual([['BOX 1 OF 2', 'thu'], ['BOX 2 OF 2', 'fri']]);
+    expect(s.extraStickers).toBe(true);
+  });
+});

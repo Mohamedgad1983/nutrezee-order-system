@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  PartnerLabelProfileSource, addressFromPartner, daysRemaining, isKitchenPickup, labelText, localPhone, mealsOfOneDelivery,
+  PartnerLabelProfileSource, addressFromPartner, daysRemaining, isKitchenPickup, labelText, localPhone, mealsOfOneDelivery, mealsPerBox,
 } from '../../apps/api/src/modules/m25-label/partner-label-profile';
 
 // TS-U (WP-OPS-A78) — the customer part of the legacy label, read from Partner at print time.
@@ -100,7 +100,7 @@ describe('TS-U partner label profile (A78)', () => {
       packageName: '(تقريبا) 720- 1920 سعرة حرارية', mealsPerDay: 3, snacksPerDay: 2,
       address: { area: 'Abdullah Al Mubarak', block: '3', street: '314', building: '13', floor: null, flat: null, direction: null },
       notes: 'Thursday Double Box if no answer call 97504160',
-      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: 3, deliveryRows: 1,
+      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: 3, deliveryRows: 1, doubleBox: false, boxItemCounts: [],
     });
     await expect(instance.profileForOrder('WA-98992558', DATE)).resolves.toBeNull();
     await instance.profileForOrder('29203', DATE);
@@ -121,7 +121,7 @@ describe('TS-U partner label profile (A78)', () => {
     await expect(lists.instance.profileForOrder('29203', DATE)).resolves.toEqual({
       userId: '1119', phone: '98992558', packageName: null, mealsPerDay: null, snacksPerDay: null, address: null,
       notes: 'Thursday Double Box if no answer call 97504160',
-      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: null, deliveryRows: 1,
+      deliveryTime: 'Before 1 day', deliveryMethod: 'Leave the box', daysRemaining: null, deliveryRows: 1, doubleBox: false, boxItemCounts: [],
     });
     const down = source({});
     await expect(down.instance.profileForOrder('29203', DATE)).resolves.toBeNull();
@@ -217,5 +217,26 @@ describe('TS-U partner label profile (A78)', () => {
       'customer-addresses': () => page([address]),
     });
     expect((await instance.profileForOrder('29203', DATE))?.deliveryRows).toBe(2);
+  });
+
+  it('A98: a Thursday double box is two boxes with their own meals, and Friday still counts as a day', async () => {
+    const meal = (dish_name: string) => ({ dish_name, qty: 1 });
+    const thursday = ['cheddar toast', 'chomein', 'pasta', 'dry fruits', 'crudites'].map(meal);
+    const friday = ['cheddar toast', 'pasta', 'chomein', 'tabbouleh'].map(meal);
+    expect(mealsPerBox([...thursday, ...friday], [5, 4])).toEqual([thursday, friday]);
+    expect(mealsPerBox([...thursday, ...friday], [5, 5])).toBeNull();
+    expect(mealsPerBox(thursday, [5])).toBeNull();
+    // Thu 22 Oct to Tue 27 Oct: 6 with Friday's box (legacy "Days Remaining 6"), 5 without
+    expect(daysRemaining('2026-10-22', { endDate: '2026-10-27', offWeekdays: [5], doubleBox: true })).toBe(6);
+    expect(daysRemaining('2026-10-22', { endDate: '2026-10-27', offWeekdays: [5] })).toBe(5);
+
+    const { instance } = source({
+      'daily-deliveries': () => page([
+        { ...daily, delivery_id: 411360, meal_item_count: 4 }, { ...daily, delivery_id: 411359, meal_item_count: 5 },
+      ]),
+      subscriptions: () => page([{ ...subscription, delivery: { ...subscription.delivery, thursday_double_box: true } }]),
+      'customer-addresses': () => page([address]),
+    });
+    expect(await instance.profileForOrder('29203', DATE)).toMatchObject({ deliveryRows: 2, doubleBox: true, boxItemCounts: [5, 4] });
   });
 });
