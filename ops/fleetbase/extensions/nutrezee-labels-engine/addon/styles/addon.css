@@ -1524,3 +1524,19 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     .nz-kitchen-hint { grid-column: auto; }
     .nz-kitchen-list { max-height: 40vh; }
 }
+
+/* A98: "BOX 1 OF 2" on a Thursday double box, under the brand like the legacy sticker. */
+.nz-legacy-label__box {
+    /* In the place of the hexagon mark, so the header keeps its height. */
+    width: 26mm;
+    height: 3.8mm;
+    margin-bottom: 0.15mm;
+    color: #000;
+    font-size: 3mm;
+    font-weight: 800;
+    line-height: 3.8mm;
+    letter-spacing: 0.1mm;
+    text-align: center;
+    white-space: nowrap;
+}
+.nz-legacy-label--box .nz-legacy-label__mark { display: none; }

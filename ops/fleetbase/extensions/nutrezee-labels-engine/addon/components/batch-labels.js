@@ -217,12 +217,19 @@ export default class BatchLabelsComponent extends Component {
             { id: 'area', label: 'Area / المنطقة' },
             { id: 'time', label: 'Delivery time / وقت التوصيل' },
             { id: 'source', label: 'WhatsApp subscribers / مشتركين الواتساب' },
+            { id: 'double_box', label: 'Thursday double box / دبل بوكس الخميس' },
             { id: 'order', label: 'Orders / الطلبات' },
         ].filter((option) => (option.id !== 'driver' || this.hasDriverOptions) && (option.id !== 'time' || this.timeSlots.length > 0)
-            && (option.id !== 'source' || this.sources.length > 0));
+            && (option.id !== 'source' || this.sources.length > 0)
+            && (option.id !== 'double_box' || (this.options?.double_box_total ?? 0) > 0));
     }
 
     /** A96: "Delivery orders" (legacy) or "WhatsApp" — the two tabs of the page. */
+    /** A98: more stickers than labels when Thursday double boxes are in the batch. */
+    get extraStickers() {
+        return (this.preview?.stickers ?? 0) > (this.preview?.count ?? 0);
+    }
+
     get activeTab() {
         return this.filterType === 'source' ? 'whatsapp' : 'delivery';
     }
@@ -247,7 +254,7 @@ export default class BatchLabelsComponent extends Component {
 
     get filterLabel() {
         if (this.filterType === 'time') return 'Delivery time / وقت التوصيل';
-        if (this.filterType === 'source') return 'Group / المجموعة';
+        if (this.filterType === 'source' || this.filterType === 'double_box') return 'Group / المجموعة';
         return this.filterType === 'driver' ? 'Driver / السائق' : 'Area / المنطقة';
     }
 
@@ -273,6 +280,9 @@ export default class BatchLabelsComponent extends Component {
         if (!this.options || this.isOrderFilter) return [];
         if (this.filterType === 'time') return this.timeSlots;
         if (this.filterType === 'source') return this.sources;
+        if (this.filterType === 'double_box') {
+            return [{ id: 'all', label: `Double box customers (${this.options.double_box_total ?? 0}) — 2 stickers each / عملاء الدبل بوكس — ستيكرين لكل واحد` }];
+        }
         return (this.filterType === 'driver' ? this.options.drivers : this.options.areas) ?? [];
     }
 
@@ -288,6 +298,8 @@ export default class BatchLabelsComponent extends Component {
                 : (order) => order.source === this.filterValue;
             return orders.filter(inGroup).sort(byDriverThenArea);
         }
+        // A98: the Thursday double boxes as their own batch (two stickers each).
+        if (this.filterType === 'double_box') return orders.filter((order) => order.double_box).sort(byDriverThenArea);
         const legacy = orders.filter((order) => order.source !== 'whatsapp');
         if (this.filterType === 'time') {
             // One time slot across the day prints grouped by driver, then area.
@@ -556,13 +568,18 @@ export default class BatchLabelsComponent extends Component {
                 body: JSON.stringify(payload),
             });
             if (revision !== this.previewRevision || this.isDestroyed || this.isDestroying) return;
-            this.preview = {
-                ...response,
-                items: (response.items ?? []).map((item) => ({
+            // A98: a Thursday double box comes as one label with two boxes; it prints as two stickers,
+            // "BOX 1 OF 2" and "BOX 2 OF 2", each with its own meals (as the legacy admin prints them).
+            const items = (response.items ?? []).flatMap((item) => {
+                const boxes = Array.isArray(item.label?.boxes) && item.label.boxes.length > 1 ? item.label.boxes : null;
+                if (!boxes) return [{ ...item, label: normalizeLabel(item.label) }];
+                return boxes.map((box) => ({
                     ...item,
-                    label: normalizeLabel(item.label),
-                })),
-            };
+                    boxTitle: `BOX ${box.index} OF ${box.total}`,
+                    label: normalizeLabel({ ...item.label, meals: box.meals, totals: box.totals }),
+                }));
+            });
+            this.preview = { ...response, items, stickers: items.length };
             this.notice = `${response.count} label(s) for ${this.selectedDate} shown below. No print has been recorded yet.`;
             // A88: once the labels are on the page, make every customer column fit above its barcode.
             if (typeof window !== 'undefined') window.requestAnimationFrame(() => fitLabels());
