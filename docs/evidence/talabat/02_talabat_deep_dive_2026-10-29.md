@@ -209,3 +209,52 @@ Labels: **Verified** = read from data. *Inferred* = derived. **[NC]** = needs ow
 
 ## English summary
 Order-level data (69.5k orders, 90 days) overturns the first report's main hypothesis: food does **not** sit after being marked ready (median 2 min). Instead Talabat dispatches riders early: in 66% of orders the rider arrives ≥5 min before the food is ready (median 8 min) and waits 11 min at the store, so every minute of prep (13–14 min at most stores, 11 at Khairan) translates directly into lateness: 60% of orders deliver after the promised time, 16.5% ≥10 min late (worst: West Abu Fetera 19%, Sharq 18.5%). "Cold food" therefore comes from the 18–20 min transit with weak packaging, pre-made/reheated items, and the 20:00–22:00 peak (23% of orders). Complaints: 425 (0.61%), 58% missing/wrong items, 13 food-poisoning cases (Jabriya 5, Sharq 3, WAF 3); Ardhiya is worst at 1.01%, two-thirds packing errors. Pro subscribers are 53% of orders, bigger baskets, and complain 2.4× more. Vendor cancellations are led by spillage (80) and wrong items (45); 28% of all cancellations are rider/customer-caused and disputable. Reviews (404 with text, 55% 1–2★): cold 16%, not fresh/old 14%, wrong/missing/notes ignored 10%, portion shrink 9% (a July 2026 portion change is suspected [NC]). Channel economics: 71.1% of food value reaches the payout (commission 18.8%, ops 3.4%, marketing 2.35%, vendor vouchers 2.15%, payment 1.6%); no wait-time or avoidable-cancellation fees yet. Volume: Talabat fell 20% Aug→Oct (25.9k→20.7k) while Keeta roughly doubled; Khairan's drop is seasonal across all channels. Menu: only bundles grow (+463%, +113%, +48%), Steak & Mash −41% after removal, 90 tail items sold ≤5 units. Priorities: read customer notes twice, packing checklist + seal (sauces/desserts first), reply to 400+ reviews and dispute rider-caused cancellations, immediate food-safety audit, 10-minute peak prep target, morning-shift review, heat/spill-proof packaging, menu-stock sync and tail pruning, no blanket discounts (channel keeps 71%), compare Keeta's real commission, plan Khairan staffing seasonally, flag PRO orders, and pipe Talabat KPIs into the executive dashboard.
+
+---
+
+## 9. إضافة 2026-10-30 — المنيو، مستويات tStar، ومناطق التوصيل (Verified)
+
+### 9.1 المنيو: نفس الأسعار في كل الفروع، لكن التوفر مختلف جدًا
+المنيو على طلبات 170 صنفًا في 17 فئة (الخيران 161، نسخة مختلفة). **الأسعار متطابقة في الفروع الثمانية** (برجر سماش 1.750، دبل 2.450، ستيك روزماري 4.250، سلمون 4.500، شوربة عدس 0.950). الفرق كله في زر "متاح":
+
+| الفرع | أصناف مطفأة | أهم ما هو مطفأ |
+|---|---|---|
+| Sharq | **53** | شوربة العدس، كل القهوة (11/11)، كل العصائر (5)، كل البروتين شيك (5)، الشوفان، رمان طازج، 23 صوص |
+| Jabriya | **47** | **عرض "سماش + بطاطس مشوية" 2 KD** (الصنف الأسرع نموًا، باع 650 في الفرع قبل إطفائه)، **كومبو الفيليه** (+463% على الشبكة)، كومبو البافلو، تيراميسو، كرات البروتين، 23 صوص |
+| Ardhiya | 46 | كل البروتين شيك (5)، الشوفان، القهوة، 23 صوص |
+| Mahboula | 43 | **ساندويتش الأفوكادو بالبيض** (1,697 وحدة على الشبكة)، شريحة أفوكادو، كرات البروتين، الصنفان الجديدان (Roasted Potato Bed / Sweet potato power) |
+| Reggai | 42 | **دبل سماش لفافة خس** (2,206 على الشبكة)، فواكه مشكلة |
+| Khairan | 41 | Loaded Beef Bowl (جديد)، تشيز كيك توت، ريسز |
+| WAF/Qurain | 39 | **سلطة الشمندر** (1,355 على الشبكة، 319 في الفرع)، **توست الأفوكادو** (331 في الفرع)، تيراميسو، تشيز كيك ×2، براونيز |
+| Jahra | 31 | **إيجز بنديكت** (1,556 على الشبكة)، أومليت تركي، **كل العصائر الطازجة الأربعة**، 7 حلويات |
+
+**مطفأ على مستوى الشبكة كلها:** فئة القهوة (10 من 11 في 7 فروع، 11/11 في الشرق)، فئة "Sauces add-ons" المدفوعة (23 صوص) في 7 فروع، Protein Cookie في 7، Peanut Toast و Mango Trifle في 8، Overnight Oats في 5. القهوة والصوصات المدفوعة لم تبع وحدة واحدة في 90 يوم، أي أنها مطفأة منذ أشهر وتظهر للعميل كفئات رمادية.
+
+*Inferred:* جزء من الإطفاء مقصود (القهوة، صوصات مدفوعة مكررة مع الخيارات المجانية)، لكن الأصناف الأعلى مبيعًا المطفأة في فرع واحد فقط (العرض 2 KD في الجابرية، إيجز بنديكت في الجهراء، أفوكادو-بيض في المهبولة، شمندر في القرين) تبدو **نفاد مخزون قديم لم يُعد تشغيله**. هذا يفسر جزءًا من "Items unavailable" وإغلاق "outdated menu" و"الطلب ناقص". **[NC] يحتاج مراجعة مع مدير كل فرع اليوم.** صلاحية الحساب الحالي "تغيير التوفر فقط"، فالتشغيل ممكن فورًا من البورتال.
+
+### 9.2 tStar — الأهداف السبعة والفجوة لكل فرع (شهر أكتوبر، التقييم 1 نوفمبر)
+الأهداف: إغلاق <5%، شكاوى (Customer contacts) <0.5%، Menu score >95%، تقييم >4.3، إلغاءات متجنَّبة <0.5%، انتظار السائق <3 دقائق، طلبات >60.
+
+| الفرع | المستوى الآن | المتوقع لنوفمبر | الناقص |
+|---|---|---|---|
+| Khairan | Exceptional | Exceptional 7/7 | — (إغلاق 2.68%، شكاوى 0.24%، انتظار 1.7 د) |
+| Reggai | Good | **Exceptional 7/7** | — |
+| Jahra | Good | **Exceptional 7/7** | — |
+| Jabriya | Good | Good 6/7 | شكاوى 0.58% |
+| WAF/Qurain | Good | Good 6/7 | شكاوى 0.60% |
+| Mahboula | Good | Good 5/7 | إغلاق **6.03%**، شكاوى 0.68% |
+| Sharq | Good | Good 4/7 | شكاوى 0.56%، تقييم 4.1، انتظار 3.2 د |
+| Ardhiya | Fair | Good 6/7 | تقييم 3.8 (الآن 4.0) |
+
+ثلاثة فروع ستكون Exceptional من نوفمبر (ظهور مجاني في Top Restaurants swimlane والفلتر والشارة). الجابرية والقرين على بُعد هدف واحد (الشكاوى)، وهما 41% من المبيعات.
+
+### 9.3 مناطق التوصيل (30 يوم، 229 اسم منطقة = 174 بعد دمج العربي/الإنجليزي)
+- أعلى 10 مناطق = 31.5% من المبيعات، أعلى 24 = 50%. السوق موزع، لا منطقة تتجاوز 5%.
+- **الخيران 5,718 KWD (5.1%) أكبر منطقة في الشبكة** رغم هبوط الفرع 16%؛ ثم جابر الأحمد 4,528، عبدالله المبارك/غرب الجليب 4,469، صباح السالم 3,788، سعد العبدالله 3,438، مبارك الكبير 3,159، أبو فطيرة 2,922، العدان 2,521، الجابرية 2,436، الفنيطيس 2,337.
+- 45 منطقة تبيع أقل من 100 KWD في الشهر (مجموعها 1,992 KWD = 1.8%)؛ هذه هي الأطراف التي تطيل مسافة التوصيل وتزيد "بارد" و"لم يُعثر على العميل". [NC] مراجعة نطاق التوصيل لكل فرع مع طلبات.
+- البورتال يكرر المناطق بالعربي والإنجليزي (مثلاً Khairan 3,453 + الخيران 2,265)؛ أي تقرير داخلي يجب أن يدمجها.
+
+### 9.4 ملاحظات أخرى
+- "20 stores" في صفحتي المنيو وأوقات العمل رسم توضيحي ثابت، وليس بيانات. الفروع 8.
+- آخر 7 أيام (23–29 أكتوبر): الشرق +10%، العارضية +9%، الرقعي +7%، المهبولة +5%، الخيران +5%، الجهراء −4%، الجابرية والقرين ثابتان.
+- تقييم العارضية ارتفع من 3.8 إلى 4.0 خلال يوم واحد (29→30 أكتوبر).
