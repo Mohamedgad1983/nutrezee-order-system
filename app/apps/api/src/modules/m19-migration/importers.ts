@@ -309,6 +309,15 @@ function numberField(value: unknown): number | undefined {
   return Number.isFinite(out) ? out : undefined;
 }
 
+/** A99: identity key for a Partner customer whose phone cannot be read. "+96500" cannot start a real
+ *  Kuwaiti number (local numbers start with 2, 4, 5, 6 or 9), so it never collides with a customer
+ *  keyed by a true phone; the digits of customer_ref (else order_number) keep it stable per customer. */
+export function placeholderPhone(customerRef: string | undefined, orderNumber: string): string | null {
+  const digits = (customerRef && /^\d{1,9}$/.test(customerRef) ? customerRef : orderNumber).replace(/\D/g, '');
+  if (!digits) return null;
+  return `+96500${digits}`;
+}
+
 /**
  * WP-OPS-06 (A47) — Partner daily-deliveries mirror. One row = one order on one delivery date.
  * Idempotent by order_number (sync_record + UNIQUE order_number) and by (order, date)
@@ -365,12 +374,22 @@ export function partnerDailyImporter(
     }
 
     const phoneRaw = stringField(row['customer_phone']);
-    if (!phoneRaw) return { rowNo, action: 'error', messages: ['missing customer_phone'] };
+    const customerRef = stringField(row['customer_ref']);
     let phoneNormalized: string;
     try {
+      if (!phoneRaw) throw new Error('missing');
       phoneNormalized = normalizePhone(phoneRaw, defaultCountryCode);
     } catch {
-      return { rowNo, action: 'error', messages: ['unparseable customer_phone'] };
+      // A99 (owner, 2026-11-01: a sticker may never be lost over a typed phone). A phone the app holds
+      // with a letter in it (order 31508: "k99…") used to drop the whole row, so Fleetbase had the order
+      // from the screen but Batch Labels printed nothing — one difference every day until the app was
+      // corrected. The customer is now keyed by a placeholder derived from the Partner customer_ref
+      // (never a real number), the raw phone is kept as typed, and the row is flagged for the night email.
+      const key = placeholderPhone(customerRef, orderNumber);
+      if (!key) return { rowNo, action: 'error', messages: [phoneRaw ? 'unparseable customer_phone' : 'missing customer_phone'] };
+      phoneNormalized = key;
+      messages.push(`phone_unreadable:${phoneRaw ?? ''}`);
+      messages.push(`customer_ref:${customerRef ?? ''}`);
     }
     const name = stringField(row['customer_name']);
     if (!name) return { rowNo, action: 'error', messages: ['missing customer_name'] };

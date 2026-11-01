@@ -34,6 +34,8 @@ let feedRows: Record<string, unknown[]> = {};
 
 const DATE = '2099-09-05';
 const NEXT = '2099-09-06';
+const A99_DATE = '2099-09-20'; // A99 case runs last, on its own dates
+const A99_NEXT = '2099-09-21';
 const sa: StaffContext = {
   staffId: 'sa-ops06', name: 'SA OPS06', email: 'sa-ops06@t', locale: 'en', roles: ['super_admin'], sessionId: 's-ops06',
 };
@@ -240,6 +242,41 @@ describe('TS-I Partner daily feed → Nutrezee orders (WP-OPS-06)', () => {
     feedRows['2099-09-08'] = [delivery({ delivery_id: 801, delivery_date: '2099-09-08' })];
     await expect(migrations.runPartnerDaily(sa, '2099-09-08', true)).rejects.toMatchObject({ code: 'dry_run_required' });
   });
+  it('A99: a customer whose phone cannot be read still gets order, day and label identity (placeholder key, raw phone kept, row flagged)', async () => {
+    feedRows = { [A99_DATE]: [
+      delivery({ delivery_id: 601, delivery_date: A99_DATE, order_id: 61, order_number: '31508', customer_ref: '25699', customer: { name: 'Typed Phone', phone: 'k9955683' } }),
+      delivery({ delivery_id: 602, delivery_date: A99_DATE, order_id: 62, order_number: '31509', customer_ref: '25700', customer: { name: 'No Phone', phone: '' } }),
+    ] };
+    await migrations.runPartnerDaily(sa, A99_DATE, false);
+    const applied = await migrations.runPartnerDaily(sa, A99_DATE, true);
+    expect(applied.counts).toMatchObject({ created: 2, error: 0 });
+    const flagged = applied.rows.filter((r) => r.messages.some((m) => m.startsWith('phone_unreadable:')));
+    expect(flagged).toHaveLength(2);
+    expect(flagged.flatMap((r) => r.messages)).toEqual(expect.arrayContaining([
+      'phone_unreadable:k9955683', expect.stringMatching(/^phone_unreadable:/), 'customer_ref:25699', 'customer_ref:25700',
+    ]));
+    expect(flagged.every((r) => r.messages.includes('customer_ref:25699') || r.messages.includes('customer_ref:25700'))).toBe(true);
+    const rows = await pool.query(
+      `SELECT co.order_number, p.phone_normalized, p.phone_raw, fd.status AS day_status
+         FROM customer_order co JOIN fulfillment_day fd ON fd.order_id = co.id
+         JOIN customer_phone p ON p.customer_id = co.customer_id AND p.is_primary
+        WHERE co.order_number IN ('31508', '31509') ORDER BY co.order_number`,
+    );
+    expect(rows.rows.map((r) => ({ order_number: r.order_number, phone_normalized: r.phone_normalized, day_status: r.day_status }))).toEqual([
+      { order_number: '31508', phone_normalized: '+9650025699', day_status: 'scheduled' },
+      { order_number: '31509', phone_normalized: '+9650025700', day_status: 'scheduled' },
+    ]);
+    expect(rows.rows[0].phone_raw).toBe('k9955683'); // kept exactly as the app holds it
+    // the same customer on a later day reuses the placeholder key: one customer, no duplicate
+    feedRows = { [A99_NEXT]: [
+      delivery({ delivery_id: 603, order_id: 61, order_number: '31508', delivery_date: A99_NEXT, customer_ref: '25699', customer: { name: 'Typed Phone', phone: 'k9955683' } }),
+    ] };
+    await migrations.runPartnerDaily(sa, A99_NEXT, false);
+    const again = await migrations.runPartnerDaily(sa, A99_NEXT, true);
+    expect(again.counts).toMatchObject({ matched: 1, created: 0, error: 0 });
+    expect((await pool.query(`SELECT count(*)::int AS n FROM customer_phone WHERE phone_normalized = '+9650025699'`)).rows[0].n).toBe(1);
+  });
+
 });
 
 function feedOrder(rowNo: number): string {

@@ -70,6 +70,13 @@ async function call(step, date) {
 const summarize = (report) => ({
   batch_id: report.batchId, dry_run: report.dryRun, counts: report.counts, source: report.source,
   errors: report.rows.filter((x) => x.action === 'error').map((x) => ({ row: x.rowNo, messages: x.messages })).slice(0, 20),
+  // A99: rows kept with an unreadable phone (label prints; the app's phone needs a correction)
+  phone_unreadable: report.rows
+    .filter((x) => x.messages.some((m) => m.startsWith('phone_unreadable:')))
+    .map((x) => ({ row: x.rowNo, order: x.targetRef ?? null,
+      customer_ref: (x.messages.find((m) => m.startsWith('customer_ref:')) ?? '').slice('customer_ref:'.length),
+      phone: (x.messages.find((m) => m.startsWith('phone_unreadable:')) ?? '').slice('phone_unreadable:'.length) }))
+    .slice(0, 20),
   locked_days: report.rows.filter((x) => x.messages.includes('day_locked')).length,
   days_created: report.rows.filter((x) => x.messages.includes('day_created')).length,
   days_updated: report.rows.filter((x) => x.messages.includes('day_updated')).length,
