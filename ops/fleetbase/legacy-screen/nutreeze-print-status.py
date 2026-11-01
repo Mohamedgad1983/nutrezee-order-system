@@ -8,7 +8,7 @@ screen's driver in Fleetbase. On any difference it repairs automatically and che
   - an order has no label record yet   → run the Partner label feed for that day.
 Then one short email to it@nutreeze.com (Fleetbase Laravel mailer, hello@nutreeze.com).
 Order numbers only; no customer data.
-Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--no-fix] [--follow-up]
+Usage: nutreeze-print-status.py [YYYY-MM-DD] [--no-send] [--send] [--no-fix] [--follow-up]
 
 A81 (owner, 2026-10-08): drivers are often completed in the legacy admin around 01:00, after the
 00:45 check. `--follow-up` (timer every 15 min) repeats the same check and repair so those labels
@@ -42,7 +42,12 @@ STARTED_UTC = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 def sh(cmd, inp=None, timeout=300, env=None):
-    return subprocess.run(cmd, input=inp, capture_output=True, text=True, timeout=timeout,
+    # 2026-11-01: a sticker text with "·" came back from the mysql client as latin-1 byte 0xB7 and the
+    # UTF-8 decode crashed every check since 30 Oct; the client now answers in utf8mb4 and a stray byte
+    # can never stop a check again.
+    if cmd[:4] == ['docker', 'exec', 'fleetbase-database-1', 'mysql']:
+        cmd = cmd[:4] + ['--default-character-set=utf8mb4'] + cmd[4:]
+    return subprocess.run(cmd, input=inp, capture_output=True, text=True, errors='replace', timeout=timeout,
                           env={**os.environ, **(env or {})}).stdout
 
 
@@ -322,6 +327,10 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
     print(body)
     if '--no-send' in sys.argv:
         return
+    if not os.environ.get('INVOCATION_ID') and '--send' not in sys.argv:
+        # 2026-11-01: a run started by hand (not by systemd) never emails; the report stays in /root/a70/last-print-status.txt.
+        print('mail: skipped (manual run; add --send to email)')
+        return
     sent_file = os.path.join(STATE_DIR, f'print-status-sent-{day}.txt')
     if FOLLOW_UP:
         # A81: a follow-up run is silent unless the result differs from the last email of that day.
@@ -390,6 +399,16 @@ def feed_labels(day, log):
     # "applied" appears only when something was created/updated; a complete run with nothing to add is success.
     log.append('  label database: ' + ('FAILED' if not ok else
                (f"filled {json.dumps(applied[-1].get('counts'))}" if applied else 'already complete')))
+    # A99: a label printed for a customer whose phone the app holds with a typo — the sticker is on the
+    # page, but the phone must be corrected in the app (one such order was a daily "1 difference" until 1 Nov).
+    flagged = []
+    for e in events:
+        for row in e.get('phone_unreadable') or []:
+            item = f"order {row.get('order') or '?'} / customer {row.get('customer_ref') or '?'} / phone as typed: {row.get('phone') or '(empty)'}"
+            if item not in flagged:
+                flagged.append(item)
+    if flagged:
+        log.append('  phone needs correction in the app / رقم تليفون محتاج تصليح في التطبيق (الستيكر بيطبع): ' + '; '.join(flagged[:10]))
     return ok
 
 

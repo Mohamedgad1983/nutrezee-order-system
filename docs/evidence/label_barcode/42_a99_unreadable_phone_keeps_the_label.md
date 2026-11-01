@@ -42,3 +42,19 @@ deploy: feed for 2026-11-02 applied → 31508 gets its label; `print-status.py 2
 The app's phone for customer 4847 still needs correcting by the call centre (the placeholder key stays until
 the customer is re-keyed by a real phone — a later correction creates the real-phone customer; the old
 placeholder customer keeps the already printed days).
+
+## Addendum 2026-11-01 — manual runs of the print guard no longer email
+
+**Observed (Verified):** the owner received several print-guard emails during the afternoon of 1 Nov
+(17:40–17:45 Kuwait and again ~19:23). The scheduled units had sent nothing: the follow-up timer
+logged `mail: skipped (before the 00:45 email of this day)` all day and the night unit was still
+crashing until the utf8 fix. The emails came from `print-status.py` being run by hand (via the ops
+shell) while the crash and the unreadable-phone case were being fixed — every non-`--follow-up` run
+sends the day's email unconditionally, and the first such run also wrote `print-status-sent-2026-11-02.txt`.
+
+**Change (server `/opt/fleetbase/integrations/nutreeze-orders/print-status.py`, mirrored here):** a run
+without systemd's `INVOCATION_ID` and without an explicit `--send` flag prints
+`mail: skipped (manual run; add --send to email)` and writes only `/root/a70/last-print-status.txt`.
+The 00:45 night email, the change-only follow-up updates and the hourly silent upcoming-days check are
+unchanged (verified: `systemd-run` sets `INVOCATION_ID`; a manual `--no-fix` run now reports skipped).
+Backup: `print-status.py.bak-manualsend-20261101`.
