@@ -148,6 +148,35 @@ describe('TS-I Partner daily feed → Nutrezee orders (WP-OPS-06)', () => {
     expect(audit.rows[0].n).toBe(2);
   });
 
+  it('A99: a customer whose phone cannot be read still gets order, day and label identity (placeholder key, raw phone kept, row flagged)', async () => {
+    feedRows = { [DATE]: [
+      delivery({ delivery_id: 601, order_id: 61, order_number: '31508', customer_ref: '25699', customer: { name: 'Typed Phone', phone: 'k9955683' } }),
+      delivery({ delivery_id: 602, order_id: 62, order_number: '31509', customer_ref: '25700', customer: { name: 'No Phone', phone: '' } }),
+    ] };
+    const applied = await migrations.runPartnerDaily(sa, DATE, true);
+    expect(applied.counts).toMatchObject({ created: 2, error: 0 });
+    const flagged = applied.rows.filter((r) => r.messages.some((m) => m.startsWith('phone_unreadable:')));
+    expect(flagged.map((r) => r.messages.find((m) => m.startsWith('phone_unreadable:')))).toEqual(['phone_unreadable:k9955683', 'phone_unreadable:']);
+    expect(flagged.every((r) => r.messages.includes('customer_ref:25699') || r.messages.includes('customer_ref:25700'))).toBe(true);
+    const rows = await pool.query(
+      `SELECT co.order_number, p.phone_normalized, p.phone_raw, fd.status AS day_status
+         FROM customer_order co JOIN fulfillment_day fd ON fd.order_id = co.id
+         JOIN customer_phone p ON p.customer_id = co.customer_id AND p.is_primary
+        WHERE co.order_number IN ('31508', '31509') ORDER BY co.order_number`,
+    );
+    expect(rows.rows).toEqual([
+      { order_number: '31508', phone_normalized: '+9650025699', phone_raw: 'k9955683', day_status: 'scheduled' },
+      { order_number: '31509', phone_normalized: '+9650025700', phone_raw: null, day_status: 'scheduled' },
+    ]);
+    // the same customer on a later day reuses the placeholder key: one customer, no duplicate
+    feedRows = { [NEXT]: [
+      delivery({ delivery_id: 603, order_id: 61, order_number: '31508', delivery_date: NEXT, customer_ref: '25699', customer: { name: 'Typed Phone', phone: 'k9955683' } }),
+    ] };
+    const again = await migrations.runPartnerDaily(sa, NEXT, true);
+    expect(again.counts).toMatchObject({ matched: 1, created: 0, error: 0 });
+    expect((await pool.query(`SELECT count(*)::int AS n FROM customer_phone WHERE phone_normalized = '+9650025699'`)).rows[0].n).toBe(1);
+  });
+
   it('re-run is idempotent; a new date adds a day and widens the order range; cancellation mirrors to cancelled_day', async () => {
     const again = await migrations.runPartnerDaily(sa, DATE, false);
     expect(again.counts).toMatchObject({ created: 0, matched: 3, error: 0 });
