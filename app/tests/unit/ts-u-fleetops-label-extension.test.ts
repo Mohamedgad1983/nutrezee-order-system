@@ -27,7 +27,7 @@ const adminGateway = readFileSync(new URL('../../../docker/nginx.admin.conf', im
 describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
   it('is a separately identifiable supported Fleetbase Ember extension', () => {
     expect(packageJson.name).toBe('@nutrezee/fleetops-labels-engine');
-    expect(packageJson.version).toBe('0.3.30');
+    expect(packageJson.version).toBe('0.3.31');
     expect(extensionJson.version).toBe(packageJson.version);
     expect(packageJson.keywords).toContain('fleetbase-extension');
     expect(packageJson.keywords).toContain('ember-engine');
@@ -348,6 +348,34 @@ describe('TS-U A28/A43/A44/A45 Fleet-Ops extension boundary', () => {
     expect(styles).toMatch(/\.nz-legacy-label__info \{[^}]*overflow: hidden;/);
     expect(styles).toMatch(/\.nz-info-row em \{[^}]*white-space: nowrap;/);
     expect(source).toMatch(/export function printDetached[\s\S]*?fitLabels\(/);
+  });
+
+  it('A100: neither column can reach the barcode — the dishes table is tightened until it fits, and a note never stretches the customer column', () => {
+    const source = readFileSync(new URL('../../../ops/fleetbase/extensions/nutrezee-labels-engine/addon/components/order-label.js', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('export function fitLabels'), source.indexOf('export function printDetached'))
+      .replace('export function', 'function');
+    const fitLabels = new Function(`${body}; return fitLabels;`)() as (root: unknown) => void;
+    // a fake label whose dishes column needs `needs` meal levels before it fits; the customer column already fits
+    const label = (needs: number) => {
+      const classes = new Set<string>(['nz-legacy-label']);
+      const level = () => ['nz-meals-fit-1', 'nz-meals-fit-2', 'nz-meals-fit-3'].findIndex((name) => classes.has(name)) + 1;
+      const fits = { clientHeight: 100, scrollHeight: 100 };
+      const meals = { clientHeight: 100, get scrollHeight() { return level() >= needs ? 100 : 140; } };
+      return {
+        classes,
+        classList: { add: (...n: string[]) => n.forEach((x) => classes.add(x)), remove: (...n: string[]) => n.forEach((x) => classes.delete(x)) },
+        querySelector: (selector: string) => (selector.includes('__meals') ? meals : selector.includes('notes') ? null : fits),
+      };
+    };
+    const labels = [label(0), label(1), label(2), label(9)];
+    fitLabels({ querySelectorAll: () => labels });
+    expect(labels.map((l) => [...l.classes].filter((c) => c.startsWith('nz-meals-fit')))).toEqual([[], ['nz-meals-fit-1'], ['nz-meals-fit-2'], ['nz-meals-fit-3']]);
+    expect([...labels[0]!.classes]).toEqual(['nz-legacy-label']);
+    // the dishes column is clipped at its own area, and both columns keep 45.2 mm even when the note column is 55.8 mm
+    expect(styles).toMatch(/\.nz-legacy-label__meals \{[^}]*height: 45\.2mm;[^}]*align-self: start;[^}]*overflow: hidden;/);
+    expect(styles).toMatch(/\.nz-legacy-label__info \{[^}]*height: 45\.2mm;[^}]*align-self: start;[^}]*overflow: hidden;/);
+    expect(styles).toMatch(/\.nz-legacy-label--notes \.nz-legacy-label__meals \{[^}]*height: 55\.8mm;/);
+    for (const level of [1, 2, 3]) expect(styles).toMatch(new RegExp(`\\.nz-meals-fit-${level} \\.nz-meals-table \\{ font-size: 1\\.[0-9]+mm;`));
   });
 
   it('prints the driver box black-on-white with car number, name and phone only (A58)', () => {

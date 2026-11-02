@@ -1133,6 +1133,11 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
     min-width: 0;
     min-height: 0;
     padding-right: 1.4mm;
+    /* A100 (owner photo 2026-11-02, order 31942): on a label with a note the right column is 55.8 mm
+       tall, the grid row grew with it and this column stretched 10.6 mm into the barcode zone — the
+       Phone line was printed under the barcode. The column keeps its own 45.2 mm whatever its neighbour does. */
+    height: 45.2mm;
+    align-self: start;
     /* A88: this column may never paint over the barcode below it. fitLabels() tightens the type
        until the content fits; whatever still does not fit is cut here, not printed on the barcode. */
     overflow: hidden;
@@ -1157,8 +1162,25 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 
 .nz-legacy-label__meals {
     min-width: 0;
+    min-height: 0;
+    height: 45.2mm;
+    align-self: start;
     padding-left: 1.4mm;
+    /* A100 (owner photo 2026-11-02, order 32156, eight dishes): this column may never paint over the
+       barcode either. fitLabels() tightens the dishes table until it fits; the rest is cut here. */
+    overflow: hidden;
 }
+
+/* A100 meals fit levels, applied by fitLabels() only to a label whose dishes column is too tall. */
+.nz-meals-fit-1 .nz-meals-table { font-size: 1.8mm; line-height: 1.15; }
+.nz-meals-fit-1 .nz-meals-table th, .nz-meals-fit-1 .nz-meals-table td { padding: 0.3mm 0.4mm; }
+.nz-meals-fit-1 .nz-total-row { margin-top: 0.7mm; }
+.nz-meals-fit-2 .nz-meals-table { font-size: 1.7mm; line-height: 1.1; }
+.nz-meals-fit-2 .nz-meals-table th, .nz-meals-fit-2 .nz-meals-table td { padding: 0.2mm 0.35mm; }
+.nz-meals-fit-2 .nz-total-row { margin-top: 0.5mm; font-size: 1.8mm; }
+.nz-meals-fit-3 .nz-meals-table { font-size: 1.6mm; line-height: 1.08; }
+.nz-meals-fit-3 .nz-meals-table th, .nz-meals-fit-3 .nz-meals-table td { padding: 0.15mm 0.3mm; }
+.nz-meals-fit-3 .nz-total-row { margin-top: 0.4mm; font-size: 1.7mm; }
 
 .nz-info-group {
     padding: 0.5mm 0;
