@@ -177,6 +177,17 @@ export function fitLabels(root) {
             label.classList.remove(...levels);
             label.classList.add(level);
         }
+        // A100: the dishes column too — eight dishes with long names ran over the barcode.
+        const meals = label.querySelector('.nz-legacy-label__meals');
+        const mealLevels = ['nz-meals-fit-1', 'nz-meals-fit-2', 'nz-meals-fit-3'];
+        if (meals) {
+            label.classList.remove(...mealLevels);
+            for (const level of mealLevels) {
+                if (meals.scrollHeight <= meals.clientHeight + 1) break;
+                label.classList.remove(...mealLevels);
+                label.classList.add(level);
+            }
+        }
         // A89: the note is printed in the largest type that fits its box on this label.
         const notes = label.querySelector('.nz-label-notes');
         if (!notes) return;
