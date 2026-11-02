@@ -33,3 +33,5 @@
 ## Release
 
 Server extension copy was byte-identical to `main` before the change (22 files compared by hash); the four changed files were synced (`addon.css`, `order-label.js`, `package.json`, `extension.json`). Build, gate and swap recorded below.
+
+**Release 2026-11-02 (19:12 CET / 21:12 Kuwait):** `fleetbase-console:a100-1` built from the synced extension (build step 1745 s), gate 13/13, candidate booted in a real browser over an SSH tunnel (title "Nutreeze | Fleet-Ops", extension script loaded, no "Could not find module"; only the expected CORS error for the API from a foreign origin), then swapped with `docker compose up -d --no-build console`. Live `ops.nutreeze.com/extensions.json` reports extension 0.3.31 and the live `engine.css` carries `nz-meals-fit-3`. Rollback: `docker tag fleetbase-console:pre-a100-20261102 fleetbase-console:latest && docker compose up -d --no-build console`. **Not yet printed on paper** — the owner's next print (labels for Wednesday 4 Nov) is the paper trial; the two photographed orders (32156, 31942) are the ones to check.
