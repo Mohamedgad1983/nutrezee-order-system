@@ -20,7 +20,7 @@ export interface KitchenStickerInput {
   mobile?: unknown; name?: unknown; box?: unknown; area?: unknown; block?: unknown; street?: unknown;
   house?: unknown; address_details?: unknown; meals_per_day?: unknown; snacks_per_day?: unknown;
   breakfast?: unknown; protein_g?: unknown; carb_g?: unknown; notes?: unknown; start_date?: unknown;
-  end_date?: unknown;
+  end_date?: unknown; delivery_time?: unknown;
 }
 
 export interface KitchenSticker {
@@ -28,14 +28,17 @@ export interface KitchenSticker {
   street: string | null; house: string | null; address_details: string | null;
   meals_per_day: number | null; snacks_per_day: number | null; breakfast: number | null;
   protein_g: number | null; carb_g: number | null; notes: string | null;
-  start_date: string; end_date: string | null; active: boolean;
+  start_date: string; end_date: string | null; delivery_time: KitchenStickerDeliveryTime | null; active: boolean;
   updated_at: string; updated_by: string;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A101: the app's own slot names, so Batch Labels' time filter puts a sticker with the app orders of its slot. */
+export const KITCHEN_STICKER_DELIVERY_TIMES = ['From 5 AM to 4 PM', 'Before 1 day'] as const;
+export type KitchenStickerDeliveryTime = (typeof KITCHEN_STICKER_DELIVERY_TIMES)[number];
 const FIELDS = [
   'mobile', 'name', 'box', 'area', 'block', 'street', 'house', 'address_details', 'meals_per_day',
-  'snacks_per_day', 'breakfast', 'protein_g', 'carb_g', 'notes', 'start_date', 'end_date',
+  'snacks_per_day', 'breakfast', 'protein_g', 'carb_g', 'notes', 'start_date', 'end_date', 'delivery_time',
 ] as const;
 
 /** One line, no control characters; empty is "none". */
@@ -72,6 +75,15 @@ function day(value: unknown, field: string, required: boolean): string | null {
   return v;
 }
 
+/** A101: one of the two slots, or none (a sticker saved before the choice existed). */
+function deliveryTime(value: unknown): KitchenStickerDeliveryTime | null {
+  if (value === null || value === undefined || value === '') return null;
+  const v = String(value).trim();
+  const hit = KITCHEN_STICKER_DELIVERY_TIMES.find((t) => t === v);
+  if (!hit) throw new KitchenStickerError('validation_failed', { field: 'delivery_time' });
+  return hit;
+}
+
 /** `+965 9890-8830` / `96598908830` → `98908830`. Kuwait numbers only, like the WhatsApp list. */
 export function stickerMobile(value: unknown): string {
   const digits = String(value ?? '').replace(/\D/g, '').replace(/^00/, '');
@@ -98,6 +110,7 @@ export function cleanSticker(input: KitchenStickerInput) {
     notes: text(input.notes, 'notes', 900),
     start_date: day(input.start_date, 'start_date', true)!,
     end_date: day(input.end_date, 'end_date', false),
+    delivery_time: deliveryTime(input.delivery_time),
   };
   if (out.box && !/^[0-9A-Za-z-]{1,20}$/.test(out.box)) throw new KitchenStickerError('validation_failed', { field: 'box' });
   if (out.end_date && out.end_date < out.start_date) throw new KitchenStickerError('validation_failed', { field: 'end_date', reason: 'before_start' });
@@ -116,7 +129,8 @@ function toSticker(row: Record<string, unknown>): KitchenSticker {
     meals_per_day: (row.meals_per_day as number) ?? null, snacks_per_day: (row.snacks_per_day as number) ?? null,
     breakfast: (row.breakfast as number) ?? null, protein_g: (row.protein_g as number) ?? null,
     carb_g: (row.carb_g as number) ?? null, notes: (row.notes as string) ?? null,
-    start_date: date(row.start_date)!, end_date: date(row.end_date), active: row.archived_at === null,
+    start_date: date(row.start_date)!, end_date: date(row.end_date),
+    delivery_time: (row.delivery_time as KitchenStickerDeliveryTime) ?? null, active: row.archived_at === null,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     updated_by: row.updated_by as string,
   };

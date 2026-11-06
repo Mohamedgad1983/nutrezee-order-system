@@ -1535,8 +1535,12 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 .nz-kitchen-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.6rem; }
 .nz-kitchen-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; }
 .nz-kitchen-field input, .nz-kitchen-field textarea { width: 100%; padding: 0.4rem 0.5rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.45rem; font: inherit; font-size: 0.9rem; }
-.nz-kitchen-field--invalid input, .nz-kitchen-field--invalid textarea { border-color: #b91c1c; }
-.nz-kitchen-field--name, .nz-kitchen-field--area, .nz-kitchen-field--address_details, .nz-kitchen-field--notes { grid-column: 1 / -1; }
+.nz-kitchen-field--invalid input, .nz-kitchen-field--invalid textarea, .nz-kitchen-field--invalid .nz-kitchen-choices { outline: 1px solid #b91c1c; }
+/* A101: the delivery time is two buttons, not a <select> (empty inside the Fleetbase host, A54.4). */
+.nz-kitchen-choices { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.nz-kitchen-choices .btn { white-space: normal; text-align: start; }
+.nz-kitchen-choices__hint { color: #92400e; }
+.nz-kitchen-field--name, .nz-kitchen-field--area, .nz-kitchen-field--address_details, .nz-kitchen-field--notes, .nz-kitchen-field--delivery_time { grid-column: 1 / -1; }
 .nz-kitchen-driver { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--nz-muted, #6b7280); }
 .nz-kitchen-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
 .nz-kitchen-barcode { width: 34mm; height: 9mm; display: flex; align-items: center; justify-content: center; border: 0.3mm dashed currentColor; font-size: 2.1mm; letter-spacing: 0.15mm; white-space: nowrap; overflow: hidden; }

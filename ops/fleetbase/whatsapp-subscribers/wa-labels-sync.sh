@@ -52,7 +52,8 @@ if docker exec "${PG_CONTAINER:-nutrezee-postgres-1}" psql -U nutrezee -d nutrez
       'breakfast', coalesce(breakfast::text, ''), 'area', area, 'block', coalesce(block, ''),
       'street', coalesce(street, ''), 'house', coalesce(house, ''), 'details', coalesce(address_details, ''),
       'address', concat_ws(', ', area, 'Block ' || block, 'Street ' || street, 'House ' || house, address_details),
-      'start_date', start_date::text, 'end_date', end_date::text) ORDER BY box, name), '[]'::json))
+      'start_date', start_date::text, 'end_date', end_date::text,
+      'delivery_time', coalesce(delivery_time, '')) ORDER BY box, name), '[]'::json))
     FROM kitchen_sticker WHERE archived_at IS NULL" > "$STICKERS.new"
   chmod 600 "$STICKERS.new" && mv "$STICKERS.new" "$STICKERS"
 fi
