@@ -127,6 +127,8 @@ def merge(export_path, list_path, day_text):
         extra = {
             'notes': sticker['notes'], 'box': sticker['box'],
             'meals_per_day': number(sticker['meals']), 'snacks_per_day': number(sticker['snacks']),
+            # A101: the delivery time chosen on the Kitchen Stickers page ('' = not chosen).
+            'delivery_time': sticker.get('delivery_time', ''),
         }
         row = by_phone.get(sticker['mobile'])
         if row is not None:

@@ -52,6 +52,15 @@
                             {{#each this.areaOptions as |area|}}<option value={{area.label}}></option>{{/each}}
                         </datalist>
                         <p class="nz-kitchen-driver">{{this.areaDriver}}</p>
+                        <div class="nz-kitchen-field nz-kitchen-field--delivery_time {{if (eq this.fieldError.field "delivery_time") "nz-kitchen-field--invalid"}}" role="group" aria-label="Delivery time / وقت التوصيل" data-test-kitchen-delivery-time>
+                            <span>Delivery time / وقت التوصيل</span>
+                            <div class="nz-kitchen-choices">
+                                {{#each this.deliveryTimes as |t|}}
+                                    <button type="button" class={{t.className}} aria-pressed={{if t.selected "true" "false"}} {{on "click" (fn this.pickTime t.value)}}>{{t.label}}</button>
+                                {{/each}}
+                            </div>
+                            {{#if this.deliveryTimeMissing}}<small class="nz-kitchen-choices__hint">Not chosen yet — the sticker prints "-". / لسه ما اتحددش، الستيكر هيطبع "-".</small>{{/if}}
+                        </div>
                         <label class="nz-kitchen-field nz-kitchen-field--notes">
                             <span>Notes / الملاحظات</span>
                             <textarea rows="6" maxlength="900" {{on "input" (fn this.update "notes")}}>{{this.form.notes}}</textarea>

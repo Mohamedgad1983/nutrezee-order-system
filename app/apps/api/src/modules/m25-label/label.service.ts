@@ -80,6 +80,8 @@ export interface BatchLabelCandidate {
   labelFullName?: string | null;
   labelMealsPerDay?: number | null;
   labelSnacksPerDay?: number | null;
+  /** A101: the delivery time chosen on the kitchen sticker (From 5 AM to 4 PM / Before 1 day). */
+  labelDeliveryTime?: string | null;
   /** A72: the Fleetbase order's own id, status and (fallback) pin, for the order-status page. */
   fleetbaseOrderId?: string;
   fleetbaseStatus?: string | null;
@@ -107,6 +109,8 @@ export interface FleetbaseDriverLabelSource {
   labelFullName?: string | null;
   labelMealsPerDay?: number | null;
   labelSnacksPerDay?: number | null;
+  /** A101: the delivery time chosen on the kitchen sticker (From 5 AM to 4 PM / Before 1 day). */
+  labelDeliveryTime?: string | null;
 }
 
 export interface BatchLabelFilter {
@@ -243,7 +247,7 @@ export class LabelService {
       full_name: source?.labelFullName ?? (r.full_name_en as string) ?? '',
       subscription_date_display: formatLabelDate(deliveryDate),
       // A78.3: the day's own slot wins — the order keeps only the slot of its first imported day.
-      delivery_time: profile?.deliveryTime ?? (r.delivery_time_frozen as string) ?? null,
+      delivery_time: source?.labelDeliveryTime ?? profile?.deliveryTime ?? (r.delivery_time_frozen as string) ?? null,
       // A80: Partner's end date gives the legacy figure; the mirrored-day count is only a fallback.
       days_remaining: source?.labelDaysRemaining ?? profile?.daysRemaining ?? (r.days_remaining === null || r.days_remaining === undefined
         ? null : Number(r.days_remaining)),
@@ -392,14 +396,17 @@ export class LabelService {
       const row = raw as Record<string, unknown>;
       const localOrderId = row.order_id as string;
       const order = fleetbaseByLocalOrder.get(localOrderId)!;
-      const time = compactStrings([dayTimes.get(row.order_number as string), row.delivery_time_frozen])[0] ?? '';
+      const driverSource = this.fleetbaseDriverSource(order);
+      // A101: a kitchen sticker's chosen time first, so the time filter matches what its label prints.
+      const time = compactStrings([
+        driverSource.labelDeliveryTime, dayTimes.get(row.order_number as string), row.delivery_time_frozen,
+      ])[0] ?? '';
       const area = compactStrings([
         order.meta?.routing_area,
         order.meta?.area_en,
         order.meta?.area_ar,
         row.local_area_name,
       ])[0] ?? '';
-      const driverSource = this.fleetbaseDriverSource(order);
       const driverId = driverSource.driverRef;
       const orderNumber = compactStrings([
         order.meta?.source_order_number,
@@ -543,6 +550,7 @@ export class LabelService {
             labelUserId: candidate.labelUserId,
             labelMealsPerDay: candidate.labelMealsPerDay,
             labelSnacksPerDay: candidate.labelSnacksPerDay,
+            labelDeliveryTime: candidate.labelDeliveryTime,
           }),
           this.printHistory(candidate.localOrderId, deliveryDate),
         ]);
@@ -972,6 +980,7 @@ interface LabelOverrides {
   labelFullName?: string;
   labelMealsPerDay?: number;
   labelSnacksPerDay?: number;
+  labelDeliveryTime?: string;
 }
 
 /** A71.2: `meta.label_address` / `meta.label_package` of a Fleetbase order, cleaned for printing. */
@@ -1011,5 +1020,7 @@ function labelOverrides(
   if (meals !== null) out.labelMealsPerDay = meals;
   const snacks = count(meta?.label_snacks_per_day);
   if (snacks !== null) out.labelSnacksPerDay = snacks;
+  const time = clean(meta?.label_delivery_time, 60);
+  if (time) out.labelDeliveryTime = time;
   return out;
 }

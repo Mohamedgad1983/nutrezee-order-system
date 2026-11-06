@@ -491,6 +491,25 @@ describe('TS-I label printing — audited, unlimited reprints (A48), barcode nev
     expect(byNumber.get('N-LBL-A712-2')?.package_name).toBe(stored.package_name);
   });
 
+  it('A101: a kitchen sticker\'s chosen delivery time prints and drives the time filter', async () => {
+    const sticker = await seed('Kitchen Sticker', 'WA-50000101');
+    const other = await seed('Kitchen Sticker Unset', 'WA-50000102');
+    await pool.query(`UPDATE customer_order SET delivery_time_frozen = 'From 5 AM to 4 PM' WHERE id = ANY($1::text[])`,
+      [[sticker.orderId, other.orderId]]);
+    const candidates = await labels.batchCandidates(DATE_B, [
+      { id: 'fleetbase_a101_1', meta: { delivery_date: DATE_B, nutrezee_order_id: sticker.orderId, label_delivery_time: ' Before 1 day ' } },
+      { id: 'fleetbase_a101_2', meta: { delivery_date: DATE_B, nutrezee_order_id: other.orderId, label_delivery_time: '' } },
+    ]);
+    const byNumber = new Map(candidates.map((c) => [c.orderNumber, c]));
+    expect(byNumber.get('WA-50000101')).toMatchObject({ timeKey: 'Before 1 day', source: 'whatsapp' });
+    expect(byNumber.get('WA-50000102')).toMatchObject({ timeKey: 'From 5 AM to 4 PM' });
+    expect(labels.selectBatchCandidates(candidates, { filterType: 'time', filterValue: 'Before 1 day' })
+      .map((c) => c.orderNumber)).toEqual(['WA-50000101']);
+    const built = new Map((await labels.buildCandidateBatch(actor, DATE_B, candidates)).map((i) => [i.order_number, i.label]));
+    expect(built.get('WA-50000101')?.delivery_time).toBe('Before 1 day');
+    expect(built.get('WA-50000102')?.delivery_time).toBe('From 5 AM to 4 PM');
+  });
+
   it('A72: finds a customer\'s orders by the last digits of the phone and reads the day\'s pin', async () => {
     const found = await seed('Phone Lookup', 'N-LBL-A72-1', { phone: '+96555123456' });
     const hits = await labels.ordersForPhoneDigits('55123456');

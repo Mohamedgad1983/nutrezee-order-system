@@ -47,6 +47,8 @@ const WA_OWNER = 'nutreeze_whatsapp_subscribers';
 const WA_PREFIX = 'NUTREEZE-WA';
 const PARTNER_DAY_PREFIX = 'NUTREEZE-PARTNER-DAY';
 const WA_MAPPING_VERSION = 1;
+// A101: the delivery times a kitchen sticker can carry (the app's own slot names).
+const WA_DELIVERY_TIMES = ['From 5 AM to 4 PM', 'Before 1 day'];
 const CONFIG_DIR = '/fleetbase/api/storage/app/integrations/config';
 const CALL_INSTRUCTION = 'NO EXACT PIN - CALL CUSTOMER / لا يوجد موقع دقيق - اتصل بالعميل';
 const CALL_PLACE_PREFIX = 'CALL CUSTOMER FIRST / اتصل بالعميل أولا - ';
@@ -405,6 +407,8 @@ final class WaWriter
             'label_notes' => $row['notes'] !== '' ? $row['notes'] : null,
             'label_user_id' => $row['box'] !== '' ? $row['box'] : null,
             'label_meals_per_day' => $row['meals_per_day'], 'label_snacks_per_day' => $row['snacks_per_day'],
+            // A101: the delivery time chosen on the Kitchen Stickers page.
+            'label_delivery_time' => $row['delivery_time'] !== '' ? $row['delivery_time'] : null,
         ]);
         $order->setAttribute('deleted_at', null);
         $changed = quietSave($order) || $changed;
@@ -532,6 +536,8 @@ try {
             'notes' => trim((string) ($row['notes'] ?? '')), 'box' => trim((string) ($row['box'] ?? '')),
             'meals_per_day' => is_int($row['meals_per_day'] ?? null) ? $row['meals_per_day'] : null,
             'snacks_per_day' => is_int($row['snacks_per_day'] ?? null) ? $row['snacks_per_day'] : null,
+            // A101: only the two slots the page offers.
+            'delivery_time' => in_array($row['delivery_time'] ?? '', WA_DELIVERY_TIMES, true) ? $row['delivery_time'] : '',
         ];
     }
     $lock = fopen('/tmp/nutreeze-wa-orders.lock', 'c');

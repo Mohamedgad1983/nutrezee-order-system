@@ -10,7 +10,12 @@ import { fitLabels } from './order-label';
 const DASH = '-';
 const FIELDS = [
     'name', 'mobile', 'box', 'area', 'block', 'street', 'house', 'address_details', 'meals_per_day',
-    'snacks_per_day', 'breakfast', 'protein_g', 'carb_g', 'notes', 'start_date', 'end_date',
+    'snacks_per_day', 'breakfast', 'protein_g', 'carb_g', 'notes', 'start_date', 'end_date', 'delivery_time',
+];
+// A101: the app's own slot names, printed as they are; the page shows them with an Arabic hint.
+const DELIVERY_TIMES = [
+    { value: 'From 5 AM to 4 PM', label: 'From 5 AM to 4 PM / من 5 الصبح لـ 4 العصر' },
+    { value: 'Before 1 day', label: 'Day before / اليوم اللي قبله' },
 ];
 const ERRORS = {
     required: 'This field is required. / الخانة دي لازم تتملى.',
@@ -26,11 +31,12 @@ const LABELS = {
     street: 'Street', house: 'House / Building', address_details: 'Direction / تفاصيل العنوان',
     meals_per_day: 'Meals / وجبات', snacks_per_day: 'Snacks / سناك', breakfast: 'Breakfast / فطار',
     protein_g: 'Protein (g)', carb_g: 'Carb (g)', notes: 'Notes / الملاحظات', start_date: 'Start date / تاريخ البداية',
-    end_date: 'End date / تاريخ النهاية',
+    end_date: 'End date / تاريخ النهاية', delivery_time: 'Delivery time / وقت التوصيل',
 };
 
 function blank(today) {
-    return Object.fromEntries(FIELDS.map((field) => [field, field === 'start_date' ? (today ?? '') : '']));
+    const first = { start_date: today ?? '', delivery_time: DELIVERY_TIMES[0].value };
+    return Object.fromEntries(FIELDS.map((field) => [field, first[field] ?? '']));
 }
 
 function fromSticker(sticker) {
@@ -112,12 +118,31 @@ export default class KitchenStickersComponent extends Component {
     }
 
     get fields() {
-        return FIELDS.filter((f) => f !== 'notes').map((field) => ({
+        return FIELDS.filter((f) => f !== 'notes' && f !== 'delivery_time').map((field) => ({
             field, label: LABELS[field], value: this.form[field],
             type: field.endsWith('_date') ? 'date' : ['meals_per_day', 'snacks_per_day', 'breakfast', 'protein_g', 'carb_g'].includes(field) ? 'number' : 'text',
             list: field === 'area' ? 'nz-kitchen-areas' : null,
             invalid: this.fieldError?.field === field,
         }));
+    }
+
+    /**
+     * A101: the two delivery times as buttons — a raw <select> renders empty inside the Fleetbase host
+     * (A54.4). A sticker saved before the choice existed has neither pressed and prints "-".
+     */
+    get deliveryTimes() {
+        const chosen = this.form.delivery_time;
+        return DELIVERY_TIMES.map((t) => ({
+            ...t, selected: t.value === chosen,
+            className: `btn btn-sm ${t.value === chosen ? 'btn-primary' : 'btn-default'}`,
+        }));
+    }
+
+    get deliveryTimeMissing() { return !this.form.delivery_time; }
+
+    @action
+    pickTime(value) {
+        this.update('delivery_time', { target: { value } });
     }
 
     /** The sticker drawn from the form, with the same markup and fit rules as Batch Labels. */
@@ -127,7 +152,7 @@ export default class KitchenStickersComponent extends Component {
         const day = this.data?.delivery_date ?? '';
         const left = daysLeft(day, f.end_date);
         return {
-            fullName: v(f.name), subscription: formatDay(day), deliveryTime: DASH,
+            fullName: v(f.name), subscription: formatDay(day), deliveryTime: v(f.delivery_time),
             daysRemaining: left === null ? DASH : String(left), deliveryMethod: DASH,
             packageName: v(stickerPackage(f)), mealsPerDay: v(f.meals_per_day), snacksPerDay: v(f.snacks_per_day),
             legacyUserId: v(f.box), orderNumber: f.mobile ? `WA-${f.mobile.replace(/\D/g, '').slice(-8)}` : DASH,
