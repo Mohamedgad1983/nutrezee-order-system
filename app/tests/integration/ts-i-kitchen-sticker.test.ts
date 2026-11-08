@@ -31,6 +31,11 @@ describe('TS-I kitchen stickers (A97)', () => {
     expect(() => cleanSticker({ ...omar, name: ' ' })).toThrow();
     expect(() => cleanSticker({ ...omar, end_date: '2099-10-01' })).toThrow();
     expect(() => cleanSticker({ ...omar, meals_per_day: 'x' })).toThrow();
+    // A101: one of the two slots the page offers, or none.
+    expect(cleanSticker({ ...omar, delivery_time: 'Before 1 day' }).delivery_time).toBe('Before 1 day');
+    expect(cleanSticker({ ...omar, delivery_time: ' From 5 AM to 4 PM ' }).delivery_time).toBe('From 5 AM to 4 PM');
+    expect(cleanSticker(omar).delivery_time).toBeNull();
+    expect(() => cleanSticker({ ...omar, delivery_time: 'Midnight' })).toThrow();
   });
 
   it('creates, edits, stops and restores with an audit row each, one live sticker per phone', async () => {
@@ -38,8 +43,11 @@ describe('TS-I kitchen stickers (A97)', () => {
     expect(created).toMatchObject({ mobile: '66818181', name: 'Omar', active: true, start_date: '2099-10-19' });
     await expect(stickers.create(actor, { ...omar, name: 'Other' })).rejects.toMatchObject({ code: 'conflict' });
 
+    expect(created.delivery_time).toBeNull();
     const edited = await stickers.update(actor, created.id, { ...omar, notes: 'Green salad only', end_date: '2099-11-01' });
     expect(edited).toMatchObject({ notes: 'Green salad only', end_date: '2099-11-01' });
+    const timed = await stickers.update(actor, created.id, { ...omar, notes: 'Green salad only', end_date: '2099-11-01', delivery_time: 'Before 1 day' });
+    expect(timed.delivery_time).toBe('Before 1 day');
 
     const stopped = await stickers.setActive(actor, created.id, false);
     expect(stopped.active).toBe(false);
@@ -53,10 +61,11 @@ describe('TS-I kitchen stickers (A97)', () => {
       `SELECT event_type, related_refs->>'changed_fields' AS changed FROM audit_event WHERE entity_type = 'kitchen_sticker' ORDER BY occurred_at, id`,
     );
     expect(audit.rows.map((r) => r.event_type)).toEqual([
-      'label.kitchen_sticker_created', 'label.kitchen_sticker_updated', 'label.kitchen_sticker_stopped',
+      'label.kitchen_sticker_created', 'label.kitchen_sticker_updated', 'label.kitchen_sticker_updated', 'label.kitchen_sticker_stopped',
       'label.kitchen_sticker_created', 'label.kitchen_sticker_stopped', 'label.kitchen_sticker_restored',
     ]);
     expect(audit.rows[1].changed).toBe('notes,end_date');
+    expect(audit.rows[2].changed).toBe('delivery_time');
   });
 
   it('lists the legacy areas of the day with their driver', () => {

@@ -48,11 +48,23 @@ describe('TS-U A97 kitchen stickers page', () => {
       orderNumber: 'WA-66818181', packageName: 'Protein 150g / Carb 300g', mealsPerDay: '2', notes: 'DRY FOOD', hasNotes: true,
     });
     expect(page.areaDriver).toContain('Arsad');
+    // A101: a sticker saved before the choice existed shows "not chosen" and prints "-".
+    expect(page.preview.deliveryTime).toBe('-');
+    expect(page.deliveryTimeMissing).toBe(true);
+    expect(page.deliveryTimes.map((t: { value: string; selected: boolean }) => [t.value, t.selected]))
+      .toEqual([['From 5 AM to 4 PM', false], ['Before 1 day', false]]);
+    page.pickTime('Before 1 day');
+    expect(page.preview.deliveryTime).toBe('Before 1 day');
+    expect(page.form.delivery_time).toBe('Before 1 day');
+    expect(page.deliveryTimeMissing).toBe(false);
+    expect(page.deliveryTimes.find((t: { selected: boolean }) => t.selected).value).toBe('Before 1 day');
     page.update('notes', { target: { value: '' } });
     expect(page.preview.hasNotes).toBe(false);
     page.startNew();
     expect(page.isNew).toBe(true);
     expect(page.form.start_date).toBe('2026-10-20');
     expect(page.preview.fullName).toBe('-');
+    expect(page.form.delivery_time).toBe('From 5 AM to 4 PM');
+    expect(page.preview.deliveryTime).toBe('From 5 AM to 4 PM');
   });
 });
