@@ -43,3 +43,13 @@ lint, typecheck, cross-module scan clean.
 
 Rollback: `docker tag nutrezee-api:pre-a101-20261106 nutrezee-api:latest` + compose up api; copy the
 three scripts back from `bak-a101/`; the column can stay (NULL = old behaviour).
+
+## Console release addendum (2026-11-08) — Verified
+
+- Image `fleetbase-console:a101-1` (CONSOLE_RELEASE 0.7.48-a101.1, extension 0.3.32) built on the VPS.
+- Release gate: **13/13 PASS** (extensions.json shows Nutrezee 0.3.32).
+- Rollback tag: `fleetbase-console:pre-a101-20261108` (the previous `latest`).
+- Swap: `a101-1` tagged `latest`, `docker compose up -d --no-deps --no-build console` in `/opt/fleetbase`; running container image id = a101-1 id (4b385bfe7623).
+- Live bundle `engines-dist/@nutrezee/fleetops-labels-engine/assets/engine-e75d4d2f….js` contains the new `pickTime` action.
+- Owner confirmed on ops.nutreeze.com: Kitchen Stickers → "Delivery time / وقت التوصيل" buttons visible and working.
+- Rollback: `docker tag fleetbase-console:pre-a101-20261108 fleetbase-console:latest && (cd /opt/fleetbase && docker compose up -d --no-deps --no-build console)`.
