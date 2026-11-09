@@ -16,3 +16,9 @@
 **Tests:** ts-u-kitchen-stickers-page (tabs, counts, switching, ended-sticker note, Print again = restore + clear end date), extension version 0.3.33. TS-U 236 pass, lint clean.
 
 **Release:** console image `fleetbase-console:a102-1` (CONSOLE_RELEASE 0.7.48-a102.1) → gate → swap; rollback to `fleetbase-console:pre-a102-<date>`.
+
+## Console release (2026-11-09) — Verified
+- Image `fleetbase-console:a102-1` (CONSOLE_RELEASE 0.7.48-a102.1, extension 0.3.33); gate **13/13 PASS**.
+- Rollback tag `fleetbase-console:pre-a102-20261109` (= a101-1, 4b385bfe7623).
+- Live container image 952a03848ce9; live engine bundle contains `pickTab`; ops.nutreeze.com 200.
+- Rollback: `docker tag fleetbase-console:pre-a102-20261109 fleetbase-console:latest && (cd /opt/fleetbase && docker compose up -d --no-deps --no-build console)`.
