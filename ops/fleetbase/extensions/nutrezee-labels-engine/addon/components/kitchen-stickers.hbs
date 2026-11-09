@@ -19,10 +19,10 @@
         <div class="nz-kitchen-layout">
             <aside class="nz-kitchen-list" aria-label="Stickers / الستيكرات">
                 <input type="search" class="nz-kitchen-search" value={{this.search}} placeholder="Search name, mobile, BOX, area… / ابحث" aria-label="Search stickers" {{on "input" this.searchList}} />
-                <div class="nz-kitchen-count">{{this.activeCount}} printing / بيتطبعوا
-                    {{#if this.stoppedCount}}
-                        · <button type="button" class="nz-link-button" {{on "click" this.toggleStopped}}>{{if this.showStopped "Hide" "Show"}} {{this.stoppedCount}} stopped / متوقف</button>
-                    {{/if}}
+                <div class="nz-kitchen-tabs" role="tablist" aria-label="Subscriptions / الاشتراكات">
+                    {{#each this.tabs key="key" as |t|}}
+                        <button type="button" role="tab" class={{t.className}} aria-selected={{if t.selected "true" "false"}} {{on "click" (fn this.pickTab t.key)}} data-test-kitchen-tab={{t.key}}>{{t.label}}</button>
+                    {{/each}}
                 </div>
                 {{#each this.stickers key="id" as |sticker|}}
                     <button type="button" class={{sticker.rowClass}} {{on "click" (fn this.open sticker)}} data-test-kitchen-row={{sticker.box}}>
@@ -33,7 +33,7 @@
                         {{#if sticker.ended}}<span class="nz-kitchen-row__tag">End date passed / التاريخ خلص</span>{{/if}}
                     </button>
                 {{else}}
-                    <p class="nz-kitchen-empty">No stickers. / مفيش ستيكرات.</p>
+                    <p class="nz-kitchen-empty">{{if (eq this.tab "active") "No active stickers. / مفيش ستيكرات شغالة." "No inactive stickers. / مفيش ستيكرات واقفة."}}</p>
                 {{/each}}
             </aside>
 

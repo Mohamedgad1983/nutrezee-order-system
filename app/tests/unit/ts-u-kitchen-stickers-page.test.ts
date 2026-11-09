@@ -34,11 +34,15 @@ describe('TS-U A97 kitchen stickers page', () => {
       stickers: [
         { id: 's1', name: 'Omar', mobile: '66818181', box: '9027', area: 'Salam', active: true, end_date: '2026-10-22', notes: 'DRY FOOD', start_date: '2026-10-19', meals_per_day: 2, snacks_per_day: 1, breakfast: 0, protein_g: 150, carb_g: 300 },
         { id: 's2', name: 'Old', mobile: '50000000', box: '1', area: 'Adan', active: false, end_date: null },
+        { id: 's3', name: 'Ended', mobile: '51111111', box: '2', area: 'Adan', active: true, end_date: '2026-10-18' },
       ],
     };
+    // A102: stopped or past-end-date stickers live on the Not active tab.
     expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s1']);
-    page.toggleStopped();
-    expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s1', 's2']);
+    expect(page.tabs.map((t: { key: string; label: string }) => t.label)).toEqual(['Active / شغال (1)', 'Not active / مش شغال (2)']);
+    page.pickTab('inactive');
+    expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s2', 's3']);
+    page.pickTab('active');
     page.searchList({ target: { value: '9027' } });
     expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s1']);
 

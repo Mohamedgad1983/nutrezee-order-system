@@ -83,7 +83,7 @@ export default class KitchenStickersComponent extends Component {
     @tracked form = blank('');
     @tracked fieldError = null;
     @tracked search = '';
-    @tracked showStopped = false;
+    @tracked tab = 'active';
 
     constructor() {
         super(...arguments);
@@ -93,7 +93,7 @@ export default class KitchenStickersComponent extends Component {
     get stickers() {
         const query = this.search.trim().toLowerCase();
         return (this.data?.stickers ?? [])
-            .filter((s) => (this.showStopped || s.active)
+            .filter((s) => (this.tab === 'active') === this.isRunning(s)
                 && (!query || [s.name, s.mobile, s.box, s.area].some((v) => String(v ?? '').toLowerCase().includes(query))))
             .map((s) => ({
                 ...s,
@@ -102,8 +102,16 @@ export default class KitchenStickersComponent extends Component {
             }));
     }
 
-    get activeCount() { return (this.data?.stickers ?? []).filter((s) => s.active).length; }
-    get stoppedCount() { return (this.data?.stickers ?? []).filter((s) => !s.active).length; }
+    // A102: "active" = still printing and its end date has not passed; everything else is on the Not active tab.
+    isRunning(s) { return Boolean(s.active) && !(s.end_date && this.data && s.end_date < this.data.today); }
+    get activeCount() { return (this.data?.stickers ?? []).filter((s) => this.isRunning(s)).length; }
+    get inactiveCount() { return (this.data?.stickers ?? []).filter((s) => !this.isRunning(s)).length; }
+    get tabs() {
+        return [
+            { key: 'active', label: `Active / شغال (${this.activeCount})` },
+            { key: 'inactive', label: `Not active / مش شغال (${this.inactiveCount})` },
+        ].map((t) => ({ ...t, selected: t.key === this.tab, className: `nz-kitchen-tab${t.key === this.tab ? ' nz-kitchen-tab--on' : ''}` }));
+    }
     get selected() { return (this.data?.stickers ?? []).find((s) => s.id === this.selectedId) ?? null; }
     get isNew() { return this.selectedId === 'new'; }
     get editing() { return this.selectedId !== null; }
@@ -200,7 +208,7 @@ export default class KitchenStickersComponent extends Component {
     }
 
     @action reload() { void this.load(); }
-    @action toggleStopped() { this.showStopped = !this.showStopped; }
+    @action pickTab(tab) { this.tab = tab; }
     @action searchList(event) { this.search = event.target.value; }
 
     @action
