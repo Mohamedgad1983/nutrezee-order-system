@@ -127,6 +127,21 @@ def print_time(day):
     return (datetime.date.fromisoformat(day) - datetime.timedelta(days=1)).isoformat() + ' 01:00'
 
 
+def printed_at_night(day):
+    """What was printed that night: the labels Batch Labels held at the last print check up to 03:00 Kuwait (printing runs from 01:00; follow-up checks end 02:57; A85)."""
+    q = ("SELECT labels, whatsapp_labels, to_char(finished_at AT TIME ZONE 'Asia/Kuwait', 'YYYY-MM-DD HH24:MI') "
+         "FROM label_print_check WHERE delivery_date = '%s' AND status IN ('ok', 'differences') "
+         "AND finished_at AT TIME ZONE 'Asia/Kuwait' <= (DATE '%s' - 1) + TIME '03:00' "
+         "ORDER BY finished_at DESC LIMIT 1" % (day, day))
+    res = subprocess.run(['docker', 'exec', 'nutrezee-postgres-1', 'psql', '-U', 'nutrezee', '-d', 'nutrezee', '-AtF', '\t', '-c', q],
+                         capture_output=True, text=True, timeout=60)
+    line = res.stdout.strip()
+    if res.returncode != 0 or not line:
+        return None
+    app, wa, at = line.split('\t')
+    return int(app), int(wa), at
+
+
 def partner_env():
     env = {}
     for line in open(ENV_FILE, encoding='utf-8'):
@@ -174,25 +189,29 @@ def dishes(day, printed_orders):
     return salads, fruits
 
 
-def build(day, rows, salads, fruits, removed):
+def build(day, rows, salads, fruits, removed, printed):
     app = [r for r in rows if r['source'] == 'App']
     wa = [r for r in rows if r['source'] == 'WhatsApp']
+    p_app, p_wa, p_at = printed
     weekday = datetime.date.fromisoformat(day).strftime('%A')
     summary = [
         ['Item / البند', 'Count / العدد'],
         ['Delivery day / يوم التوصيل', f'{day} ({weekday})'],
-        ['Subscription boxes (app) / بوكسات الاشتراكات (التطبيق)', len(app)],
-        ['WhatsApp boxes / بوكسات الواتساب', len(wa)],
-        ['Total boxes to deliver / إجمالي البوكسات اللي هتتوصل', len(rows)],
+        ['PRINTED LAST NIGHT / اللي اتطبع بالليل', f'at {p_at} Kuwait'],
+        ['Subscription boxes (app) / بوكسات الاشتراكات (التطبيق)', p_app],
+        ['WhatsApp boxes / بوكسات الواتساب', p_wa],
+        ['Total printed / إجمالي المطبوع', p_app + p_wa],
         [],
         ['Printed, then cancelled — pull these labels / اتطبعوا واتلغوا — شيلوا الليبلات دي', len(removed)],
+        ['Still to deliver at 09:00 / اللي هيتوصل فعلاً', len(rows)],
         [],
         ['Salad dishes / أطباق السلطة', sum(salads.values())],
         ['Fruit dishes / أطباق الفواكه', sum(fruits.values())],
         [],
-        ['Boxes: Fleet-Ops orders of the day that are still active at 09:00 Kuwait (labels printed at 01:00 the night before).'],
+        ['Printed = the labels Batch Labels held at the 01:00 print (last print check of the night, matched to the legacy screen).'],
+        ['Still to deliver = Fleet-Ops orders of the day still active at 09:00 Kuwait.'],
         ['Cancelled after printing = the customer paused/stopped, or the subscription ended in the app/ERPNext, after the 01:00 print. They are NOT in the box count.'],
-        ['Dishes: Partner order items of the printed app boxes; WhatsApp boxes have no dish list.'],
+        ['Dishes: Partner order items of the printed app boxes (still active + pulled); WhatsApp boxes have no dish list.'],
     ]
     def table(title, counter):
         return [[title, 'Count / العدد']] + [[n, c] for n, c in counter.most_common()] + [['Total / الإجمالي', sum(counter.values())]]
@@ -238,28 +257,34 @@ def main():
         # Friday (no delivery) or nothing printed: no empty email.
         print(json.dumps({**stamp, 'total': 0, 'mail': 'skipped (no printed boxes)'}))
         return 0
-    salads, fruits = dishes(day, {r['order'] for r in rows if r['source'] == 'App'})
-    data, n_app, n_wa = build(day, rows, salads, fruits, removed)
+    salads, fruits = dishes(day, {r['order'] for r in rows + removed if r['source'] == 'App'})
+    # Owner 2026-11-09: the email reports what was really printed. Fallback when the check log is missing:
+    # still-active + printed-then-cancelled, which is the same set.
+    printed = printed_at_night(day) or (
+        sum(r['source'] == 'App' for r in rows + removed), sum(r['source'] == 'WhatsApp' for r in rows + removed), print_time(day))
+    data, n_app, n_wa = build(day, rows, salads, fruits, removed, printed)
     n_salad, n_fruit = sum(salads.values()), sum(fruits.values())
     os.makedirs(OUT_DIR, exist_ok=True)
     name = f'boxes-printed-{day}.xlsx'
     with open(os.path.join(OUT_DIR, name), 'wb') as fh:
         fh.write(data)
     weekday = datetime.date.fromisoformat(day).strftime('%A')
-    subject = f'Boxes for {weekday} {day}: {len(rows)} / عدد البوكسات'
-    body = (f'Boxes printed last night for delivery on {weekday} {day}:\n'
-            f'  Subscription boxes (app): {n_app}\n  WhatsApp boxes: {n_wa}\n  Total boxes: {len(rows)}\n'
-            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n'
-            f'  Printed then cancelled (pull these labels): {len(removed)}' + (': ' + ', '.join(r['order'] for r in removed) if removed else '') + '\n\n'
-            f'البوكسات اللي اتطبعت امبارح بالليل لتوصيل يوم {day}:\n'
-            f'  بوكسات الاشتراكات (التطبيق): {n_app}\n  بوكسات الواتساب: {n_wa}\n  إجمالي البوكسات: {len(rows)}\n'
-            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n'
-            f'  اتطبعوا واتلغوا (شيلوا الليبلات دي): {len(removed)}\n\n'
-            'Each salad and fruit dish with its count is in the attached sheet. / كل طبق سلطة وفاكهة وعدده في الشيت المرفق.\n')
+    p_app, p_wa, p_at = printed
+    subject = f'Boxes printed for {weekday} {day}: {p_app + p_wa} / البوكسات المطبوعة'
+    body = (f'Printed last night ({p_at} Kuwait) for delivery on {weekday} {day}:\n'
+            f'  Subscription boxes (app): {p_app}\n  WhatsApp boxes: {p_wa}\n  Total printed: {p_app + p_wa}\n'
+            f'  Printed then cancelled (pull these labels): {len(removed)}' + (': ' + ', '.join(r['order'] for r in removed) if removed else '') + '\n'
+            f'  Still to deliver: {len(rows)}\n'
+            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n\n'
+            f'اللي اتطبع امبارح بالليل لتوصيل يوم {day}:\n'
+            f'  بوكسات الاشتراكات (التطبيق): {p_app}\n  بوكسات الواتساب: {p_wa}\n  إجمالي المطبوع: {p_app + p_wa}\n'
+            f'  اتطبعوا واتلغوا (شيلوا الليبلات دي): {len(removed)}\n  اللي هيتوصل فعلاً: {len(rows)}\n'
+            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n\n'
+            'Each salad and fruit dish, and the labels to pull, are in the attached sheet. / تفاصيل السلطة والفاكهة والليبلات اللي تتشال في الشيت المرفق.\n')
     sent = 'skipped (manual run; add --send to email)'
     if '--send' in sys.argv:
         sent = 'sent' if mail(subject, body, name, data, to) else 'FAILED'
-    print(json.dumps({**stamp, 'app': n_app, 'whatsapp': n_wa, 'total': len(rows), 'salads': n_salad, 'fruits': n_fruit, 'pulled': [r['order'] for r in removed], 'to': to, 'mail': sent}))
+    print(json.dumps({**stamp, 'printed_app': printed[0], 'printed_whatsapp': printed[1], 'printed_at': printed[2], 'to_deliver': len(rows), 'salads': n_salad, 'fruits': n_fruit, 'pulled': [r['order'] for r in removed], 'to': to, 'mail': sent}))
     return 0 if sent != 'FAILED' else 1
 
 
