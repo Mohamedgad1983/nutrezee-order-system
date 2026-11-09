@@ -195,18 +195,18 @@ def build(day, rows, salads, fruits, removed, printed):
     p_app, p_wa, p_at = printed
     weekday = datetime.date.fromisoformat(day).strftime('%A')
     summary = [
-        ['Item / البند', 'Count / العدد'],
-        ['Delivery day / يوم التوصيل', f'{day} ({weekday})'],
-        ['PRINTED LAST NIGHT / اللي اتطبع بالليل', f'at {p_at} Kuwait'],
-        ['Subscription boxes (app) / بوكسات الاشتراكات (التطبيق)', p_app],
-        ['WhatsApp boxes / بوكسات الواتساب', p_wa],
-        ['Total printed / إجمالي المطبوع', p_app + p_wa],
+        ['Item', 'Count'],
+        ['Delivery day', f'{day} ({weekday})'],
+        ['Printed last night', f'at {p_at} Kuwait'],
+        ['Subscription boxes (app)', p_app],
+        ['WhatsApp boxes', p_wa],
+        ['Total printed', p_app + p_wa],
         [],
-        ['Printed, then cancelled — pull these labels / اتطبعوا واتلغوا — شيلوا الليبلات دي', len(removed)],
-        ['Still to deliver at 09:00 / اللي هيتوصل فعلاً', len(rows)],
+        ['Printed, then cancelled — pull these labels', len(removed)],
+        ['Still to deliver at 09:00', len(rows)],
         [],
-        ['Salad dishes / أطباق السلطة', sum(salads.values())],
-        ['Fruit dishes / أطباق الفواكه', sum(fruits.values())],
+        ['Salad dishes', sum(salads.values())],
+        ['Fruit dishes', sum(fruits.values())],
         [],
         ['Printed = the labels Batch Labels held at the 01:00 print (last print check of the night, matched to the legacy screen).'],
         ['Still to deliver = Fleet-Ops orders of the day still active at 09:00 Kuwait.'],
@@ -214,11 +214,11 @@ def build(day, rows, salads, fruits, removed, printed):
         ['Dishes: Partner order items of the printed app boxes (still active + pulled); WhatsApp boxes have no dish list.'],
     ]
     def table(title, counter):
-        return [[title, 'Count / العدد']] + [[n, c] for n, c in counter.most_common()] + [['Total / الإجمالي', sum(counter.values())]]
+        return [[title, 'Count']] + [[n, c] for n, c in counter.most_common()] + [['Total', sum(counter.values())]]
     data = xlsx([('Summary', summary, [56, 22]),
-                 ('Salads', table('Salad dish / طبق السلطة', salads), [44, 14]),
-                 ('Fruits', table('Fruit dish / طبق الفاكهة', fruits), [44, 14]),
-                 ('Pull these labels', [['Order / الطلب', 'Source / المصدر', 'Driver / السواق', 'Cancelled at (Kuwait) / اتلغى امتى']]
+                 ('Salads', table('Salad dish', salads), [44, 14]),
+                 ('Fruits', table('Fruit dish', fruits), [44, 14]),
+                 ('Pull these labels', [['Order', 'Source', 'Driver', 'Cancelled at (Kuwait)']]
                   + [[r['order'], r['source'], r['driver'], r['changed']] for r in sorted(removed, key=lambda r: (r['driver'], r['order']))],
                   [16, 12, 28, 22])])
     return data, len(app), len(wa)
@@ -270,17 +270,21 @@ def main():
         fh.write(data)
     weekday = datetime.date.fromisoformat(day).strftime('%A')
     p_app, p_wa, p_at = printed
-    subject = f'Boxes printed for {weekday} {day}: {p_app + p_wa} / البوكسات المطبوعة'
-    body = (f'Printed last night ({p_at} Kuwait) for delivery on {weekday} {day}:\n'
-            f'  Subscription boxes (app): {p_app}\n  WhatsApp boxes: {p_wa}\n  Total printed: {p_app + p_wa}\n'
-            f'  Printed then cancelled (pull these labels): {len(removed)}' + (': ' + ', '.join(r['order'] for r in removed) if removed else '') + '\n'
-            f'  Still to deliver: {len(rows)}\n'
-            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n\n'
-            f'اللي اتطبع امبارح بالليل لتوصيل يوم {day}:\n'
-            f'  بوكسات الاشتراكات (التطبيق): {p_app}\n  بوكسات الواتساب: {p_wa}\n  إجمالي المطبوع: {p_app + p_wa}\n'
-            f'  اتطبعوا واتلغوا (شيلوا الليبلات دي): {len(removed)}\n  اللي هيتوصل فعلاً: {len(rows)}\n'
-            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n\n'
-            'Each salad and fruit dish, and the labels to pull, are in the attached sheet. / تفاصيل السلطة والفاكهة والليبلات اللي تتشال في الشيت المرفق.\n')
+    # Owner 2026-11-09: short, polite, English only.
+    nice_day = datetime.date.fromisoformat(day).strftime('%A, %d %B %Y')
+    pulled = (f"- Cancelled after printing (please remove these labels): {len(removed)} "
+              f"({', '.join(r['order'] for r in removed)})\n") if removed else ''
+    subject = f'Daily Box Report – {nice_day}'
+    body = ('Good morning,\n\n'
+            f'Please find below the boxes printed last night for delivery on {nice_day}:\n\n'
+            f'- Subscription boxes: {p_app}\n'
+            f'- WhatsApp boxes: {p_wa}\n'
+            f'- Total printed: {p_app + p_wa}\n'
+            + pulled +
+            f'- Salad dishes: {n_salad}\n'
+            f'- Fruit dishes: {n_fruit}\n\n'
+            'The full details are in the attached sheet.\n\n'
+            'Kind regards,\nNutreeze Operations\n')
     sent = 'skipped (manual run; add --send to email)'
     if '--send' in sys.argv:
         sent = 'sent' if mail(subject, body, name, data, to) else 'FAILED'
