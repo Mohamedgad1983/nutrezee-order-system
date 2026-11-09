@@ -83,7 +83,7 @@ export default class KitchenStickersComponent extends Component {
     @tracked form = blank('');
     @tracked fieldError = null;
     @tracked search = '';
-    @tracked showStopped = false;
+    @tracked tab = 'active';
 
     constructor() {
         super(...arguments);
@@ -93,17 +93,30 @@ export default class KitchenStickersComponent extends Component {
     get stickers() {
         const query = this.search.trim().toLowerCase();
         return (this.data?.stickers ?? [])
-            .filter((s) => (this.showStopped || s.active)
+            .filter((s) => (this.tab === 'active') === this.isRunning(s)
                 && (!query || [s.name, s.mobile, s.box, s.area].some((v) => String(v ?? '').toLowerCase().includes(query))))
             .map((s) => ({
                 ...s,
                 rowClass: `nz-kitchen-row${s.id === this.selectedId ? ' nz-kitchen-row--chosen' : ''}${s.active ? '' : ' nz-kitchen-row--stopped'}`,
-                ended: s.end_date && this.data && s.end_date < this.data.today,
+                ended: this.isEnded(s),
             }));
     }
 
-    get activeCount() { return (this.data?.stickers ?? []).filter((s) => s.active).length; }
-    get stoppedCount() { return (this.data?.stickers ?? []).filter((s) => !s.active).length; }
+    // A102: a sticker stops printing on its own after its end date (wa_manual_stickers.py, A97.2),
+    // so "active" = not stopped AND the print day is not past the end date. The rest is on the Not active tab.
+    isEnded(s) { return Boolean(s?.end_date && this.data && s.end_date < this.data.delivery_date); }
+    isRunning(s) { return Boolean(s?.active) && !this.isEnded(s); }
+    get selectedRunning() { return this.isRunning(this.selected); }
+    get selectedEnded() { return this.isEnded(this.selected); }
+    get showEndedNote() { return !this.isNew && this.selectedEnded; }
+    get activeCount() { return (this.data?.stickers ?? []).filter((s) => this.isRunning(s)).length; }
+    get inactiveCount() { return (this.data?.stickers ?? []).filter((s) => !this.isRunning(s)).length; }
+    get tabs() {
+        return [
+            { key: 'active', label: `Active / شغال (${this.activeCount})` },
+            { key: 'inactive', label: `Not active / مش شغال (${this.inactiveCount})` },
+        ].map((t) => ({ ...t, selected: t.key === this.tab, className: `nz-kitchen-tab${t.key === this.tab ? ' nz-kitchen-tab--on' : ''}` }));
+    }
     get selected() { return (this.data?.stickers ?? []).find((s) => s.id === this.selectedId) ?? null; }
     get isNew() { return this.selectedId === 'new'; }
     get editing() { return this.selectedId !== null; }
@@ -200,7 +213,7 @@ export default class KitchenStickersComponent extends Component {
     }
 
     @action reload() { void this.load(); }
-    @action toggleStopped() { this.showStopped = !this.showStopped; }
+    @action pickTab(tab) { this.tab = tab; }
     @action searchList(event) { this.search = event.target.value; }
 
     @action
@@ -262,6 +275,18 @@ export default class KitchenStickersComponent extends Component {
         } finally {
             this.saving = false;
         }
+    }
+
+    // A102: the kitchen can bring back any not-active sticker: un-stop it and, when its end date
+    // has passed, clear the end date so it prints every day again until someone stops it.
+    @action
+    async printAgain() {
+        if (this.saving || !this.selected) return;
+        if (!this.selected.active) await this.setActive(true);
+        if (this.error || !this.isEnded(this.selected)) return;
+        this.form = { ...this.form, end_date: '' };
+        await this.save();
+        if (!this.error) this.notice = 'Printing again from the next labels, with no end date. / رجع يتطبع من الملصقات الجاية، من غير تاريخ نهاية.';
     }
 
     @action

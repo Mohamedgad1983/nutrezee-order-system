@@ -1521,6 +1521,9 @@ body.nutrezee-brand-theme .floating-pagination .page-item.active {
 .nz-kitchen-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 78vh; overflow: auto; }
 .nz-kitchen-search { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.5rem; }
 .nz-kitchen-count { font-size: 0.8rem; color: var(--nz-muted, #6b7280); }
+.nz-kitchen-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--nz-border, #e5e7eb); }
+.nz-kitchen-tab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 4px; font-size: 0.8rem; color: var(--nz-muted, #6b7280); cursor: pointer; }
+.nz-kitchen-tab--on { border-bottom-color: currentColor; color: inherit; font-weight: 600; }
 .nz-link-button { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; }
 .nz-kitchen-row { display: grid; grid-template-columns: auto 1fr; gap: 0 0.6rem; padding: 0.55rem 0.7rem; text-align: start; border: 1px solid var(--nz-border, #d1d5db); border-radius: 0.6rem; background: var(--nz-surface, #fff); color: inherit; cursor: pointer; }
 .nz-kitchen-row--chosen { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
