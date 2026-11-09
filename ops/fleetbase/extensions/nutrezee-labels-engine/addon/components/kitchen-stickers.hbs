@@ -66,14 +66,17 @@
                             <textarea rows="6" maxlength="900" {{on "input" (fn this.update "notes")}}>{{this.form.notes}}</textarea>
                         </label>
                     </div>
+                    {{#if this.showEndedNote}}
+                        <div class="nz-label-state" role="status">End date passed — it stopped printing on its own. Press "Print again" to print it with no end date, or put a new end date and Save. / تاريخ النهاية عدّى فوقف الطباعة لوحده. دوس "رجعه للطباعة" يتطبع من غير تاريخ نهاية، أو اكتب تاريخ نهاية جديد واحفظ.</div>
+                    {{/if}}
                     <div class="nz-kitchen-buttons">
                         <button type="submit" class="btn btn-primary" disabled={{this.saving}} data-test-kitchen-save>{{if this.saving "Saving… / بيحفظ…" "Save / حفظ"}}</button>
                         {{#unless this.isNew}}
                             <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" this.copy}}>Copy as new / انسخ كجديد</button>
-                            {{#if this.selected.active}}
+                            {{#if this.selectedRunning}}
                                 <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" (fn this.setActive false)}}>Stop printing / وقف الطباعة</button>
                             {{else}}
-                                <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" (fn this.setActive true)}}>Print again / رجعه للطباعة</button>
+                                <button type="button" class="btn btn-primary" disabled={{this.saving}} {{on "click" this.printAgain}} data-test-kitchen-print-again>Print again / رجعه للطباعة</button>
                             {{/if}}
                         {{/unless}}
                         <button type="button" class="btn btn-default" disabled={{this.saving}} {{on "click" this.close}}>Close / قفل</button>

@@ -98,12 +98,17 @@ export default class KitchenStickersComponent extends Component {
             .map((s) => ({
                 ...s,
                 rowClass: `nz-kitchen-row${s.id === this.selectedId ? ' nz-kitchen-row--chosen' : ''}${s.active ? '' : ' nz-kitchen-row--stopped'}`,
-                ended: s.end_date && this.data && s.end_date < this.data.today,
+                ended: this.isEnded(s),
             }));
     }
 
-    // A102: "active" = still printing and its end date has not passed; everything else is on the Not active tab.
-    isRunning(s) { return Boolean(s.active) && !(s.end_date && this.data && s.end_date < this.data.today); }
+    // A102: a sticker stops printing on its own after its end date (wa_manual_stickers.py, A97.2),
+    // so "active" = not stopped AND the print day is not past the end date. The rest is on the Not active tab.
+    isEnded(s) { return Boolean(s?.end_date && this.data && s.end_date < this.data.delivery_date); }
+    isRunning(s) { return Boolean(s?.active) && !this.isEnded(s); }
+    get selectedRunning() { return this.isRunning(this.selected); }
+    get selectedEnded() { return this.isEnded(this.selected); }
+    get showEndedNote() { return !this.isNew && this.selectedEnded; }
     get activeCount() { return (this.data?.stickers ?? []).filter((s) => this.isRunning(s)).length; }
     get inactiveCount() { return (this.data?.stickers ?? []).filter((s) => !this.isRunning(s)).length; }
     get tabs() {
@@ -270,6 +275,18 @@ export default class KitchenStickersComponent extends Component {
         } finally {
             this.saving = false;
         }
+    }
+
+    // A102: the kitchen can bring back any not-active sticker: un-stop it and, when its end date
+    // has passed, clear the end date so it prints every day again until someone stops it.
+    @action
+    async printAgain() {
+        if (this.saving || !this.selected) return;
+        if (!this.selected.active) await this.setActive(true);
+        if (this.error || !this.isEnded(this.selected)) return;
+        this.form = { ...this.form, end_date: '' };
+        await this.save();
+        if (!this.error) this.notice = 'Printing again from the next labels, with no end date. / رجع يتطبع من الملصقات الجاية، من غير تاريخ نهاية.';
     }
 
     @action

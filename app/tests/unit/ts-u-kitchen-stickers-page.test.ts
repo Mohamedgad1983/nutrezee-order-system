@@ -42,6 +42,9 @@ describe('TS-U A97 kitchen stickers page', () => {
     expect(page.tabs.map((t: { key: string; label: string }) => t.label)).toEqual(['Active / شغال (1)', 'Not active / مش شغال (2)']);
     page.pickTab('inactive');
     expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s2', 's3']);
+    page.open(page.data.stickers[2]);
+    expect(page.selectedRunning).toBe(false);
+    expect(page.showEndedNote).toBe(true);
     page.pickTab('active');
     page.searchList({ target: { value: '9027' } });
     expect(page.stickers.map((s: { id: string }) => s.id)).toEqual(['s1']);
@@ -70,5 +73,26 @@ describe('TS-U A97 kitchen stickers page', () => {
     expect(page.preview.fullName).toBe('-');
     expect(page.form.delivery_time).toBe('From 5 AM to 4 PM');
     expect(page.preview.deliveryTime).toBe('From 5 AM to 4 PM');
+  });
+
+  it('A102: Print again un-stops a sticker and clears a passed end date', async () => {
+    Page.prototype.load = vi.fn();
+    const page = new Page();
+    const ended = { id: 's3', name: 'Ended', mobile: '51111111', box: '2', area: 'Adan', active: false, start_date: '2026-10-01', end_date: '2026-10-18' };
+    page.data = { delivery_date: '2026-10-20', today: '2026-10-19', areas: [], stickers: [ended] };
+    const calls: Array<[string, Record<string, unknown>]> = [];
+    page.request = vi.fn(async (url: string, init: { body: string }) => {
+      calls.push([url, JSON.parse(init.body)]);
+      const saved = url.endsWith('/restore') ? { ...ended, active: true } : { ...ended, active: true, end_date: null };
+      page.data = { ...page.data, stickers: [saved] };
+      return saved;
+    });
+    page.load = vi.fn(async () => {});
+    page.open(ended);
+    await page.printAgain();
+    expect(calls.map(([url]) => url)).toEqual(['/nz/fleet-ops/kitchen-stickers/s3/restore', '/nz/fleet-ops/kitchen-stickers/s3']);
+    expect(calls[1][1].end_date).toBe('');
+    expect(page.selectedRunning).toBe(true);
+    expect(page.notice).toContain('no end date');
   });
 });
