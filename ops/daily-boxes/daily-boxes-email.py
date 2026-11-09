@@ -60,17 +60,19 @@ def orders(day):
                COALESCE(u.name, NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.meta, '$.partner_driver_name')), 'null'), ''),
                COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.meta, '$.meal_item_count')), 'null'), ''),
                COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.meta, '$.label_user_id')), 'null'), ''),
-               o.status
+               o.status,
+               DATE_FORMAT(CONVERT_TZ(o.updated_at, '+00:00', '+03:00'), '%Y-%m-%d %H:%i')
           FROM orders o
           LEFT JOIN drivers d ON d.uuid = o.driver_assigned_uuid
           LEFT JOIN users u ON u.uuid = d.user_uuid
          WHERE (o.internal_id LIKE 'NUTREEZE-PARTNER-DAY-{key}-ORDER-%' OR o.internal_id LIKE 'NUTREEZE-WA-DAY-{key}-ORDER-%')
-           AND o.deleted_at IS NULL AND o.status NOT LIKE '%cancel%'""")
+           AND o.deleted_at IS NULL""")
     out = []
-    for source, number, area, driver, meals, box, status in rows:
+    for source, number, area, driver, meals, box, status, changed in rows:
         out.append({'source': source, 'order': number.replace('NUTREEZE-WA-DAY-' + key + '-ORDER-', 'WA-'),
                     'area': (area or '(no area)').strip().title(), 'driver': driver.strip() or '(no driver)',
-                    'meals': int(meals) if meals.isdigit() else None, 'kitchen': bool(box), 'status': status})
+                    'meals': int(meals) if meals.isdigit() else None, 'kitchen': bool(box), 'status': status,
+                    'cancelled': 'cancel' in status, 'changed': changed})
     return out
 
 
@@ -120,6 +122,11 @@ def xlsx(sheets):
     return buf.getvalue()
 
 
+def print_time(day):
+    """A70: the labels of a delivery day are printed at 01:00 Kuwait the day before."""
+    return (datetime.date.fromisoformat(day) - datetime.timedelta(days=1)).isoformat() + ' 01:00'
+
+
 def partner_env():
     env = {}
     for line in open(ENV_FILE, encoding='utf-8'):
@@ -167,7 +174,7 @@ def dishes(day, printed_orders):
     return salads, fruits
 
 
-def build(day, rows, salads, fruits):
+def build(day, rows, salads, fruits, removed):
     app = [r for r in rows if r['source'] == 'App']
     wa = [r for r in rows if r['source'] == 'WhatsApp']
     weekday = datetime.date.fromisoformat(day).strftime('%A')
@@ -176,19 +183,25 @@ def build(day, rows, salads, fruits):
         ['Delivery day / يوم التوصيل', f'{day} ({weekday})'],
         ['Subscription boxes (app) / بوكسات الاشتراكات (التطبيق)', len(app)],
         ['WhatsApp boxes / بوكسات الواتساب', len(wa)],
-        ['Total boxes printed / إجمالي البوكسات المطبوعة', len(rows)],
+        ['Total boxes to deliver / إجمالي البوكسات اللي هتتوصل', len(rows)],
+        [],
+        ['Printed, then cancelled — pull these labels / اتطبعوا واتلغوا — شيلوا الليبلات دي', len(removed)],
         [],
         ['Salad dishes / أطباق السلطة', sum(salads.values())],
         ['Fruit dishes / أطباق الفواكه', sum(fruits.values())],
         [],
-        ['Boxes: Fleet-Ops orders of the day that are not cancelled, read at 09:00 Kuwait (labels printed at 01:00).'],
+        ['Boxes: Fleet-Ops orders of the day that are still active at 09:00 Kuwait (labels printed at 01:00 the night before).'],
+        ['Cancelled after printing = the customer paused/stopped, or the subscription ended in the app/ERPNext, after the 01:00 print. They are NOT in the box count.'],
         ['Dishes: Partner order items of the printed app boxes; WhatsApp boxes have no dish list.'],
     ]
     def table(title, counter):
         return [[title, 'Count / العدد']] + [[n, c] for n, c in counter.most_common()] + [['Total / الإجمالي', sum(counter.values())]]
     data = xlsx([('Summary', summary, [56, 22]),
                  ('Salads', table('Salad dish / طبق السلطة', salads), [44, 14]),
-                 ('Fruits', table('Fruit dish / طبق الفاكهة', fruits), [44, 14])])
+                 ('Fruits', table('Fruit dish / طبق الفاكهة', fruits), [44, 14]),
+                 ('Pull these labels', [['Order / الطلب', 'Source / المصدر', 'Driver / السواق', 'Cancelled at (Kuwait) / اتلغى امتى']]
+                  + [[r['order'], r['source'], r['driver'], r['changed']] for r in sorted(removed, key=lambda r: (r['driver'], r['order']))],
+                  [16, 12, 28, 22])])
     return data, len(app), len(wa)
 
 
@@ -216,32 +229,37 @@ def main():
         args = [a for a in args if a != sys.argv[sys.argv.index('--to') + 1]]
     now = datetime.datetime.now(KW)
     day = args[0] if args else (now.date() + datetime.timedelta(days=1)).isoformat()
-    rows = orders(day)
+    every = orders(day)
+    rows = [r for r in every if not r['cancelled']]
+    # Printed at 01:00 and cancelled afterwards: their labels exist and must be pulled (owner 2026-11-09).
+    removed = [r for r in every if r['cancelled'] and r['changed'] >= print_time(day)]
     stamp = {'event': 'daily_boxes', 'delivery_date': day, 'at': now.isoformat(timespec='seconds')}
     if not rows:
         # Friday (no delivery) or nothing printed: no empty email.
         print(json.dumps({**stamp, 'total': 0, 'mail': 'skipped (no printed boxes)'}))
         return 0
     salads, fruits = dishes(day, {r['order'] for r in rows if r['source'] == 'App'})
-    data, n_app, n_wa = build(day, rows, salads, fruits)
+    data, n_app, n_wa = build(day, rows, salads, fruits, removed)
     n_salad, n_fruit = sum(salads.values()), sum(fruits.values())
     os.makedirs(OUT_DIR, exist_ok=True)
     name = f'boxes-printed-{day}.xlsx'
     with open(os.path.join(OUT_DIR, name), 'wb') as fh:
         fh.write(data)
     weekday = datetime.date.fromisoformat(day).strftime('%A')
-    subject = f'Boxes printed for {weekday} {day}: {len(rows)} / البوكسات المطبوعة'
+    subject = f'Boxes for {weekday} {day}: {len(rows)} / عدد البوكسات'
     body = (f'Boxes printed last night for delivery on {weekday} {day}:\n'
             f'  Subscription boxes (app): {n_app}\n  WhatsApp boxes: {n_wa}\n  Total boxes: {len(rows)}\n'
-            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n\n'
+            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n'
+            f'  Printed then cancelled (pull these labels): {len(removed)}' + (': ' + ', '.join(r['order'] for r in removed) if removed else '') + '\n\n'
             f'البوكسات اللي اتطبعت امبارح بالليل لتوصيل يوم {day}:\n'
             f'  بوكسات الاشتراكات (التطبيق): {n_app}\n  بوكسات الواتساب: {n_wa}\n  إجمالي البوكسات: {len(rows)}\n'
-            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n\n'
+            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n'
+            f'  اتطبعوا واتلغوا (شيلوا الليبلات دي): {len(removed)}\n\n'
             'Each salad and fruit dish with its count is in the attached sheet. / كل طبق سلطة وفاكهة وعدده في الشيت المرفق.\n')
     sent = 'skipped (manual run; add --send to email)'
     if '--send' in sys.argv:
         sent = 'sent' if mail(subject, body, name, data, to) else 'FAILED'
-    print(json.dumps({**stamp, 'app': n_app, 'whatsapp': n_wa, 'total': len(rows), 'salads': n_salad, 'fruits': n_fruit, 'to': to, 'mail': sent}))
+    print(json.dumps({**stamp, 'app': n_app, 'whatsapp': n_wa, 'total': len(rows), 'salads': n_salad, 'fruits': n_fruit, 'pulled': [r['order'] for r in removed], 'to': to, 'mail': sent}))
     return 0 if sent != 'FAILED' else 1
 
 
