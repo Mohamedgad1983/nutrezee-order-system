@@ -2,16 +2,23 @@
 """A103 — daily 09:00 Kuwait email: Excel of the boxes whose labels were printed last night.
 
 Owner 2026-11-09: every day at 9 AM send Ahmad Ibrahim (ahmad@) and a.mahran@ an Excel sheet with the
-number of boxes actually printed. Labels are printed at 01:00 for the NEXT delivery day (A70), so at
+number of boxes actually printed (subscriptions = app, and WhatsApp) and the number of salad and fruit
+dishes in them. No area or driver breakdown (owner). Labels are printed at 01:00 for the NEXT delivery day (A70), so at
 09:00 on day X the printed set is delivery day X+1: the Fleet-Ops (Fleetbase) orders of that day that
 are not cancelled — app (Partner) orders + WhatsApp subscribers. That is exactly what Batch Labels
 offered and the 00:45 print check matched against the legacy screen.
 
-Read-only. Order numbers, areas and drivers only — no customer phones or addresses in the sheet.
+Dishes come from Partner's order-items for that day (same key as the labels), counted only for the
+printed app orders. Salads = the kitchen's "salad" section plus any dish named "... salad" (except fruit
+salad); fruits = the fruit dishes in FRUIT_WORDS. WhatsApp boxes have no dish list in Partner.
+Read-only. Counts only — no customer names, phones or addresses in the sheet.
 Usage: daily-boxes-email.py [YYYY-MM-DD] [--send] [--to a@x,b@y]
 A run by hand never emails unless --send; the systemd unit passes --send.
 """
 import datetime
+import re
+import urllib.parse
+import urllib.request
 import io
 import json
 import os
@@ -27,6 +34,12 @@ TO = ['ahmad@nutreeze.com', 'a.mahran@nutreeze.com']
 DB_CONTAINER = 'fleetbase-database-1'
 MAIL_CONTAINER = 'fleetbase-application-1'
 OUT_DIR = '/var/log/nutrezee/daily-boxes'
+ENV_FILE = '/opt/nutrezee/.env'
+FRUIT_WORDS = ('fruit', 'pineapple', 'mango', 'banana', 'pomegranate', 'grape', 'apple', 'melon', 'berry', 'berries',
+               'orange', 'kiwi', 'papaya', 'strawberr', 'pear', 'peach', 'guava', 'fig', 'cherry', 'cherries', 'plum')
+# A dessert or drink that only carries a fruit's name (blueberry cheesecake, apple juice) is not a fruit dish.
+NOT_FRUIT_WORDS = ('cake', 'cookie', 'juice', 'smoothie', 'muffin', 'pancake', 'tart', 'pie', 'bar', 'oat', 'granola',
+                   'yogurt', 'pudding', 'jam', 'dry fruit', 'chicken', 'beef', 'fish', 'shrimp', 'sauce')
 
 
 def mysql(query):
@@ -107,42 +120,76 @@ def xlsx(sheets):
     return buf.getvalue()
 
 
-def build(day, rows):
+def partner_env():
+    env = {}
+    for line in open(ENV_FILE, encoding='utf-8'):
+        if line.startswith('NUTREEZE_PARTNER_LABEL_API_') and '=' in line:
+            key, value = line.rstrip('\n').split('=', 1)
+            env[key] = value.strip().strip('"').strip("'")
+    return env['NUTREEZE_PARTNER_LABEL_API_BASE'].rstrip('/'), env['NUTREEZE_PARTNER_LABEL_API_KEY']
+
+
+def order_items(day):
+    base, key = partner_env()
+    out, cursor = [], None
+    for _ in range(200):
+        query = {'delivery_date': day, 'limit': '500', **({'cursor': str(cursor)} if cursor else {})}
+        req = urllib.request.Request(f'{base}/order-items?{urllib.parse.urlencode(query)}',
+                                     headers={'X-Api-Key': key, 'Accept': 'application/json'})
+        page = json.load(urllib.request.urlopen(req, timeout=120))
+        out += page.get('data') or []
+        cursor = page.get('next_cursor')
+        if not cursor or not page.get('data'):
+            break
+    return out
+
+
+def kind(item):
+    name = re.sub(r'\s+', ' ', (item.get('meal_name_en') or '')).strip().lower()
+    sections = {s.get('code') for s in item.get('sections') or [] if not s.get('is_packing')}
+    words = set(re.findall(r'[a-z]+', name))
+    if any(word in name for word in FRUIT_WORDS) and not any(w in words or (' ' in w and w in name) or (w.endswith('cake') and w in name) for w in NOT_FRUIT_WORDS):
+        return 'fruit'
+    if 'salad' in sections or 'salad' in name:
+        return 'salad'
+    return None
+
+
+def dishes(day, printed_orders):
+    salads, fruits = Counter(), Counter()
+    for item in order_items(day):
+        if str(item.get('order_number')) not in printed_orders:
+            continue
+        k = kind(item)
+        if k:
+            name = re.sub(r'\s+', ' ', (item.get('meal_name_en') or '')).strip().title()
+            (salads if k == 'salad' else fruits)[name] += int(item.get('qty') or 1)
+    return salads, fruits
+
+
+def build(day, rows, salads, fruits):
     app = [r for r in rows if r['source'] == 'App']
     wa = [r for r in rows if r['source'] == 'WhatsApp']
-    kitchen = sum(r['kitchen'] for r in wa)
     weekday = datetime.date.fromisoformat(day).strftime('%A')
     summary = [
-        ['Item / البند', 'Boxes / بوكسات'],
+        ['Item / البند', 'Count / العدد'],
         ['Delivery day / يوم التوصيل', f'{day} ({weekday})'],
-        ['App orders / طلبات التطبيق', len(app)],
-        ['WhatsApp subscribers / مشتركين الواتساب', len(wa)],
-        ['  of which kitchen stickers / منهم ستيكرات المطبخ', kitchen],
-        ['Total printed / إجمالي المطبوع', len(rows)],
-        ['App meals / وجبات التطبيق', sum(r['meals'] or 0 for r in app)],
+        ['Subscription boxes (app) / بوكسات الاشتراكات (التطبيق)', len(app)],
+        ['WhatsApp boxes / بوكسات الواتساب', len(wa)],
+        ['Total boxes printed / إجمالي البوكسات المطبوعة', len(rows)],
         [],
-        ['Source: Fleet-Ops orders of the day that are not cancelled, read at 09:00 Kuwait (labels printed at 01:00).'],
+        ['Salad dishes / أطباق السلطة', sum(salads.values())],
+        ['Fruit dishes / أطباق الفواكه', sum(fruits.values())],
+        [],
+        ['Boxes: Fleet-Ops orders of the day that are not cancelled, read at 09:00 Kuwait (labels printed at 01:00).'],
+        ['Dishes: Partner order items of the printed app boxes; WhatsApp boxes have no dish list.'],
     ]
-    by_area = defaultdict(Counter)
-    for r in rows:
-        by_area[r['area']][r['source']] += 1
-    area_rows = [['Area / المنطقة', 'App / التطبيق', 'WhatsApp / واتساب', 'Total / الإجمالي']]
-    for area, c in sorted(by_area.items(), key=lambda kv: (-sum(kv[1].values()), kv[0])):
-        area_rows.append([area, c['App'], c['WhatsApp'], c['App'] + c['WhatsApp']])
-    area_rows.append(['Total / الإجمالي', len(app), len(wa), len(rows)])
-    by_driver = defaultdict(lambda: [Counter(), set()])
-    for r in rows:
-        by_driver[r['driver']][0][r['source']] += 1
-        by_driver[r['driver']][1].add(r['area'])
-    driver_rows = [['Driver / السواق', 'App / التطبيق', 'WhatsApp / واتساب', 'Total / الإجمالي', 'Areas / المناطق']]
-    for driver, (c, areas) in sorted(by_driver.items(), key=lambda kv: (-sum(kv[1][0].values()), kv[0])):
-        driver_rows.append([driver, c['App'], c['WhatsApp'], c['App'] + c['WhatsApp'], ', '.join(sorted(areas))])
-    driver_rows.append(['Total / الإجمالي', len(app), len(wa), len(rows), ''])
-    order_rows = [['Order / الطلب', 'Source / المصدر', 'Area / المنطقة', 'Driver / السواق', 'Meals / وجبات', 'Kitchen sticker / ستيكر مطبخ']]
-    for r in sorted(rows, key=lambda r: (r['driver'], r['area'], r['order'])):
-        order_rows.append([r['order'], r['source'], r['area'], r['driver'], r['meals'] if r['meals'] is not None else '', 'Yes' if r['kitchen'] else ''])
-    return xlsx([('Summary', summary, [48, 26]), ('By area', area_rows, [30, 14, 16, 14]),
-                 ('By driver', driver_rows, [30, 14, 16, 14, 60]), ('Orders', order_rows, [16, 12, 26, 28, 10, 16])]), len(app), len(wa), kitchen
+    def table(title, counter):
+        return [[title, 'Count / العدد']] + [[n, c] for n, c in counter.most_common()] + [['Total / الإجمالي', sum(counter.values())]]
+    data = xlsx([('Summary', summary, [56, 22]),
+                 ('Salads', table('Salad dish / طبق السلطة', salads), [44, 14]),
+                 ('Fruits', table('Fruit dish / طبق الفاكهة', fruits), [44, 14])])
+    return data, len(app), len(wa)
 
 
 def mail(subject, body, name, data, to):
@@ -175,7 +222,9 @@ def main():
         # Friday (no delivery) or nothing printed: no empty email.
         print(json.dumps({**stamp, 'total': 0, 'mail': 'skipped (no printed boxes)'}))
         return 0
-    data, n_app, n_wa, kitchen = build(day, rows)
+    salads, fruits = dishes(day, {r['order'] for r in rows if r['source'] == 'App'})
+    data, n_app, n_wa = build(day, rows, salads, fruits)
+    n_salad, n_fruit = sum(salads.values()), sum(fruits.values())
     os.makedirs(OUT_DIR, exist_ok=True)
     name = f'boxes-printed-{day}.xlsx'
     with open(os.path.join(OUT_DIR, name), 'wb') as fh:
@@ -183,14 +232,16 @@ def main():
     weekday = datetime.date.fromisoformat(day).strftime('%A')
     subject = f'Boxes printed for {weekday} {day}: {len(rows)} / البوكسات المطبوعة'
     body = (f'Boxes printed last night for delivery on {weekday} {day}:\n'
-            f'  App orders: {n_app}\n  WhatsApp subscribers: {n_wa} (kitchen stickers {kitchen})\n  Total: {len(rows)}\n\n'
+            f'  Subscription boxes (app): {n_app}\n  WhatsApp boxes: {n_wa}\n  Total boxes: {len(rows)}\n'
+            f'  Salad dishes: {n_salad}\n  Fruit dishes: {n_fruit}\n\n'
             f'البوكسات اللي اتطبعت امبارح بالليل لتوصيل يوم {day}:\n'
-            f'  التطبيق: {n_app}\n  الواتساب: {n_wa} (منهم ستيكرات المطبخ {kitchen})\n  الإجمالي: {len(rows)}\n\n'
-            'Details by area, by driver and per order in the attached sheet. / التفاصيل بالمنطقة والسواق والطلب في الشيت المرفق.\n')
+            f'  بوكسات الاشتراكات (التطبيق): {n_app}\n  بوكسات الواتساب: {n_wa}\n  إجمالي البوكسات: {len(rows)}\n'
+            f'  أطباق السلطة: {n_salad}\n  أطباق الفواكه: {n_fruit}\n\n'
+            'Each salad and fruit dish with its count is in the attached sheet. / كل طبق سلطة وفاكهة وعدده في الشيت المرفق.\n')
     sent = 'skipped (manual run; add --send to email)'
     if '--send' in sys.argv:
         sent = 'sent' if mail(subject, body, name, data, to) else 'FAILED'
-    print(json.dumps({**stamp, 'app': n_app, 'whatsapp': n_wa, 'kitchen': kitchen, 'total': len(rows), 'to': to, 'mail': sent}))
+    print(json.dumps({**stamp, 'app': n_app, 'whatsapp': n_wa, 'total': len(rows), 'salads': n_salad, 'fruits': n_fruit, 'to': to, 'mail': sent}))
     return 0 if sent != 'FAILED' else 1
 
 
