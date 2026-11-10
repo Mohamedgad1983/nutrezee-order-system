@@ -1,0 +1,10 @@
+[Unit]
+Description=A105 Monday/Thursday box report (3 days before to 3 days after, active boxes only) to ahmad@nutreeze.com
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/nutrezee/daily-boxes/boxes-range.py --around --active-only --to ahmad@nutreeze.com --send
+StandardOutput=append:/var/log/nutrezee/daily-boxes/week.log
+StandardError=append:/var/log/nutrezee/daily-boxes/week.log
+TimeoutStartSec=1800

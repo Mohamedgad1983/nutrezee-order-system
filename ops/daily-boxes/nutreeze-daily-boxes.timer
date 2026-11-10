@@ -1,0 +1,9 @@
+[Unit]
+Description=A103 boxes-printed email every day 09:00 Kuwait
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Kuwait
+Persistent=false
+
+[Install]
+WantedBy=timers.target

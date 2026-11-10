@@ -1,0 +1,9 @@
+[Unit]
+Description=A105 box report every Monday and Thursday 09:00 Kuwait
+
+[Timer]
+OnCalendar=Mon,Thu *-*-* 09:00:00 Asia/Kuwait
+Persistent=true
+
+[Install]
+WantedBy=timers.target
