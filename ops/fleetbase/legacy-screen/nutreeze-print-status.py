@@ -333,6 +333,14 @@ def report(day, screen, d, fix_log, started, note=None, wa=None):
         return
     sent_file = os.path.join(STATE_DIR, f'print-status-sent-{day}.txt')
     if FOLLOW_UP:
+        # A104 (2026-11-10): the labels of `day` print the night before (01:00, follow-ups to ~03:00 Kuwait).
+        # After that window the print page's own daytime checks (A85) keep the page in step but never email:
+        # an "(update)" email for a day already printed reached it@ about every hour.
+        print_done = datetime.datetime.combine(datetime.date.fromisoformat(day) - datetime.timedelta(days=1),
+                                               datetime.time(3, 0), KW)
+        if datetime.datetime.now(KW) >= print_done:
+            print('mail: skipped (labels of this day already printed)')
+            return
         # A81: a follow-up run is silent unless the result differs from the last email of that day.
         last = open(sent_file).read().strip() if os.path.isfile(sent_file) else None
         if last is None:
