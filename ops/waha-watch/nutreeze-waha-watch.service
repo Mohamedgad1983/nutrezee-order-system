@@ -1,0 +1,10 @@
+[Unit]
+Description=A106 email it@ when the Nutreeze WhatsApp (WAHA session nutreeze) stops, and when it is back
+
+[Service]
+Type=oneshot
+Environment=TZ=Asia/Kuwait
+ExecStart=/usr/bin/python3 -I /opt/waha/watch/waha-watch.py
+StandardOutput=append:/var/log/nutrezee/waha-watch.log
+StandardError=append:/var/log/nutrezee/waha-watch.log
+TimeoutStartSec=600
