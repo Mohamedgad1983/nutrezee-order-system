@@ -487,6 +487,63 @@ export class OrderService {
   }
 
   /**
+   * A107: who an imported order belongs to now, and which Partner customers (customer_ref stamped
+   * on each mirrored day) that local customer is carrying across all of its orders.
+   */
+  async importedCustomerStateInTx(
+    client: PoolClient,
+    orderId: string,
+  ): Promise<{ customerId: string; partnerRefs: string[] } | null> {
+    const { rows } = await client.query(`SELECT customer_id FROM customer_order WHERE id = $1`, [orderId]);
+    if (rows.length === 0) return null;
+    const customerId = rows[0].customer_id as string;
+    const refs = await client.query(
+      `SELECT DISTINCT fd.address_frozen->>'partner_customer_ref' AS ref
+         FROM fulfillment_day fd JOIN customer_order co ON co.id = fd.order_id
+        WHERE co.customer_id = $1 AND fd.address_frozen->>'partner_customer_ref' IS NOT NULL`,
+      [customerId],
+    );
+    return { customerId, partnerRefs: refs.rows.map((r) => r.ref as string) };
+  }
+
+  /**
+   * A107: move one Partner-imported order to another customer — used when orders that were first
+   * imported under one shared phone turn out (in Partner) to belong to different people. Only the
+   * order's customer changes; days, labels already printed and their trail stay as they are.
+   * Audited in the caller's transaction. Returns false when the order no longer has `fromCustomerId`.
+   */
+  async relinkImportedCustomerInTx(
+    client: PoolClient,
+    actorId: string,
+    orderId: string,
+    fromCustomerId: string,
+    toCustomerId: string,
+    detail: { partnerCustomerRef: string; phoneNormalized: string },
+  ): Promise<boolean> {
+    if (fromCustomerId === toCustomerId) return false;
+    const { rows } = await client.query(
+      `UPDATE customer_order
+          SET customer_id = $3, updated_at = now(), updated_by = $4, version = version + 1
+        WHERE id = $1 AND customer_id = $2 AND channel = 'partner'
+        RETURNING order_number`,
+      [orderId, fromCustomerId, toCustomerId, actorId],
+    );
+    if (rows.length === 0) return false;
+    await this.audit.writeInTx(client, {
+      eventType: 'order.customer_relinked',
+      actor: { id: actorId, role: 'import' },
+      entityType: 'customer_order',
+      entityId: orderId,
+      severity: 'warn',
+      relatedRefs: { order_number: rows[0].order_number as string, partner_customer_ref: detail.partnerCustomerRef },
+      before: { customer_id: fromCustomerId },
+      after: { customer_id: toCustomerId, phone: detail.phoneNormalized },
+      reason: 'Partner shows this order under a different customer than the shared phone it was imported with',
+    });
+    return true;
+  }
+
+  /**
    * Backfill frozen legacy delivery (method/time/area) onto an existing imported order.
    * Idempotent: only fills columns that are currently NULL, so re-runs are no-ops and a
    * later better value never overwrites a stored one. Returns true if any column was set.
