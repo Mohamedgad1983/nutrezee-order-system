@@ -1,0 +1,10 @@
+[Unit]
+Description=A103 daily 09:00 Kuwait email: Excel of boxes printed last night (ahmad@, a.mahran@)
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart=/usr/bin/python3 -I /opt/nutrezee/daily-boxes/daily-boxes-email.py --send
+StandardOutput=append:/var/log/nutrezee/daily-boxes/run.log
+StandardError=append:/var/log/nutrezee/daily-boxes/run.log
