@@ -80,9 +80,16 @@ const summarize = (report) => ({
   locked_days: report.rows.filter((x) => x.messages.includes('day_locked')).length,
   days_created: report.rows.filter((x) => x.messages.includes('day_created')).length,
   days_updated: report.rows.filter((x) => x.messages.includes('day_updated')).length,
+  // A107: orders moved off a shared phone to the customer of their own phone (their own name + barcode)
+  customer_relinked: report.rows
+    .filter((x) => x.messages.some((m) => m.startsWith('customer_relinked')))
+    .map((x) => ({ row: x.rowNo, order: x.targetRef ?? null,
+      how: (x.messages.find((m) => m.startsWith('customer_relinked')) ?? '').split(':')[1] ?? '' }))
+    .slice(0, 50),
 });
 // WP-OPS-07: the timer now runs every 30 minutes; only apply when the dry-run shows a change.
-const hasChanges = (s) => (s.counts?.created ?? 0) > 0 || s.days_created > 0 || s.days_updated > 0;
+const hasChanges = (s) => (s.counts?.created ?? 0) > 0 || s.days_created > 0 || s.days_updated > 0
+  || s.customer_relinked.length > 0;
 
 await client.connect();
 let failures = 0;

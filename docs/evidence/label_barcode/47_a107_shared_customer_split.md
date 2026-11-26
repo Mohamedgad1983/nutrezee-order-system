@@ -72,3 +72,14 @@ still sharing one phone in Partner, and any unreadable phone (A99 placeholder).
 Tests: TS-I `ts-i-partner-daily-import` new last case (own dates 2099-09-25/26): shared phone → created customer,
 → existing phone owner, the phone-keeper stays, a phone-only change stays, three distinct barcodes, two audit rows,
 nothing in the dry-run trail, re-run moves nothing. Local run (PostgreSQL 16): 87 files / 515 tests green.
+
+## 4. Deploy (2026-11-26)
+
+- PR #137 merged `8720219` (CI 30/30). API image `nutrezee-api:a107-8720219` built from `/opt/nutrezee/a107-src-8720219`,
+  tagged `latest`, `up -d --no-build api`; running image verified, 0 restarts, `/health` and `/nz/health` 200, built
+  `importers.js` contains `customer_relinked`. Rollback `nutrezee-api:pre-a107-20261126` (= the previous running image).
+- Found while deploying: the feed runner (`ops/sync/partner-daily-feed.mjs`) applies a day only when the dry-run shows
+  new orders or day changes, so a re-link alone would never be applied. A107.2: the dry-run summary lists
+  `customer_relinked` rows and a day with any of them is applied.
+- Dry-run with the A107.2 runner on real data (2026-11-26/28/29/30): matched 722/637/590/539, 1 created, 0 errors,
+  **0 re-links** (the only shared family was already split by hand).
