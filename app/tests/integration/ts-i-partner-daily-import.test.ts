@@ -277,6 +277,68 @@ describe('TS-I Partner daily feed → Nutrezee orders (WP-OPS-06)', () => {
     expect((await pool.query(`SELECT count(*)::int AS n FROM customer_phone WHERE phone_normalized = '+9650025699'`)).rows[0].n).toBe(1);
   });
 
+  it('A107: orders first imported under one shared phone move to their own customer when Partner gives them their own phone', async () => {
+    const day1 = '2099-09-25';
+    const day2 = '2099-09-26';
+    const family = (date: string, n: string, ref: string, name: string, phone: string, id: number) => delivery({
+      delivery_id: id, delivery_date: date, order_id: Number(n), order_number: n, customer_ref: ref, customer: { name, phone },
+    });
+    // Day 1: three subscriptions bought under one phone; one more customer whose phone will simply change.
+    feedRows = { [day1]: [
+      family(day1, '32785', '27136', 'leena .', '96963120', 701),
+      family(day1, '32786', '27137', 'leena .', '96963120', 702),
+      family(day1, '32787', '27135', 'leena .', '96963120', 703),
+      family(day1, '31581', '5197', 'Mohammed', '55501443', 704),
+    ] };
+    await migrations.runPartnerDaily(sa, day1, false);
+    expect((await migrations.runPartnerDaily(sa, day1, true)).counts).toMatchObject({ created: 4, error: 0 });
+    const shared = (await pool.query(
+      `SELECT count(DISTINCT customer_id)::int AS n FROM customer_order WHERE order_number IN ('32785','32786','32787')`,
+    )).rows[0].n;
+    expect(shared).toBe(1);
+
+    // Day 2: Partner now shows each order with its own person and phone; Mohammed changed his number.
+    feedRows = { [day2]: [
+      family(day2, '32785', '27136', 'Lina Al Khabbaz .', '90027828', 711),
+      family(day2, '32786', '27137', 'faris .', '50266999', 712), // phone of the existing customer "Second"
+      family(day2, '32787', '27135', 'tala shlash', '96963120', 713),
+      family(day2, '31581', '5197', 'Mohammed', '55817219', 714),
+    ] };
+    const dry = await migrations.runPartnerDaily(sa, day2, false);
+    expect(dry.rows.flatMap((r) => r.messages)).toEqual(expect.arrayContaining(['customer_relinked:created', 'customer_relinked:existing']));
+    expect((await pool.query(`SELECT count(*)::int AS n FROM audit_event WHERE event_type = 'order.customer_relinked'`)).rows[0].n).toBe(0);
+    const applied = await migrations.runPartnerDaily(sa, day2, true);
+    expect(applied.counts).toMatchObject({ matched: 4, error: 0 });
+
+    const owners = await pool.query(
+      `SELECT co.order_number, c.full_name_en, p.phone_normalized
+         FROM customer_order co JOIN customer c ON c.id = co.customer_id
+         JOIN customer_phone p ON p.customer_id = c.id AND p.is_primary
+        WHERE co.order_number IN ('32785','32786','32787','31581') ORDER BY 1`,
+    );
+    expect(owners.rows).toEqual([
+      { order_number: '31581', full_name_en: 'Mohammed', phone_normalized: '+96555501443' }, // same person: not moved
+      { order_number: '32785', full_name_en: 'Lina Al Khabbaz .', phone_normalized: '+96590027828' }, // created
+      { order_number: '32786', full_name_en: 'Second', phone_normalized: '+96550266999' }, // existing owner of the phone
+      { order_number: '32787', full_name_en: 'leena .', phone_normalized: '+96596963120' }, // keeps the shared phone
+    ]);
+    // Each order now has its own customer, so each label gets its own barcode.
+    const ids = (await pool.query(
+      `SELECT customer_id FROM customer_order WHERE order_number IN ('32785','32786','32787')`,
+    )).rows.map((r) => r.customer_id as string);
+    const codes = await Promise.all(ids.map(async (id) => (await barcodes.issueFor(opsActor, id)).barcode_value));
+    expect(new Set(codes).size).toBe(3);
+    const trail = await pool.query(
+      `SELECT related_refs->>'order_number' AS n, severity FROM audit_event WHERE event_type = 'order.customer_relinked' ORDER BY 1`,
+    );
+    expect(trail.rows).toEqual([{ n: '32785', severity: 'warn' }, { n: '32786', severity: 'warn' }]);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM sync_record WHERE object_type = 'customer' AND legacy_key = '+96590027828'`)).rows[0].n).toBe(1);
+
+    // A re-run moves nothing again.
+    const again = await migrations.runPartnerDaily(sa, day2, false);
+    expect(again.rows.flatMap((r) => r.messages).some((m) => m.startsWith('customer_relinked'))).toBe(false);
+  });
+
 });
 
 function feedOrder(rowNo: number): string {

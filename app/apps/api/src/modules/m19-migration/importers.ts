@@ -319,6 +319,52 @@ export function placeholderPhone(customerRef: string | undefined, orderNumber: s
 }
 
 /**
+ * A107 (owner, 2026-11-25): orders 32785/32786/32787 were first imported under one phone, so they
+ * became one customer and printed one name and one barcode; Partner later gave each order its own
+ * customer and phone. When an existing order now arrives with a phone that is not its customer's,
+ * and that customer also carries orders of OTHER Partner customers (customer_ref on their days), the
+ * order moves to the customer of its own phone (found, else created). A single Partner customer who
+ * only changed phone stays where they are, and an unreadable phone never moves anything.
+ */
+async function relinkSharedPhoneOrder(
+  client: PoolClient,
+  customers: CustomerService,
+  orders: OrderService,
+  sync: SyncRecordService,
+  defaultCountryCode: string,
+  row: Record<string, unknown>,
+  orderId: string,
+  batchId: string,
+): Promise<string | null> {
+  const customerRef = stringField(row['customer_ref']);
+  const phoneRaw = stringField(row['customer_phone']);
+  const name = stringField(row['customer_name']);
+  if (!customerRef || !phoneRaw || !name) return null;
+  let phoneNormalized: string;
+  try {
+    phoneNormalized = normalizePhone(phoneRaw, defaultCountryCode);
+  } catch {
+    return null;
+  }
+  const state = await orders.importedCustomerStateInTx(client, orderId);
+  if (!state) return null;
+  const phoneOwner = await customers.findActiveByPhone(client, phoneNormalized);
+  if (phoneOwner === state.customerId) return null;
+  if (!state.partnerRefs.some((ref) => ref !== customerRef)) return null;
+
+  let target = phoneOwner;
+  if (!target) {
+    target = await customers.createImported(client, { fullNameEn: name, phoneNormalized, phoneRaw }, batchId);
+    await sync.record(client, 'customer', phoneNormalized, target);
+  }
+  const moved = await orders.relinkImportedCustomerInTx(
+    client, IMPORT_ACTOR.staffId, orderId, state.customerId, target,
+    { partnerCustomerRef: customerRef, phoneNormalized },
+  );
+  return moved ? `customer_relinked:${phoneOwner ? 'existing' : 'created'}` : null;
+}
+
+/**
  * WP-OPS-06 (A47) — Partner daily-deliveries mirror. One row = one order on one delivery date.
  * Idempotent by order_number (sync_record + UNIQUE order_number) and by (order, date)
  * (fulfillment_day UNIQUE). Customers are keyed by normalized phone (the identifier rule).
@@ -364,6 +410,8 @@ export function partnerDailyImporter(
       if (orderId) await sync.record(client, 'order', orderNumber, orderId);
     }
     if (orderId) {
+      const relink = await relinkSharedPhoneOrder(client, customers, orders, sync, defaultCountryCode, row, orderId, batchId);
+      if (relink) messages.push(relink);
       const day = await orders.ensureImportedDayInTx(client, IMPORT_ACTOR.staffId, orderId, {
         date, status: dayStatus, addressFrozen,
       });
