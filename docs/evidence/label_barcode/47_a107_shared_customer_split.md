@@ -83,3 +83,7 @@ nothing in the dry-run trail, re-run moves nothing. Local run (PostgreSQL 16): 8
   `customer_relinked` rows and a day with any of them is applied.
 - Dry-run with the A107.2 runner on real data (2026-11-26/28/29/30): matched 722/637/590/539, 1 created, 0 errors,
   **0 re-links** (the only shared family was already split by hand).
+- PR #138 (A107.2) merged `f5e2c6f` (CI 30/30). Installed 2026-11-26 14:40 CET as `/opt/nutrezee/sync/partner-daily-feed.mjs`
+  (sha256 `be1930ab…`, = `ops/sync/partner-daily-feed.mjs` at `f5e2c6f`; `node --check` ok; no feed run in progress at the
+  swap). Rollback: `partner-daily-feed.mjs.bak-a107-2` (sha256 `9d750892…`, the previous file). Both the daily feed and
+  the window feed timers use this runner.
